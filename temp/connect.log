@@ -1,0 +1,51 @@
+D: claimInterface 0 SUCCESS
+I: Write to USB: 80 00 07 10 00 10 00  [ﾀ ��   ��  �� ]
+I: Write to USB: 80 00 07 10 00 10 00  [ﾀ ��   ��  �� ]
+D: claimInterface 0 SUCCESS
+I: Write to USB: 80 00 07 10 00 10 00  [ﾀ ��   ��  �� ]
+I: Read from USB: 00 00 00 00 00 00 00 
+I: Write to USB: 83 00 09 70 00 06 56 4e 4d  [ﾃ �� 	 p ��  V N M ]
+I: Read from USB: a0 00 07 10 00 00 18 00 00 00 00 00 00 00 
+I: Write to USB: 83 00 09 70 00 06 56 53 4e  [ﾃ �� 	 p ��  V S N ]
+I: Read from USB: a0 00 0e 70 00 06 56 4e 4d f1 55 6f 73 63 
+I: Write to USB: 83 00 09 70 00 06 56 48 57  [ﾃ �� 	 p ��  V H W ]
+I: Read from USB: a0 00 0e 70 00 06 56 53 4e f1 36 30 37 30 
+I: Write to USB: 83 00 09 70 00 06 56 53 57  [ﾃ �� 	 p ��  V S W ]
+I: Read from USB: a0 00 0e 70 00 06 56 48 57 f1 31 2e 32 35 
+I: Write to USB: 83 00 0d 71 00 05 54 44 f1 00 00 00 00  [ﾃ ��  q ��  T D ￱ �� �� �� �� ]
+I: Read from USB: a0 00 0e 70 00 06 56 53 57 f1 31 2e 32 
+I: Write to USB: 83 00 0d 71 00 05 54 43 f0 00 00 00 64  [ﾃ ��  q ��  T C ￰ �� �� �� d ]
+I: Read from USB: a0 00 0d 71 00 05 54 44 f1 00 00 00 00 
+I: Write to USB: 83 00 0a 71 00 05 52 53 b1 00  [ﾃ ��      q ��  R S ﾱ �� ]
+I: Read from USB: a0 00 0d 71 00 05 54 43 f0 00 
+I: Write to USB: 83 00 0a 71 00 05 41 52 b1 0f  [ﾃ ��      q ��  A R ﾱ  ]
+I: Read from USB: a0 00 0a 71 00 05 52 53 b1 00 
+I: Write to USB: 83 00 0a 71 00 05 41 50 b1 00  [ﾃ ��      q ��  A P ﾱ �� ]
+I: Read from USB: a0 00 0a 71 00 05 41 52 b1 0f 
+I: Write to USB: 83 00 0d 71 00 05 4d 43 f0 00 00 04 b0  [ﾃ ��  q ��  M C ￰ �� ��  ﾰ ]
+I: Read from USB: a0 00 0a 71 00 05 41 50 b1 00 00 00 64 
+I: Write to USB: 83 00 0d 71 00 05 54 41 f1 00 32 f1 b3  [ﾃ ��  q ��  T A ￱ �� 2 ￱ ﾳ ]
+I: Read from USB: a0 00 0d 71 00 05 4d 43 f0 00 00 04 af 
+I: Write to USB: 83 00 0d 71 00 05 54 57 f1 00 32 f1 b3  [ﾃ ��  q ��  T W ￱ �� 2 ￱ ﾳ ]
+I: Read from USB: a0 00 0d 71 00 05 54 41 f1 00 32 f1 b3 
+I: Write to USB: 83 00 0a 71 00 05 54 31 b1 20  [ﾃ ��      q ��  T 1 ﾱ   ]
+I: Read from USB: a0 00 0d 71 00 05 54 57 f1 00 
+I: Write to USB: 83 00 0a 71 00 05 4f 31 b1 00  [ﾃ ��      q ��  O 1 ﾱ �� ]
+I: Read from USB: a0 00 0a 71 00 05 54 31 b1 20 
+I: Write to USB: 83 00 0a 71 00 05 4d 31 b1 03  [ﾃ ��      q ��  M 1 ﾱ  ]
+I: Read from USB: a0 00 0a 71 00 05 4f 31 b1 00 
+I: Write to USB: 83 00 0d 71 00 05 56 31 f0 00 00 00 14  [ﾃ ��  q ��  V 1 ￰ �� �� ��  ]
+I: Read from USB: a0 00 0a 71 00 05 4d 31 b1 03 32 f1 b3 
+I: Write to USB: 83 00 0d 71 00 05 50 31 f0 00 00 00 00  [ﾃ ��  q ��  P 1 ￰ �� �� �� �� ]
+I: Read from USB: a0 00 0d 71 00 05 56 31 f0 00 00 00 14 
+I: Write to USB: 83 00 0a 71 00 05 53 31 b1 80  [ﾃ ��      q ��  S 1 ﾱ ﾀ ]
+I: Read from USB: a0 00 0d 71 00 05 50 31 f0 00 
+I: Write to USB: 83 00 0a 71 00 05 52 54 b1 02  [ﾃ ��      q ��  R T ﾱ  ]
+I: Read from USB: a0 00 0a 71 00 05 53 31 b1 80 
+I: Write to USB: 91 00 04 02  [ﾑ ��   ]
+I: Read from USB: a0 00 0a 71 
+D: claimInterface 0 SUCCESS
+I: Write to USB: 83 00 0d 71 00 05 54 53 f1 00 00 82 51  [ﾃ ��  q ��  T S ￱ �� �� ﾂ Q ]
+I: Read from USB: 00 00 00 00 00 00 00 00 00 00 00 00 00 
+I: Write to USB: 83 00 0d 71 00 05 51 53 f0 00 00 01 4c  [ﾃ ��  q ��  Q S ￰ �� ��  L ]
+I: Read from USB: a0 00 0d 71 00 05 54 53 f1 00 00 82 00 
