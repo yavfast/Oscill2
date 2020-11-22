@@ -203,7 +203,7 @@ public final class ClientOperation implements Operation, BaseStream {
      * <code>null</code> if not known
      */
     public String getType() {
-        byte[] data = mReplyHeader.getHeader(HeaderSet.TYPE);
+        byte[] data = mReplyHeader.getHeader(Header.TYPE);
         return data != null ? new String(data) : null;
     }
 
@@ -216,7 +216,7 @@ public final class ClientOperation implements Operation, BaseStream {
      * references, or -1 if the content length is not known
      */
     public int getLength() {
-        byte[] data = mReplyHeader.getHeader(HeaderSet.TYPE);
+        byte[] data = mReplyHeader.getHeader(Header.TYPE);
         return data != null ? ObexHelper.convertToLong(data) : -1;
     }
 
@@ -492,10 +492,10 @@ public final class ClientOperation implements Operation, BaseStream {
              */
             if ((mPrivateOutput.isClosed()) && (!returnValue) && (!mEndOfBodySent)
                     && ((opCode & ObexHelper.OBEX_OPCODE_FINAL_BIT_MASK) != 0)) {
-                out.write(HeaderSet.END_OF_BODY);
+                out.write(Header.END_OF_BODY);
                 mEndOfBodySent = true;
             } else {
-                out.write(HeaderSet.BODY);
+                out.write(Header.BODY);
             }
 
             bodyLength += 3;
@@ -510,9 +510,9 @@ public final class ClientOperation implements Operation, BaseStream {
         if (mPrivateOutputOpen && bodyLength <= 0 && !mEndOfBodySent) {
             // only 0x82 or 0x83 can send 0x49
             if ((opCode & ObexHelper.OBEX_OPCODE_FINAL_BIT_MASK) == 0) {
-                out.write(HeaderSet.BODY);
+                out.write(Header.BODY);
             } else {
-                out.write(HeaderSet.END_OF_BODY);
+                out.write(Header.END_OF_BODY);
                 mEndOfBodySent = true;
             }
 

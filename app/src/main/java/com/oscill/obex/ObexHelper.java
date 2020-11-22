@@ -42,12 +42,8 @@ import com.oscill.utils.Log;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.io.UnsupportedEncodingException;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
-import java.util.Calendar;
-import java.util.Date;
-import java.util.TimeZone;
 
 /**
  * This class defines a set of helper methods for the implementation of Obex.
@@ -275,10 +271,10 @@ public final class ObexHelper {
                     if (value != null) {
                         out.write((byte) headerId);
                         switch (headerId) {
-                            case HeaderSet.OSCILL_1BYTE:
-                            case HeaderSet.OSCILL_2BYTE:
-                            case HeaderSet.OSCILL_4BYTE:
-                            case HeaderSet.OSCILL_CRC:
+                            case Header.OSCILL_1BYTE:
+                            case Header.OSCILL_2BYTE:
+                            case Header.OSCILL_4BYTE:
+                            case Header.OSCILL_CRC:
                                 // Skip length part
                                 break;
 

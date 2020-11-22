@@ -141,7 +141,7 @@ public final class ClientSession implements ObexSession {
     }
 
     @NonNull
-    public ClientOperation get(@Nullable HeaderSet header) throws IOException {
+    public ClientOperation get(@NonNull HeaderSet header) throws IOException {
         if (!mObexConnected) {
             throw new IOException("Not connected to the server");
         }
@@ -149,14 +149,7 @@ public final class ClientSession implements ObexSession {
 
         ensureOpen();
 
-        HeaderSet head;
-        if (header == null) {
-            head = new HeaderSet();
-        } else {
-            head = header;
-        }
-
-        return new ClientOperation(this, head, ClientOperation.OperationType.GET, mMaxTxPacketSize);
+        return new ClientOperation(this, header, ClientOperation.OperationType.GET, mMaxTxPacketSize);
     }
 
     @NonNull
@@ -209,22 +202,29 @@ public final class ClientSession implements ObexSession {
     }
 
     @NonNull
-    public ClientOperation put(@Nullable HeaderSet header) throws IOException {
+    public ClientOperation put(@NonNull HeaderSet header) throws IOException {
         if (!mObexConnected) {
             throw new IOException("Not connected to the server");
         }
         setRequestActive();
 
         ensureOpen();
-        HeaderSet head;
-        if (header == null) {
-            head = new HeaderSet();
-        } else {
-            head = header;
-        }
 
-        return new ClientOperation(this, head, ClientOperation.OperationType.PUT, mMaxTxPacketSize);
+        return new ClientOperation(this, header, ClientOperation.OperationType.PUT, mMaxTxPacketSize);
     }
+
+    @NonNull
+    public ClientOperation exec(@NonNull ClientOperation.OperationType operationType, @NonNull HeaderSet header) throws IOException {
+        if (!mObexConnected) {
+            throw new IOException("Not connected to the server");
+        }
+        setRequestActive();
+
+        ensureOpen();
+
+        return new ClientOperation(this, header, operationType, mMaxTxPacketSize);
+    }
+
 
     /**
      * Verifies that the connection is open.

@@ -21,22 +21,22 @@ public class Oscill extends BaseOscillController {
 
     @NonNull
     public String getDeviceId() throws IOException {
-        return bytesToString(getProperty("VNM", HeaderSet.OSCILL_4BYTE));
+        return bytesToString(getProperty("VNM", Header.OSCILL_4BYTE));
     }
 
     @NonNull
     public String getDeviceSerialNumber() throws IOException {
-        return bytesToString(getProperty("VSN", HeaderSet.OSCILL_4BYTE));
+        return bytesToString(getProperty("VSN", Header.OSCILL_4BYTE));
     }
 
     @NonNull
     public String getDeviceHardwareVersion() throws IOException {
-        return bytesToString(getProperty("VHW", HeaderSet.OSCILL_4BYTE));
+        return bytesToString(getProperty("VHW", Header.OSCILL_4BYTE));
     }
 
     @NonNull
     public String getDeviceSoftwareVersion() throws IOException {
-        return bytesToString(getProperty("VSW", HeaderSet.OSCILL_4BYTE));
+        return bytesToString(getProperty("VSW", Header.OSCILL_4BYTE));
     }
 
     /**
@@ -47,7 +47,7 @@ public class Oscill extends BaseOscillController {
      * Пример свойства (базовая модель Oscill): MCd=0x07D0 (50МГц тактовая частота)
      */
     public int getCPUTickDefLength() throws IOException {
-        return bytesToInt(getProperty("MCd", HeaderSet.OSCILL_2BYTE));
+        return bytesToInt(getProperty("MCd", Header.OSCILL_2BYTE));
     }
 
     /**
@@ -59,7 +59,7 @@ public class Oscill extends BaseOscillController {
      * Пример свойства (базовая модель Oscill): MCl=0x03E8 (100МГц тактовая частота)
      */
     public int getCPUTickMinLength() throws IOException {
-        return bytesToInt(getProperty("MCl", HeaderSet.OSCILL_2BYTE));
+        return bytesToInt(getProperty("MCl", Header.OSCILL_2BYTE));
     }
 
     /**
@@ -71,7 +71,7 @@ public class Oscill extends BaseOscillController {
      * Регистр зависит от: нет.
      */
     public int setCPUTickLength(int value) throws IOException {
-        return bytesToInt(setRegistry("MC", HeaderSet.OSCILL_2BYTE, intToBytes(value)));
+        return bytesToInt(setRegistry("MC", Header.OSCILL_2BYTE, intToBytes(value)));
     }
 
     /**
@@ -85,7 +85,7 @@ public class Oscill extends BaseOscillController {
      * Пример свойства (базовая модель Oscill): TOl =0x2000
      */
     public int getSamplingMinPeriod() throws IOException {
-        return bytesToInt(getProperty("TOl", HeaderSet.OSCILL_2BYTE));
+        return bytesToInt(getProperty("TOl", Header.OSCILL_2BYTE));
     }
 
     /**
@@ -99,7 +99,7 @@ public class Oscill extends BaseOscillController {
      * От регистра зависят: способ оцифровки RS, обработка канала M1, задержка развертки TD.
      */
     public int setSamplingPeriod(int value) throws IOException {
-        return bytesToInt(setRegistry("TS", HeaderSet.OSCILL_4BYTE, intToBytes(value)));
+        return bytesToInt(setRegistry("TS", Header.OSCILL_4BYTE, intToBytes(value)));
     }
 
     /**
@@ -117,7 +117,7 @@ public class Oscill extends BaseOscillController {
      */
     @NonNull
     public BitSet setProcessingType(@NonNull BitSet values) throws IOException {
-        return bytesToBits(setRegistry("RS", HeaderSet.OSCILL_1BYTE, bitsToBytes(values)));
+        return bytesToBits(setRegistry("RS", Header.OSCILL_1BYTE, bitsToBytes(values)));
     }
 
     /**
@@ -131,7 +131,7 @@ public class Oscill extends BaseOscillController {
      * Пример свойства (базовая модель Oscill): TPl =0x01000000
      */
     public int getRollSamplingMinPeriod() throws IOException {
-        return bytesToInt(getProperty("TPl", HeaderSet.OSCILL_4BYTE));
+        return bytesToInt(getProperty("TPl", Header.OSCILL_4BYTE));
     }
 
     /**
@@ -154,7 +154,7 @@ public class Oscill extends BaseOscillController {
      */
     @NonNull
     public BitSet getSamplingVariants() throws IOException {
-        return bytesToBits(getProperty("TOv", HeaderSet.OSCILL_4BYTE));
+        return bytesToBits(getProperty("TOv", Header.OSCILL_4BYTE));
     }
 
     /**
@@ -166,7 +166,7 @@ public class Oscill extends BaseOscillController {
      * Пример свойства (базовая модель Oscill): TMl =0x0010
      */
     public int getStroboscopeMinSamplingPeriod() throws IOException {
-        return bytesToInt(getProperty("TMl", HeaderSet.OSCILL_2BYTE));
+        return bytesToInt(getProperty("TMl", Header.OSCILL_2BYTE));
     }
 
     /**
@@ -179,7 +179,7 @@ public class Oscill extends BaseOscillController {
      * Пример свойства (базовая модель Oscill): TMh =0x0100
      */
     public int getStroboscopeMaxSamplingPeriod() throws IOException {
-        return bytesToInt(getProperty("TMh", HeaderSet.OSCILL_2BYTE));
+        return bytesToInt(getProperty("TMh", Header.OSCILL_2BYTE));
     }
 
     /**
@@ -191,7 +191,7 @@ public class Oscill extends BaseOscillController {
      * наличия усредняющих/пиконакопительных проходов  AP.
      */
     public int getMaxPreloadSamples() throws IOException {
-        return bytesToInt(getProperty("TCh", HeaderSet.OSCILL_2BYTE));
+        return bytesToInt(getProperty("TCh", Header.OSCILL_2BYTE));
     }
 
     /**
@@ -203,7 +203,7 @@ public class Oscill extends BaseOscillController {
      * наличия усредняющих/пиконакопительных проходов  AP.
      */
     public int getMaxSamplesDataSize() throws IOException {
-        return bytesToInt(getProperty("QSh", HeaderSet.OSCILL_2BYTE));
+        return bytesToInt(getProperty("QSh", Header.OSCILL_2BYTE));
     }
 
     /**
@@ -215,7 +215,7 @@ public class Oscill extends BaseOscillController {
      * От регистра зависят: нет.
      */
     public int setSamplesDataSize(int value) throws IOException {
-        return bytesToInt(setRegistry("QS", HeaderSet.OSCILL_2BYTE, intToBytes(value)));
+        return bytesToInt(setRegistry("QS", Header.OSCILL_2BYTE, intToBytes(value)));
     }
 
     /**
@@ -229,7 +229,7 @@ public class Oscill extends BaseOscillController {
      * Регистр теряет смысл при использовании задержки развертки (TD).
      */
     public int setSamplesOffset(int value) throws IOException {
-        return bytesToInt(setRegistry("TC", HeaderSet.OSCILL_2BYTE, intToBytes(value)));
+        return bytesToInt(setRegistry("TC", Header.OSCILL_2BYTE, intToBytes(value)));
     }
 
     /**
@@ -243,21 +243,32 @@ public class Oscill extends BaseOscillController {
      * От регистра зависят: количество выборок QS и QSh
      */
     public byte setAvgSamplingCount(byte value) throws IOException {
-        return setRegistry("AP", HeaderSet.OSCILL_1BYTE, new byte[]{value})[0];
+        return setRegistry("AP", Header.OSCILL_1BYTE, new byte[]{value})[0];
+    }
+
+    /**
+     * Имя регистра: AR - Минимальное кол-во проходов в стробоскопич.режиме
+     * Формат регистра: 1 байт, беззнаковый.
+     * Описание регистра:  В стробоскопическом режиме производится серия оцифровок, из которых затем складывается выходной массив. Каждая оцифровка характеризуется своей задержкой между стартом и моментом синхронизации. Оцифровки с одинаковой задержкой усредняются или анализируются на мин/макс. Регистр AR указывает, какое минимальное количество оцифровок с одинаковой задержкой допускается. Поскольку задержка оцифровки – случайная величина, для большинства требуемых задержек накопится больше оцифровок, чем задано в AR.
+     * Регистр зависит от: нет
+     * От регистра зависят:  нет
+     */
+    public byte setMinSamplingCount(byte value) throws IOException {
+        return setRegistry("AR", Header.OSCILL_1BYTE, new byte[]{value})[0];
     }
 
     /**
      *
      */
     public int getScanDelayMin() throws IOException {
-        return bytesToInt(getProperty("TDl", HeaderSet.OSCILL_4BYTE));
+        return bytesToInt(getProperty("TDl", Header.OSCILL_4BYTE));
     }
 
     /**
      *
      */
     public int getScanDelayMax() throws IOException {
-        return bytesToInt(getProperty("TDh", HeaderSet.OSCILL_4BYTE));
+        return bytesToInt(getProperty("TDh", Header.OSCILL_4BYTE));
     }
 
     /**
@@ -271,7 +282,7 @@ public class Oscill extends BaseOscillController {
      * От регистра зависят: нет.
      */
     public int setScanDelay(int value) throws IOException {
-        return bytesToInt(setRegistry("TD", HeaderSet.OSCILL_4BYTE, intToBytes(value)));
+        return bytesToInt(setRegistry("TD", Header.OSCILL_4BYTE, intToBytes(value)));
     }
 
     /**
@@ -286,7 +297,31 @@ public class Oscill extends BaseOscillController {
      * Примечание: свободный и бесконечно ждущий запуски поддерживаются начиная с встроенного ПО (firmware) версии 1.25.
      */
     public void setSyncType(byte syncType) throws IOException {
-        setRegistry("RT", HeaderSet.OSCILL_1BYTE, new byte[]{syncType});
+        setRegistry("RT", Header.OSCILL_1BYTE, new byte[]{syncType});
+    }
+
+    /**
+     * Имя регистра: TA - Максимальное время ожидания синхронизации при автозапуске
+     * Описание регистра: Синхронизация ожидается в течение указанного времени, а по его истечению – запускается оцифровка (то есть возвращенные данные не будут синхронизированы).
+     * Формат регистра: 4 байта, беззнаковый
+     * Единица измерения: по 12 машинных циклов
+     * Регистр зависит от:  действует при RT=0
+     * От регистра зависят: нет.
+     */
+    public int setDelayMaxSyncAuto(int time) throws IOException{
+        return bytesToInt(setRegistry("TA", Header.OSCILL_4BYTE, intToBytes(time)));
+    }
+
+    /**
+     * Имя регистра: TW - Макс. время ожидания синхронизации при ждущем запуске
+     * Описание регистра: Синхронизация ожидается в течение указанного времени, а по его истечению – возвращается ошибка.
+     * Формат регистра: 4 байта, беззнаковый
+     * Единица измерения: по 12 машинных циклов
+     * Регистр зависит от: действует при RT=1
+     * От регистра зависят: нет.
+     */
+    public int setDelayMaxSyncWait(int time) throws IOException{
+        return bytesToInt(setRegistry("TW", Header.OSCILL_4BYTE, intToBytes(time)));
     }
 
     /**
@@ -298,11 +333,11 @@ public class Oscill extends BaseOscillController {
      * Пример свойства (базовая модель Oscill): V1h=0x2710 (10В/дел), V1l=0x0014 (20мВ/дел)
      */
     public int getChanelSensitivityMin() throws IOException {
-        return bytesToInt(getProperty("V1l", HeaderSet.OSCILL_2BYTE));
+        return bytesToInt(getProperty("V1l", Header.OSCILL_2BYTE));
     }
 
     public int getChanelSensitivityMax() throws IOException {
-        return bytesToInt(getProperty("V1h", HeaderSet.OSCILL_2BYTE));
+        return bytesToInt(getProperty("V1h", Header.OSCILL_2BYTE));
     }
 
     /**
@@ -314,11 +349,11 @@ public class Oscill extends BaseOscillController {
      * Пример свойства (базовая модель Oscill): P1h=0x0180, P1l=0xFE80
      */
     public int getChanelOffsetMin() throws IOException {
-        return bytesToInt(getProperty("P1l", HeaderSet.OSCILL_2BYTE)); // TODO: signed
+        return bytesToInt(getProperty("P1l", Header.OSCILL_2BYTE)); // TODO: signed
     }
 
     public int getChanelOffsetMax() throws IOException {
-        return bytesToInt(getProperty("P1h", HeaderSet.OSCILL_2BYTE)); // TODO: signed
+        return bytesToInt(getProperty("P1h", Header.OSCILL_2BYTE)); // TODO: signed
     }
 
     /**
@@ -330,7 +365,115 @@ public class Oscill extends BaseOscillController {
      * Пример свойства (базовая модель Oscill): P1h=0x0180, P1l=0xFE80
      */
     public int getChanelDelay() throws IOException {
-        return bytesToInt(getProperty("D1m", HeaderSet.OSCILL_2BYTE));
+        return bytesToInt(getProperty("D1m", Header.OSCILL_2BYTE));
     }
+
+    /**
+     * Имя регистра: O1 - Аппаратный режим канала
+     * Формат регистра: 1 байт
+     * Описание регистра: 	Бит0: 	-------0 	– канал включен
+     *                              -------1 	– вход заземлен
+     * 			            Бит1: 	------0- 	– открытый вход (AC+DC)
+     *                              ------1- 	– закрытый вход (AC)
+     *  			        Бит2:	-----0-- 	– нет фильтрации 3МГц
+     *                              -----1-- 	– включен фильтр 3МГц
+     * 			            Бит3: 	----0--- 	– нет фильтрации 3кГц
+     * 				                ----1--- 	– включен фильтр 3кГц (до 200мВ/дел)
+     * От регистра зависят: нет
+     * Регистр зависит от: нет.
+     */
+    public byte setChanelHWMode(byte value) throws IOException {
+        return setRegistry("O1", Header.OSCILL_1BYTE, new byte[]{value})[0];
+    }
+
+    /**
+     * Имя регистра: V1 - Чувствительность канала
+     * Описание регистра: задает коэффициент усиления входного усилителя канала
+     * Формат регистра: 2 байта, беззнаковый
+     * Единица измерения:  8,53мВ / диапазон АЦП. При отображении 240ка уровней на 8и делениях экрана единица регистра V1 будет соответствовать  1 мВ / деление.
+     * Граничные значения: свойства V1h (максимальное значение В/дел, то есть низшая чувствительность) и V1l (минимальное значение В/дел, то есть наивысшая чувствительность)
+     * Регистр зависит от: режима канала O1 (заземленный вход отменяет чувствительность)
+     * От регистра зависят: смещение канала P1, диапазон смещений канала P1h / P1l .
+     */
+    public int setChanelSensitivity(int value) throws IOException {
+        return bytesToInt(setRegistry("V1", Header.OSCILL_2BYTE, intToBytes(value)));
+    }
+
+    /**
+     * Имя регистра: P1 - Смещение в канале
+     * Описание регистра: смещение входного диапазона АЦП относительно 0.
+     * Формат регистра: 2 байта, знаковый
+     * Единица измерения: 1/256я входного диапазона АЦП
+     * Граничные значения: свойства P1h (максимальное положительное смещение наблюдаемого диапазона), P1l (максимальное отрицательное смещение наблюдаемого диапазона)
+     * Регистр зависит от: чувствительности канала V1 (при минимальной чувствительности 10В/дел диапазон смещения более узок)
+     * От регистра зависят: нет.
+     */
+    public int setChanelOffset(int value) throws IOException {
+        return bytesToInt(setRegistry("P1", Header.OSCILL_2BYTE, intToBytes(value)));
+    }
+
+    /**
+     * Имя регистра: M1 - Программный режим канала (обработка выборок)
+     * Формат регистра: 1 байт
+     * Описание регистра: Биты 210:
+     * -----000   – усреднение с отбрасыванием младших разрядов (1байт/выборка)
+     * -----001   – усреднение  с повышением разрешения  (2 байта/выборка)
+     * -----010   – пиковый режим – поочередно (2байта/2выборки)
+     * -----011   – пиковый режим – повыборочно (2байта/выборка)
+     * -----100   – обычный режим: байт массива = выборка АЦП (1байт/выборка)
+     * Данный регистр относится к обработке, осуществляемой в Oscill-е. Кроме неё (или в дополнение к ней) аналогичная обработка может осуществляться Comp-ом на основании нескольких подряд массивов выборок, полученных от Oscill.
+     *  Количество проходов усреднения/накопления определяется регистром A1. При медленных развертках усреднение/накопление пиковых значений производится даже в течение одного прохода.
+     * Регистр зависит от: RS (режимы невозможны при стробоскопической и параллельной оцифровках), TS (режимы невозможны при малых периодах дискретизации)
+     * От регистра зависят: количество выборок QS и QSh
+     */
+    public byte setChanelSWMode(byte value) throws IOException {
+        return setRegistry("M1", Header.OSCILL_1BYTE, new byte[]{value})[0];
+    }
+
+    /**
+     * Имя регистра: T1 - Использование канала для синхронизации
+     * Формат регистра: 1 байт
+     * Описание регистра: 	Бит4: 	---0---- 	– выключена синхронизация от спада
+     * 				                ---1---- 	– включена синхронизация от спада
+     *                      Бит5: 	--0----- 	– выключена синхронизация от фронта
+     *                              --1----- 	– включена синхронизация от фронта
+     * 			            Биты 1 0: 	------00	– гистерезис порога спада выключен
+     *                                  ------11	– гистерезис порога спада включен
+     * 			            Биты 3 2: 	----00--	– гистерезис порога фронта выключен
+     *                                  ----11--	– гистерезис порога фронта включен
+     *                      Биты 7 6 : 	00------ 	– ВЧ и НЧ синхронизация
+     *                                  11------ 	– НЧ синхронизация
+     * От регистра зависят: нет.
+     * Регистр зависит от: нет.
+     */
+    public byte setChanelSyncMode(byte value) throws IOException {
+        return setRegistry("T1", Header.OSCILL_1BYTE, new byte[]{value})[0];
+    }
+
+    /**
+     * Имя регистра: S1 - Уровень синхронизации в канале
+     * Формат регистра: 1 байт, беззнаковый
+     * Описание регистра: уровень, при достижении которого в заданном регистром T1 направлении возникает событие синхронизации, определяющее начало/окончание оцифровки.
+     * Единица измерения: 1/256 от диапазона АЦП
+     * Граничные значения: 0…255
+     * От регистра зависят: нет.
+     * Регистр зависит от: нет.
+     */
+    public byte setChanelSyncLevel(byte value) throws IOException {
+        return setRegistry("S1", Header.OSCILL_1BYTE, new byte[]{value})[0];
+    }
+
+    /**
+     * Команда калибровки
+     * По команде калибровки Oscill производит собственную калибровку
+     * (масштабирование и привязку сдвига в канале и уровня синхронизации к входному диапазону АЦП).
+     * Это обеспечивает установку нуля и правильность синхронизации и отображения.
+     * Команда калибровки передаётся от Comp-а Oscill-у пакетом PUT с заголовком 0x72 “C”.
+     * При успехе калибровки Oscill возвращает Response-пакет Success.
+     */
+    public void calibration() throws IOException {
+        sendCommand("C", Header.OSCILL_EMPTY);
+    }
+
 
 }

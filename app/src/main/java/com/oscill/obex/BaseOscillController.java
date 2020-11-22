@@ -5,7 +5,6 @@ import androidx.annotation.NonNull;
 import com.oscill.utils.Log;
 
 import java.io.IOException;
-import java.nio.ByteBuffer;
 import java.util.BitSet;
 
 public class BaseOscillController {
@@ -78,16 +77,8 @@ public class BaseOscillController {
     }
 
     @NonNull
-    public byte[] getProperty(@NonNull String property, int propertyType) throws IOException {
-        HeaderSet headerSet = new HeaderSet();
-        headerSet.setHeader(HeaderSet.OSCILL_PROPERTY, property.getBytes());
-
-        return execute(headerSet, propertyType);
-    }
-
-    @NonNull
-    public byte[] execute(@NonNull HeaderSet headerSet, int propertyType) throws IOException {
-        ClientOperation resOp = getClientSession().get(headerSet);
+    public byte[] execute(@NonNull ClientOperation.OperationType operationType, @NonNull HeaderSet headerSet, int propertyType) throws IOException {
+        ClientOperation resOp = getClientSession().exec(operationType, headerSet);
         try {
             int responseCode = resOp.getResponse();
 
@@ -109,12 +100,46 @@ public class BaseOscillController {
     }
 
     @NonNull
+    public byte[] getProperty(@NonNull String property, int propertyType) throws IOException {
+        HeaderSet headerSet = new HeaderSet();
+        headerSet.setHeader(Header.OSCILL_PROPERTY, property.getBytes());
+
+        return execute(ClientOperation.OperationType.GET, headerSet, propertyType);
+    }
+
+    @NonNull
     public byte[] setRegistry(@NonNull String registry, int propertyType, @NonNull byte[] data) throws IOException {
         HeaderSet headerSet = new HeaderSet();
-        headerSet.setHeader(HeaderSet.OSCILL_REGISTRY, registry.getBytes());
+        headerSet.setHeader(Header.OSCILL_REGISTRY, registry.getBytes());
         headerSet.setHeader(propertyType, data);
 
-        return execute(headerSet, propertyType);
+        return execute(ClientOperation.OperationType.PUT, headerSet, propertyType);
+    }
+
+    @NonNull
+    public byte[] sendCommand(@NonNull String command, int propertyType) throws IOException {
+        HeaderSet headerSet = new HeaderSet();
+        headerSet.setHeader(Header.OSCILL_DATA, command.getBytes());
+
+        return execute(ClientOperation.OperationType.PUT, headerSet, propertyType);
+    }
+
+    /**
+     * Команда оцифровки
+     * Команда инициирует: ожидание синхронизации + предвыборку, оцифровку и возврат данных.
+     * Перед этой командой необходимо настроить все регистры, в том числе – регистром способа RS установить требуемый вариант оцифровки.
+     * Команда оцифровки передаётся от Comp-а Oscill-у пакетом GET с заголовком 0x72 “D”.
+     * В ответ Oscill возвращает Response-пакет Success с заголовком 0x72 = “D” и результатами оцифровки в заголовке 0x49.
+     * В режиме бесконечной параллельной оцифровки (ROLL) данные возвращаются Comp-у в Response-пакете Continue.
+     * В режиме ждущего запуска, если условие запуска в течение TW выполнено не было,
+     * возвращается пакет Success с заголовком 0x72 = “D” и пустым заголовком 0x49.
+     */
+    @NonNull
+    public byte[] getData() throws IOException {
+        HeaderSet headerSet = new HeaderSet();
+        headerSet.setHeader(Header.OSCILL_DATA, "D".getBytes());
+
+        return execute(ClientOperation.OperationType.PUT, headerSet, Header.END_OF_BODY);
     }
 
 }
