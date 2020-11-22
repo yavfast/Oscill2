@@ -137,4 +137,12 @@ public class USBDeviceTest {
             Log.i(TAG, "Chanel delay: " + oscill.getChanelDelay());
         });
     }
+
+    @Test
+    public void testRegistry() {
+        runTest(oscill -> {
+
+        });
+    }
+
 }

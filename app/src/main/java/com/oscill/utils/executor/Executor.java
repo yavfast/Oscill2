@@ -43,7 +43,7 @@ public class Executor {
         final int CPU_COUNT = Runtime.getRuntime().availableProcessors();
         final int CORE_POOL_SIZE = Math.max(4, Math.min(CPU_COUNT, 4));
         final int MAXIMUM_POOL_SIZE = CPU_COUNT * 4 + 1;
-        final int KEEP_ALIVE = 60L; // timeout for pool threads
+        final int KEEP_ALIVE = 60; // timeout for pool threads
 
         ThreadFactory threadFactory = new ThreadFactory() {
             private final AtomicInteger mCount = new AtomicInteger(1);
@@ -112,7 +112,7 @@ public class Executor {
         return runInUIThreadAsync(view, runnable, 0L);
     }
 
-    public static <T> IAsyncTask runInUIThreadAsync(T view, @NonNull IRunnableOnView<T> runnable, int delay) {
+    public static <T> IAsyncTask runInUIThreadAsync(T view, @NonNull IRunnableOnView<T> runnable, long delay) {
         return runInUIThreadAsync(new RunnableOnView<T>(view) {
             public void run(@NonNull T view) {
                 runnable.run(view);
@@ -124,7 +124,7 @@ public class Executor {
         return runInUIThreadAsync(runnable, 0L);
     }
 
-    public static IAsyncTask runInUIThreadAsync(@NonNull Runnable runnable, int delay) {
+    public static IAsyncTask runInUIThreadAsync(@NonNull Runnable runnable, long delay) {
         ExceptionWrapper wrapper = new ExceptionWrapper(runnable, getMainHandler());
         runInTaskQueue(() -> getMainHandler().postDelayed(wrapper, delay), 0L);
         return wrapper;
@@ -142,7 +142,7 @@ public class Executor {
         return runInBackgroundAsync(runnable, 0L);
     }
 
-    public static IAsyncTask runInBackgroundAsync(@NonNull Runnable runnable, int delay) {
+    public static IAsyncTask runInBackgroundAsync(@NonNull Runnable runnable, long delay) {
         return new AsyncTask<>(getBackgroundExecutor().schedule(new ExceptionWrapper(runnable), delay, TimeUnit.MILLISECONDS));
     }
 
@@ -150,7 +150,7 @@ public class Executor {
         return getInBackgroundAsync(callable, 0L);
     }
 
-    public static <V> AsyncTask<V> getInBackgroundAsync(@NonNull Callable<V> callable, int delay) {
+    public static <V> AsyncTask<V> getInBackgroundAsync(@NonNull Callable<V> callable, long delay) {
         return new AsyncTask<>(getBackgroundExecutor().schedule(callable, delay, TimeUnit.MILLISECONDS));
     }
 
@@ -164,7 +164,7 @@ public class Executor {
         runInTaskQueue(runnable, 0L);
     }
 
-    public static void runInTaskQueue(@NonNull Runnable runnable, int delay) {
+    public static void runInTaskQueue(@NonNull Runnable runnable, long delay) {
         getTaskQueueExecutor().schedule(runnable, delay, TimeUnit.MILLISECONDS);
     }
 
@@ -205,7 +205,7 @@ public class Executor {
         if (isUIThread()) {
             dumpCurrentStack("Sleep in UI thread", true);
         }
-        int now = System.currentTimeMillis();
+        long now = System.currentTimeMillis();
         Boolean value = callable.call();
         while (value != null && value) {
             SystemClock.sleep(checkTimeMs);
@@ -419,20 +419,20 @@ public class Executor {
     }
 
     public static void trace(@NonNull String TAG, @NonNull Object msg, @NonNull Runnable task) {
-        int start = SystemClock.uptimeMillis();
+        long start = SystemClock.uptimeMillis();
         task.run();
-        int delta = SystemClock.uptimeMillis() - start;
+        long delta = SystemClock.uptimeMillis() - start;
         Log.i(TAG, "TRACE: ", msg, " (", delta, "ms)");
     }
 
     public static <T> T trace(@NonNull String TAG, @NonNull Object msg, @NonNull Callable<T> task) {
-        int start = SystemClock.uptimeMillis();
+        long start = SystemClock.uptimeMillis();
         try {
             return task.call();
         } catch (Exception e) {
             throw new IllegalStateException(e);
         } finally {
-            int delta = SystemClock.uptimeMillis() - start;
+            long delta = SystemClock.uptimeMillis() - start;
             Log.i(TAG, "TRACE: ", msg, " (", delta, "ms)");
         }
     }

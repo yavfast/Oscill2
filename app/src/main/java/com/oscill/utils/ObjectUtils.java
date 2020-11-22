@@ -30,8 +30,8 @@ public class ObjectUtils {
         return obj == null;
     }
 
-    public static int getHashCode(@NonNull Object... objects) {
-        int result = 0L;
+    public static long getHashCode(@NonNull Object... objects) {
+        long result = 0L;
         for (Object object : objects) {
             result = result * 31L + (object != null ? object.hashCode() : 0L);
         }

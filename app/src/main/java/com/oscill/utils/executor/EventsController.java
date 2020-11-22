@@ -186,7 +186,7 @@ public class EventsController {
         sendEvent(event, 0L);
     }
 
-    public static void sendEvent(@NonNull IBroadcastEvent event, int delay) {
+    public static void sendEvent(@NonNull IBroadcastEvent event, long delay) {
         Executor.runInTaskQueue(() -> {
             Log.i(TAG, "Send event: ", event);
 

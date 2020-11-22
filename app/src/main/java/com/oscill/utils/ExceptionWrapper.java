@@ -16,8 +16,8 @@ public class ExceptionWrapper implements IAsyncTask, Runnable {
 
     private static final String TAG = "ExceptionWrapper";
 
-    private static final int WARN_UI_TIMEOUT = 100L;
-    private static final int WARN_BG_TIMEOUT = 5000L;
+    private static final long WARN_UI_TIMEOUT = 100L;
+    private static final long WARN_BG_TIMEOUT = 5000L;
 
     public interface ExceptionCallback {
         void onException(@NonNull Throwable e);
@@ -29,7 +29,7 @@ public class ExceptionWrapper implements IAsyncTask, Runnable {
     private final Runnable runnable;
     private final Handler handler;
     private final ConditionVariable completed = new ConditionVariable();
-    private int started;
+    private long started;
 
     public ExceptionWrapper(@NonNull Runnable runnable) {
         this(runnable, null);
@@ -90,7 +90,7 @@ public class ExceptionWrapper implements IAsyncTask, Runnable {
 
     private void checkExecutionTime() {
         if (Log.isEnabledLog()) {
-            int time = SystemClock.uptimeMillis() - started;
+            long time = SystemClock.uptimeMillis() - started;
             boolean isTimeout = (time > (Executor.isUIThread() ? WARN_UI_TIMEOUT : WARN_BG_TIMEOUT));
             if (isTimeout) {
                 Log.w(TAG, Log.msg("Long task execution ", (Executor.isUIThread() ? "[UI Thread] " : ""), ": ", time, "ms"), stackException);

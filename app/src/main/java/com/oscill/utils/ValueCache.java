@@ -16,7 +16,7 @@ public class ValueCache<K,V> {
     private final Executor.ObjCallable<K,V> valueCreator;
     private final Map<K,Long> cachedKeys = new ConcurrentHashMap<>();
     private final ValuesLruCache cache;
-    private int expired = 0L;
+    private long expired = 0L;
 
     public ValueCache(@NonNull Executor.ObjCallable<K,V> valueCreator) {
         this(Integer.MAX_VALUE, valueCreator);
@@ -42,8 +42,8 @@ public class ValueCache<K,V> {
 
     private void checkExpired(@NonNull K key) {
         if (expired > 0L) {
-            int now = SystemClock.elapsedRealtime();
-            int created = cachedKeys.get(key);
+            long now = SystemClock.elapsedRealtime();
+            Long created = cachedKeys.get(key);
             if (created != null && (now - created > expired)) {
                 cache.remove(key);
             }

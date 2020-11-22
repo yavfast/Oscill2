@@ -318,7 +318,7 @@ public class FtdiSerialDriver implements UsbSerialDriver {
         }
 
         private int setBaudRate(int baudRate) throws IOException {
-            long[] vals = convertBaudrate(baudRate);
+            int[] vals = convertBaudrate(baudRate);
             int actualBaudrate = vals[0];
             int index = vals[1];
             int value = vals[2];
@@ -392,7 +392,7 @@ public class FtdiSerialDriver implements UsbSerialDriver {
             }
         }
 
-        private long[] convertBaudrate(int baudrate) {
+        private int[] convertBaudrate(int baudrate) {
             // TODO(mikey): Braindead transcription of libfti method.  Clean up,
             // using more idiomatic Java where possible.
             int divisor = 24000000 / baudrate;
@@ -472,7 +472,7 @@ public class FtdiSerialDriver implements UsbSerialDriver {
             }
 
             // Return the nearest baud rate
-            return new long[] {
+            return new int[] {
                     bestBaud, index, value
             };
         }
