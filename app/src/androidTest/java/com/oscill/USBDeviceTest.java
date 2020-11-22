@@ -10,6 +10,7 @@ import androidx.test.platform.app.InstrumentationRegistry;
 import androidx.test.ext.junit.runners.AndroidJUnit4;
 import androidx.test.rule.GrantPermissionRule;
 
+import com.oscill.obex.BaseOscillController;
 import com.oscill.obex.Oscill;
 import com.oscill.obex.ResponseCodes;
 import com.oscill.usb.UsbObexTransport;
@@ -21,6 +22,7 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.List;
 
 import com.oscill.obex.ClientSession;
@@ -142,6 +144,50 @@ public class USBDeviceTest {
     public void testRegistry() {
         runTest(oscill -> {
 
+        });
+    }
+
+    /**
+     * Однократная оцифровка с автозапуском
+     * Регистр способа: 0b00000000 (RS)
+     * Действие: Oscill ждет синхронизацию заданное регистром TA время.
+     * При наступлении условия или при истечении времени - производит однократную оцифровку и возвращает массив выборок.
+     * Применение: исследование однократных и периодических сигналов.
+     */
+    @Test
+    public void testSingleSync() {
+        runTest(oscill -> {
+            oscill.setProcessingType(BaseOscillController.bytesToBits(new byte[]{0,0,0,0,0,0,0,0})); // RS
+
+            oscill.setCPUTickLength(1200); // MC
+
+            int maxSamplesDataSize = oscill.getMaxSamplesDataSize();
+            Log.i(TAG, "Max samples data size: " + maxSamplesDataSize);
+            oscill.setSamplesDataSize(maxSamplesDataSize); // QS
+
+            oscill.setScanDelay(0); // TD
+            oscill.setSamplesOffset(100); // TC
+
+            oscill.setDelayMaxSyncAuto(1000000); // TA
+            oscill.setDelayMaxSyncWait(1000000); // TW
+
+            oscill.setMinSamplingCount(0); // AR
+            oscill.setAvgSamplingCount(0); // AP
+
+            oscill.setChanelSyncMode(BaseOscillController.bytesToBits(new byte[]{0,0,0,0,0,0,0,0})); // T1
+            oscill.setChanelHWMode(BaseOscillController.bytesToBits(new byte[]{0,0,0,0,0,0,0,0})); // O1
+            oscill.setChanelSWMode(BaseOscillController.bytesToBits(new byte[]{0,0,0,0,0,1,0,0})); // M1
+
+            oscill.setChanelSensitivity(20); // V1
+            oscill.setChanelOffset(0); // P1
+            oscill.setChanelSyncLevel(0); // S1
+            oscill.setSyncType(BaseOscillController.bytesToBits(new byte[]{0,0,0,0,0,0,1,0})); // RT
+
+
+            oscill.calibration();
+            byte[] data = oscill.getData();
+
+            Log.i(TAG, "Data: " + Arrays.toString(data));
         });
     }
 

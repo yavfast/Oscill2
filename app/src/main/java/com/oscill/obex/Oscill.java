@@ -222,7 +222,7 @@ public class Oscill extends BaseOscillController {
      * Имя регистра: TC - Центровка развертки
      * Формат регистра: 2 байта, беззнаковый
      * Описание регистра: Интервал между первой выборкой и моментом синхронизации.
-     * Позволяет наблюдать как предваряющий синхронизацию сигнал, так и сигнал,  последующий за моментом синхронизации.
+     * Позволяет наблюдать как предваряющий синхронизацию сигнал, так и сигнал, последующий за моментом синхронизации.
      * Единица измерения: выборки (то есть текущий интервал между выборками)
      * Диапазон изменения:  0….QS
      * Регистр зависит от: способа оцифровки RS, периода дискретизации TS, размера массива выборок QS.
@@ -242,8 +242,8 @@ public class Oscill extends BaseOscillController {
      * Тип операции (усредение или накопление пиков) может быть в каждом канале свой, и определяется регистром M1 (для первого канала).
      * От регистра зависят: количество выборок QS и QSh
      */
-    public byte setAvgSamplingCount(byte value) throws IOException {
-        return setRegistry("AP", Header.OSCILL_1BYTE, new byte[]{value})[0];
+    public byte setAvgSamplingCount(int value) throws IOException {
+        return setRegistry("AP", Header.OSCILL_1BYTE, intToByte(value))[0];
     }
 
     /**
@@ -253,8 +253,8 @@ public class Oscill extends BaseOscillController {
      * Регистр зависит от: нет
      * От регистра зависят:  нет
      */
-    public byte setMinSamplingCount(byte value) throws IOException {
-        return setRegistry("AR", Header.OSCILL_1BYTE, new byte[]{value})[0];
+    public byte setMinSamplingCount(int value) throws IOException {
+        return setRegistry("AR", Header.OSCILL_1BYTE, intToByte(value))[0];
     }
 
     /**
@@ -296,8 +296,8 @@ public class Oscill extends BaseOscillController {
      * От регистра зависят: использование регистра TA или TW
      * Примечание: свободный и бесконечно ждущий запуски поддерживаются начиная с встроенного ПО (firmware) версии 1.25.
      */
-    public void setSyncType(byte syncType) throws IOException {
-        setRegistry("RT", Header.OSCILL_1BYTE, new byte[]{syncType});
+    public void setSyncType(@NonNull BitSet bitSet) throws IOException {
+        setRegistry("RT", Header.OSCILL_1BYTE, bitsToBytes(bitSet));
     }
 
     /**
@@ -382,16 +382,18 @@ public class Oscill extends BaseOscillController {
      * От регистра зависят: нет
      * Регистр зависит от: нет.
      */
-    public byte setChanelHWMode(byte value) throws IOException {
-        return setRegistry("O1", Header.OSCILL_1BYTE, new byte[]{value})[0];
+    public byte setChanelHWMode(@NonNull BitSet bitSet) throws IOException {
+        return setRegistry("O1", Header.OSCILL_1BYTE, bitsToBytes(bitSet))[0];
     }
 
     /**
      * Имя регистра: V1 - Чувствительность канала
      * Описание регистра: задает коэффициент усиления входного усилителя канала
      * Формат регистра: 2 байта, беззнаковый
-     * Единица измерения:  8,53мВ / диапазон АЦП. При отображении 240ка уровней на 8и делениях экрана единица регистра V1 будет соответствовать  1 мВ / деление.
-     * Граничные значения: свойства V1h (максимальное значение В/дел, то есть низшая чувствительность) и V1l (минимальное значение В/дел, то есть наивысшая чувствительность)
+     * Единица измерения:  8,53мВ / диапазон АЦП. При отображении 240ка уровней на 8и делениях экрана
+     * единица регистра V1 будет соответствовать  1 мВ / деление.
+     * Граничные значения: свойства V1h (максимальное значение В/дел, то есть низшая чувствительность),
+     * V1l (минимальное значение В/дел, то есть наивысшая чувствительность)
      * Регистр зависит от: режима канала O1 (заземленный вход отменяет чувствительность)
      * От регистра зависят: смещение канала P1, диапазон смещений канала P1h / P1l .
      */
@@ -426,8 +428,8 @@ public class Oscill extends BaseOscillController {
      * Регистр зависит от: RS (режимы невозможны при стробоскопической и параллельной оцифровках), TS (режимы невозможны при малых периодах дискретизации)
      * От регистра зависят: количество выборок QS и QSh
      */
-    public byte setChanelSWMode(byte value) throws IOException {
-        return setRegistry("M1", Header.OSCILL_1BYTE, new byte[]{value})[0];
+    public byte setChanelSWMode(@NonNull BitSet bitSet) throws IOException {
+        return setRegistry("M1", Header.OSCILL_1BYTE, bitsToBytes(bitSet))[0];
     }
 
     /**
@@ -446,21 +448,22 @@ public class Oscill extends BaseOscillController {
      * От регистра зависят: нет.
      * Регистр зависит от: нет.
      */
-    public byte setChanelSyncMode(byte value) throws IOException {
-        return setRegistry("T1", Header.OSCILL_1BYTE, new byte[]{value})[0];
+    public byte setChanelSyncMode(@NonNull BitSet bitSet) throws IOException {
+        return setRegistry("T1", Header.OSCILL_1BYTE, bitsToBytes(bitSet))[0];
     }
 
     /**
      * Имя регистра: S1 - Уровень синхронизации в канале
      * Формат регистра: 1 байт, беззнаковый
-     * Описание регистра: уровень, при достижении которого в заданном регистром T1 направлении возникает событие синхронизации, определяющее начало/окончание оцифровки.
+     * Описание регистра: уровень, при достижении которого в заданном регистром T1 направлении возникает событие синхронизации,
+     * определяющее начало/окончание оцифровки.
      * Единица измерения: 1/256 от диапазона АЦП
      * Граничные значения: 0…255
      * От регистра зависят: нет.
      * Регистр зависит от: нет.
      */
-    public byte setChanelSyncLevel(byte value) throws IOException {
-        return setRegistry("S1", Header.OSCILL_1BYTE, new byte[]{value})[0];
+    public byte setChanelSyncLevel(int value) throws IOException {
+        return setRegistry("S1", Header.OSCILL_1BYTE, intToByte(value))[0];
     }
 
     /**

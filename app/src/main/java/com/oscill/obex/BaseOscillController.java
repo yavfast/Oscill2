@@ -43,6 +43,11 @@ public class BaseOscillController {
         return result;
     }
 
+    @NonNull
+    public static byte[] intToByte(int value) {
+        return new byte[]{(byte) (value & 0xFF)};
+    }
+
     public static byte[] intToBytes(int value) {
         byte[] b = new byte[4];
 
@@ -113,7 +118,7 @@ public class BaseOscillController {
         headerSet.setHeader(Header.OSCILL_REGISTRY, registry.getBytes());
         headerSet.setHeader(propertyType, data);
 
-        return execute(ClientOperation.OperationType.PUT, headerSet, propertyType);
+        return execute(ClientOperation.OperationType.GET, headerSet, propertyType);
     }
 
     @NonNull
