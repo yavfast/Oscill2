@@ -15,6 +15,10 @@ public class Oscill extends BaseOscillController {
         super(clientSession);
     }
 
+    public void reset() throws IOException {
+        getClientSession().reset();
+    }
+
     public int connect() throws IOException {
         return getClientSession().connect(null).getResponseCode();
     }

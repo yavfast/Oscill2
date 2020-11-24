@@ -147,11 +147,16 @@ public abstract class CommonUsbSerialPort implements UsbSerialPort {
 
     protected abstract void closeInt();
 
-    @Override
-    public int read(final byte[] dest, final int timeout) throws IOException {
+    public void checkConnection() throws IOException {
         if(mConnection == null) {
             throw new IOException("Connection closed");
         }
+    }
+
+    @Override
+    public int read(final byte[] dest, final int timeout) throws IOException {
+        checkConnection();
+
         final int nread;
         if (timeout != 0) {
             // bulkTransfer will cause data loss with short timeout + high baud rates + continuous transfer
@@ -176,10 +181,11 @@ public abstract class CommonUsbSerialPort implements UsbSerialPort {
             }
             nread = buf.position();
         }
+
         if (nread > 0) {
             return readFilter(dest, nread);
         } else {
-            return 0;
+            return nread;
         }
     }
 
@@ -187,11 +193,9 @@ public abstract class CommonUsbSerialPort implements UsbSerialPort {
 
     @Override
     public int write(final byte[] src, final int timeout) throws IOException {
-        int offset = 0;
+        checkConnection();
 
-        if(mConnection == null) {
-            throw new IOException("Connection closed");
-        }
+        int offset = 0;
         while (offset < src.length) {
             final int writeLength;
             final int amtWritten;

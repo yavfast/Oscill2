@@ -85,6 +85,7 @@ public class USBDeviceTest {
                     try {
                         ClientSession session = new ClientSession(usbObexTransport);
                         Oscill oscill = new Oscill(session);
+                        oscill.reset();
                         int responseCode = oscill.connect();
                         Log.i(TAG, "Connect result: " + Integer.toHexString(responseCode));
 

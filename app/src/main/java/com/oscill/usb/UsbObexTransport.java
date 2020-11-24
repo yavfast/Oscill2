@@ -43,8 +43,6 @@ public class UsbObexTransport implements ObexTransport {
 
     private static final String TAG = Log.getTag(UsbObexTransport.class);
 
-    private static final int USB_TIMEOUT_MS = 200;
-
     private final SuspendValue<UsbSerialProber> oscillProber = new SuspendValue<>(() -> {
         ProbeTable oscillProbeTable = new ProbeTable();
         oscillProbeTable.addProduct(UsbId.VENDOR_SILABS, 0x840E, Cp21xxSerialDriver.class);
@@ -199,63 +197,68 @@ public class UsbObexTransport implements ObexTransport {
 
     private class UsbInputStream extends ByteArrayInputStream {
 
-        private final AtomicBoolean hasData = new AtomicBoolean(false);
-        private final byte[] readBuf = new byte[4096];
+        private final byte[] readBuf = new byte[1024];
 
         UsbInputStream () {
             this(new byte[getMaxReceivePacketSize()]);
         }
         UsbInputStream(byte[] buf) {
             super(buf);
+            count = 0;
         }
 
-        private void readPacket() {
-            if (hasData.compareAndSet(false, true)) {
+        private void readPacket(int readDataLen) {
+            if (readDataLen > available()) {
                 UsbSerialPort usbPort = getUsbPort();
-                if (usbPort != null) {
-                    try {
-                        while (true) {
-                            int res = usbPort.read(readBuf, USB_TIMEOUT_MS);
-                            if (res > 0) {
-                                System.arraycopy(readBuf, 0, buf, count, res);
-                                count += res;
-                            } else {
-                                break;
-                            }
+                if (usbPort == null) {
+                    return;
+                }
+
+                try {
+                    while (readDataLen > available()) {
+                        int res = usbPort.read(readBuf, 30);
+                        if (res > 0) {
+                            System.arraycopy(readBuf, 0, buf, count, res);
+                            count += res;
+                        } else if (res < 0) {
+                            break;
                         }
-                        if (count > 0) {
-                            Log.i(TAG, "Read: ", ConvertUtils.bytesToHexStr(buf, count));
-                        }
-                    } catch (IOException e) {
-                        Log.e(TAG, "Read USB data error: ", e.getMessage());
                     }
+                } catch (IOException e) {
+                    Log.e(TAG, "Read USB data error: ", e.getMessage());
                 }
             }
         }
 
         @Override
-        public synchronized int read() {
-            readPacket();
+        public int read() {
+            readPacket(1);
             return super.read();
         }
 
         @Override
         public int read(@NonNull byte[] dest) throws IOException {
-            readPacket();
+            readPacket(dest.length);
             return super.read(dest, 0, dest.length);
         }
 
         @Override
-        public synchronized int read(@NonNull byte[] dest, int off, int len) {
-            readPacket();
+        public int read(@NonNull byte[] dest, int off, int len) {
+            readPacket(len);
             return super.read(dest, off, len);
         }
 
         @Override
-        public synchronized void reset() {
+        public void reset() {
+            dumpBuf();
             pos = 0;
             count = 0;
-            hasData.set(false);
+        }
+
+        public void dumpBuf() {
+            if (count > 0) {
+                Log.i(TAG, "Read: ", ConvertUtils.bytesToHexStr(buf, count));
+            }
         }
     }
 
@@ -277,7 +280,7 @@ public class UsbObexTransport implements ObexTransport {
             if (usbPort != null) {
                 byte[] out = toByteArray();
                 Log.i(TAG, "Write: ", ConvertUtils.bytesToHexStr(out, out.length));
-                usbPort.write(out, USB_TIMEOUT_MS);
+                usbPort.write(out, 100);
             }
             reset();
         }

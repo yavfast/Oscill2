@@ -83,6 +83,18 @@ public final class ClientSession implements ObexSession {
         return mOutput;
     }
 
+    public void reset() throws IOException {
+        ensureOpen();
+        if (mObexConnected) {
+            throw new IOException("Already connected to server");
+        }
+        setRequestActive();
+
+        sendRequest(ObexHelper.OBEX_OPCODE_ABORT, null);
+
+        setRequestInactive();
+    }
+
     @NonNull
     public HeaderSet connect(@Nullable HeaderSet header) throws IOException {
         ensureOpen();
@@ -278,37 +290,45 @@ public final class ClientSession implements ObexSession {
 
     private void readResponse(int opCode, @NonNull HeaderSet headerSet) throws IOException {
         InputStream input = getInput();
-        input.reset();
+        try {
+            headerSet.responseCode = read(input);
 
-        /* code | len_hi | len_lo */
-        byte[] header = read(input, 3);
+            /* len_hi | len_lo */
+            byte[] header = read(input, 2);
+            int length = (header[0] << 8) | header[1];
 
-        headerSet.responseCode = header[0] & 0xFF;
+            if (length <= ObexHelper.BASE_PACKET_LENGTH) {
+                return;
+            }
 
-        int length = (header[1] << 8) | header[2];
+            if (length > mTransport.getMaxReceivePacketSize()) {
+                throw new IOException("Packet received exceeds packet size limit");
+            }
 
-        if (length <= ObexHelper.BASE_PACKET_LENGTH) {
-            return;
+            length -= header.length + 1;
+
+            byte[] data;
+
+            switch (opCode) {
+                case ObexHelper.OBEX_OPCODE_CONNECT:
+                    data = readConnectResponse(length);
+                    break;
+
+                default:
+                    data = read(input, length);
+                    break;
+            }
+
+            ObexHelper.updateHeaderSet(headerSet, data);
+
+        } finally {
+            input.reset();
         }
 
-        if (length > mTransport.getMaxReceivePacketSize()) {
-            throw new IOException("Packet received exceeds packet size limit");
-        }
+    }
 
-        length -= header.length;
-
-        byte[] data;
-
-        switch (opCode) {
-            case ObexHelper.OBEX_OPCODE_CONNECT:
-                data = readConnectResponse(length);
-                break;
-
-            default:
-                data = read(input, length);
-        }
-
-        ObexHelper.updateHeaderSet(headerSet, data);
+    private static int read(@NonNull InputStream input) throws IOException {
+        return input.read();
     }
 
     @NonNull
