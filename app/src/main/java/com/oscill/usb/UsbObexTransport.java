@@ -207,16 +207,16 @@ public class UsbObexTransport implements ObexTransport {
             count = 0;
         }
 
-        private void readPacket(int readDataLen) {
+        private boolean readPacket(int readDataLen) {
             if (readDataLen > available()) {
                 UsbSerialPort usbPort = getUsbPort();
                 if (usbPort == null) {
-                    return;
+                    return false;
                 }
 
                 try {
                     while (readDataLen > available()) {
-                        int res = usbPort.read(readBuf, 30);
+                        int res = usbPort.read(readBuf, 100);
                         if (res > 0) {
                             System.arraycopy(readBuf, 0, buf, count, res);
                             count += res;
@@ -224,28 +224,40 @@ public class UsbObexTransport implements ObexTransport {
                             break;
                         }
                     }
+
+                    return readDataLen <= available();
+
                 } catch (IOException e) {
                     Log.e(TAG, "Read USB data error: ", e.getMessage());
+                    return false;
                 }
             }
+
+            return true;
         }
 
         @Override
         public int read() {
-            readPacket(1);
-            return super.read();
+            if (readPacket(1)) {
+                return super.read();
+            }
+            return -1;
         }
 
         @Override
         public int read(@NonNull byte[] dest) throws IOException {
-            readPacket(dest.length);
-            return super.read(dest, 0, dest.length);
+            if (readPacket(dest.length)) {
+                return super.read(dest, 0, dest.length);
+            }
+            return 0;
         }
 
         @Override
         public int read(@NonNull byte[] dest, int off, int len) {
-            readPacket(len);
-            return super.read(dest, off, len);
+            if (readPacket(len)) {
+                return super.read(dest, off, len);
+            }
+            return 0;
         }
 
         @Override

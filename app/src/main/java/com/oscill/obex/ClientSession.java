@@ -83,11 +83,23 @@ public final class ClientSession implements ObexSession {
         return mOutput;
     }
 
-    public void reset() throws IOException {
-        ensureOpen();
+    public void checkConnected() throws IOException {
+        if (!mObexConnected) {
+            throw new IOException("Not connected to the server");
+        }
+    }
+
+    public void checkDisconnected() throws IOException {
         if (mObexConnected) {
             throw new IOException("Already connected to server");
         }
+    }
+
+    public void reset() throws IOException {
+        ensureOpen();
+
+        checkDisconnected();
+
         setRequestActive();
 
         sendRequest(ObexHelper.OBEX_OPCODE_ABORT, null);
@@ -98,9 +110,9 @@ public final class ClientSession implements ObexSession {
     @NonNull
     public HeaderSet connect(@Nullable HeaderSet header) throws IOException {
         ensureOpen();
-        if (mObexConnected) {
-            throw new IOException("Already connected to server");
-        }
+
+        checkDisconnected();
+
         setRequestActive();
 
         int totalLength = 4;
@@ -154,11 +166,8 @@ public final class ClientSession implements ObexSession {
 
     @NonNull
     public ClientOperation get(@NonNull HeaderSet header) throws IOException {
-        if (!mObexConnected) {
-            throw new IOException("Not connected to the server");
-        }
+        checkConnected();
         setRequestActive();
-
         ensureOpen();
 
         return new ClientOperation(this, header, ClientOperation.OperationType.GET, mMaxTxPacketSize);
@@ -176,9 +185,7 @@ public final class ClientSession implements ObexSession {
 
     @NonNull
     public HeaderSet disconnect(@Nullable HeaderSet header) throws IOException {
-        if (!mObexConnected) {
-            throw new IOException("Not connected to the server");
-        }
+        checkConnected();
         setRequestActive();
 
         ensureOpen();
@@ -215,9 +222,7 @@ public final class ClientSession implements ObexSession {
 
     @NonNull
     public ClientOperation put(@NonNull HeaderSet header) throws IOException {
-        if (!mObexConnected) {
-            throw new IOException("Not connected to the server");
-        }
+        checkConnected();
         setRequestActive();
 
         ensureOpen();
@@ -227,9 +232,7 @@ public final class ClientSession implements ObexSession {
 
     @NonNull
     public ClientOperation exec(@NonNull ClientOperation.OperationType operationType, @NonNull HeaderSet header) throws IOException {
-        if (!mObexConnected) {
-            throw new IOException("Not connected to the server");
-        }
+        checkConnected();
         setRequestActive();
 
         ensureOpen();
@@ -335,11 +338,9 @@ public final class ClientSession implements ObexSession {
     private static byte[] read(@NonNull InputStream input, int length) throws IOException {
         if (length > 0) {
             byte[] data = new byte[length];
-            int bytesReceived = input.read(data);
-            while (bytesReceived < length) {
-                bytesReceived += input.read(data, bytesReceived, data.length - bytesReceived);
+            if (input.read(data, 0, length) > 0) {
+                return data;
             }
-            return data;
         }
 
         return new byte[]{};

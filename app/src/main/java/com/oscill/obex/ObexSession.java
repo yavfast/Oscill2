@@ -32,8 +32,6 @@
 
 package com.oscill.obex;
 
-import java.io.IOException;
-
 /**
  * The <code>ObexSession</code> interface characterizes the term
  * "OBEX Connection" as defined in the IrDA Object Exchange Protocol v1.2, which
