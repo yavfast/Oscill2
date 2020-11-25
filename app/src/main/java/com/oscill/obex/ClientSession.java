@@ -308,7 +308,7 @@ public final class ClientSession implements ObexSession {
                 throw new IOException("Packet received exceeds packet size limit");
             }
 
-            length -= header.length + 1;
+            length -= header.length + 1/*response code*/;
 
             byte[] data;
 
@@ -341,6 +341,7 @@ public final class ClientSession implements ObexSession {
             if (input.read(data, 0, length) > 0) {
                 return data;
             }
+            throw new IOException("Read data error");
         }
 
         return new byte[]{};

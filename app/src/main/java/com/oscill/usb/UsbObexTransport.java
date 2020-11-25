@@ -129,7 +129,10 @@ public class UsbObexTransport implements ObexTransport {
         return usbConnection.get();
     }
 
-    private final SuspendValue<UsbSerialPort> usbPort = new SuspendValue<>(() -> {
+    private final SuspendValue<UsbSerialPort> usbPort = new SuspendValue<>(this::openUsbPort);
+
+    @Nullable
+    private UsbSerialPort openUsbPort() {
         UsbSerialDriver usbDriver = getUsbDriver();
         if (usbDriver != null) {
             UsbDeviceConnection connection = getUsbConnection();
@@ -148,7 +151,7 @@ public class UsbObexTransport implements ObexTransport {
             }
         }
         return null;
-    });
+    }
 
     @Nullable
     private UsbSerialPort getUsbPort() {
@@ -221,6 +224,7 @@ public class UsbObexTransport implements ObexTransport {
                             System.arraycopy(readBuf, 0, buf, count, res);
                             count += res;
                         } else if (res < 0) {
+                            Log.d(TAG, "EOF");
                             break;
                         }
                     }

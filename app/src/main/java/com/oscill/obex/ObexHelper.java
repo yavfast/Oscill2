@@ -167,7 +167,7 @@ public final class ObexHelper {
         int headerID;
         byte[] data = null;
         while (index < headerArray.length) {
-            headerID = 0xFF & headerArray[index];
+            headerID = headerArray[index] & 0xFF;
             switch (headerID & 0xC0) {
 
                 /*
