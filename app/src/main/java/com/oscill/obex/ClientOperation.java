@@ -580,19 +580,26 @@ public final class ClientOperation implements Operation, BaseStream {
         } else {
             // PUT operation
             if (!mOperationDone) {
-                mReplyHeader.responseCode = ResponseCodes.OBEX_HTTP_CONTINUE;
-                while ((more) && (mReplyHeader.responseCode == ResponseCodes.OBEX_HTTP_CONTINUE)) {
-                    more = sendRequest(ObexHelper.OBEX_OPCODE_PUT);
+                if (!mGetFinalFlag) {
+                    mReplyHeader.responseCode = ResponseCodes.OBEX_HTTP_CONTINUE;
+
+                    while ((more) && (mReplyHeader.responseCode == ResponseCodes.OBEX_HTTP_CONTINUE)) {
+                        more = sendRequest(ObexHelper.OBEX_OPCODE_PUT);
+                    }
+
+                    if (mReplyHeader.responseCode == ResponseCodes.OBEX_HTTP_CONTINUE) {
+                        mParent.sendRequest(ObexHelper.OBEX_OPCODE_PUT_FINAL, null, mReplyHeader, mPrivateInput);
+                    }
+                    if (mReplyHeader.responseCode != ResponseCodes.OBEX_HTTP_CONTINUE) {
+                        mOperationDone = true;
+                    }
+
+                } else {
+                    sendRequest(ObexHelper.OBEX_OPCODE_PUT_FINAL);
+                    mOperationDone = true;
                 }
             }
 
-            if (mReplyHeader.responseCode == ResponseCodes.OBEX_HTTP_CONTINUE) {
-                mParent.sendRequest(ObexHelper.OBEX_OPCODE_PUT_FINAL, null, mReplyHeader, mPrivateInput);
-            }
-
-            if (mReplyHeader.responseCode != ResponseCodes.OBEX_HTTP_CONTINUE) {
-                mOperationDone = true;
-            }
         }
     }
 

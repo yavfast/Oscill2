@@ -219,13 +219,17 @@ public class UsbObexTransport implements ObexTransport {
 
                 try {
                     while (readDataLen > available()) {
-                        int res = usbPort.read(readBuf, 100);
+                        int res = usbPort.read(readBuf, 200);
+
                         if (res > 0) {
                             System.arraycopy(readBuf, 0, buf, count, res);
                             count += res;
+
                         } else if (res < 0) {
-                            Log.d(TAG, "EOF");
-                            break;
+                            if (count > 0) {
+                                Log.d(TAG, "EOF");
+                                break;
+                            }
                         }
                     }
 
@@ -249,7 +253,7 @@ public class UsbObexTransport implements ObexTransport {
         }
 
         @Override
-        public int read(@NonNull byte[] dest) throws IOException {
+        public int read(@NonNull byte[] dest) {
             if (readPacket(dest.length)) {
                 return super.read(dest, 0, dest.length);
             }

@@ -144,7 +144,7 @@ public class BaseOscillController {
         HeaderSet headerSet = new HeaderSet();
         headerSet.setHeader(Header.OSCILL_DATA, "D".getBytes());
 
-        return execute(ClientOperation.OperationType.PUT, headerSet, Header.END_OF_BODY);
+        return execute(ClientOperation.OperationType.GET, headerSet, Header.END_OF_BODY);
     }
 
 }
