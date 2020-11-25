@@ -225,10 +225,16 @@ public class UsbObexTransport implements ObexTransport {
                             System.arraycopy(readBuf, 0, buf, count, res);
                             count += res;
 
-                        } else if (res < 0) {
+                        } else if (res == 0) {
+                            Log.d(TAG, "WAIT DATA");
+
+                        } else {
                             if (count > 0) {
-                                Log.d(TAG, "EOF");
+                                Log.w(TAG, "EOF: " + res);
                                 break;
+                            } else {
+                                // TODO: Maybe internal restart device
+                                Log.w(TAG, "WAIT DATA: " + res);
                             }
                         }
                     }
