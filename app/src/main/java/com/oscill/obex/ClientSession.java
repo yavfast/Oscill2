@@ -34,6 +34,8 @@
 
 package com.oscill.obex;
 
+import android.os.SystemClock;
+
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
@@ -103,6 +105,7 @@ public final class ClientSession implements ObexSession {
         setRequestActive();
 
         sendRequest(ObexHelper.OBEX_OPCODE_ABORT, null);
+        SystemClock.sleep(500L); // Wait for reset device
 
         setRequestInactive();
     }
@@ -145,7 +148,7 @@ public final class ClientSession implements ObexSession {
         }
 
         HeaderSet returnHeaderSet = new HeaderSet();
-        sendRequest(ObexHelper.OBEX_OPCODE_CONNECT, requestPacket, returnHeaderSet, null);
+        sendRequest(ObexHelper.OBEX_OPCODE_CONNECT, requestPacket, returnHeaderSet);
 
         /*
         * Read the response from the OBEX server.
@@ -200,7 +203,7 @@ public final class ClientSession implements ObexSession {
         }
 
         HeaderSet returnHeaderSet = new HeaderSet();
-        sendRequest(ObexHelper.OBEX_OPCODE_DISCONNECT, head, returnHeaderSet, null);
+        sendRequest(ObexHelper.OBEX_OPCODE_DISCONNECT, head, returnHeaderSet);
 
         /*
          * An OBEX DISCONNECT reply from the server:
@@ -367,18 +370,11 @@ public final class ClientSession implements ObexSession {
      * @param opCode the type of request to send to the client
      * @param head the headers to send to the client
      * @param header the header object to update with the response
-     * @param privateInput the input stream used by the Operation object; null
-     *        if this is called on a CONNECT, SETPATH or DISCONNECT
      * @throws IOException if an IO error occurs
      */
-    public void sendRequest(int opCode, @Nullable byte[] head, @NonNull HeaderSet header, @Nullable PrivateInputStream privateInput) throws IOException {
+    public void sendRequest(int opCode, @Nullable byte[] head, @NonNull HeaderSet header) throws IOException {
         sendRequest(opCode, head);
         readResponse(opCode, header);
-
-//            if (privateInput != null && body != null) {
-//                privateInput.writeBytes(body, 1);
-//            }
-
     }
 
     public void close() throws IOException {

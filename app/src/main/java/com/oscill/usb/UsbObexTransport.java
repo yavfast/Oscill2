@@ -7,6 +7,7 @@ import android.content.IntentFilter;
 import android.hardware.usb.UsbDevice;
 import android.hardware.usb.UsbDeviceConnection;
 import android.hardware.usb.UsbManager;
+import android.os.SystemClock;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -235,6 +236,7 @@ public class UsbObexTransport implements ObexTransport {
                             } else {
                                 // TODO: Maybe internal restart device
                                 Log.w(TAG, "WAIT DATA: " + res);
+                                SystemClock.sleep(500L);
                             }
                         }
                     }

@@ -2,10 +2,10 @@ package com.oscill.obex;
 
 import androidx.annotation.NonNull;
 
+import com.oscill.utils.BitSet;
 import com.oscill.utils.Log;
 
 import java.io.IOException;
-import java.util.BitSet;
 
 public class Oscill extends BaseOscillController {
 
@@ -75,6 +75,7 @@ public class Oscill extends BaseOscillController {
      * Регистр зависит от: нет.
      */
     public int setCPUTickLength(int value) throws IOException {
+        Log.i(TAG, "setCPUTickLength: ", value);
         return bytesToInt(setRegistry("MC", Header.OSCILL_2BYTE, intToBytes(value)));
     }
 
@@ -121,7 +122,8 @@ public class Oscill extends BaseOscillController {
      */
     @NonNull
     public BitSet setProcessingType(@NonNull BitSet values) throws IOException {
-        return bytesToBits(setRegistry("RS", Header.OSCILL_1BYTE, bitsToBytes(values)));
+        Log.i(TAG, "setProcessingType: ", values);
+        return BitSet.fromBytes(setRegistry("RS", Header.OSCILL_1BYTE, values.toBytes()));
     }
 
     /**
@@ -158,7 +160,7 @@ public class Oscill extends BaseOscillController {
      */
     @NonNull
     public BitSet getSamplingVariants() throws IOException {
-        return bytesToBits(getProperty("TOv", Header.OSCILL_4BYTE));
+        return BitSet.fromBytes(getProperty("TOv", Header.OSCILL_4BYTE));
     }
 
     /**
@@ -219,6 +221,7 @@ public class Oscill extends BaseOscillController {
      * От регистра зависят: нет.
      */
     public int setSamplesDataSize(int value) throws IOException {
+        Log.i(TAG, "setSamplesDataSize: ", value);
         return bytesToInt(setRegistry("QS", Header.OSCILL_2BYTE, intToBytes(value)));
     }
 
@@ -233,6 +236,7 @@ public class Oscill extends BaseOscillController {
      * Регистр теряет смысл при использовании задержки развертки (TD).
      */
     public int setSamplesOffset(int value) throws IOException {
+        Log.i(TAG, "setSamplesOffset: ", value);
         return bytesToInt(setRegistry("TC", Header.OSCILL_2BYTE, intToBytes(value)));
     }
 
@@ -247,6 +251,7 @@ public class Oscill extends BaseOscillController {
      * От регистра зависят: количество выборок QS и QSh
      */
     public byte setAvgSamplingCount(int value) throws IOException {
+        Log.i(TAG, "setAvgSamplingCount: ", value);
         return setRegistry("AP", Header.OSCILL_1BYTE, intToByte(value))[0];
     }
 
@@ -258,6 +263,7 @@ public class Oscill extends BaseOscillController {
      * От регистра зависят:  нет
      */
     public byte setMinSamplingCount(int value) throws IOException {
+        Log.i(TAG, "setMinSamplingCount: ", value);
         return setRegistry("AR", Header.OSCILL_1BYTE, intToByte(value))[0];
     }
 
@@ -286,6 +292,7 @@ public class Oscill extends BaseOscillController {
      * От регистра зависят: нет.
      */
     public int setScanDelay(int value) throws IOException {
+        Log.i(TAG, "setScanDelay: ", value);
         return bytesToInt(setRegistry("TD", Header.OSCILL_4BYTE, intToBytes(value)));
     }
 
@@ -301,7 +308,8 @@ public class Oscill extends BaseOscillController {
      * Примечание: свободный и бесконечно ждущий запуски поддерживаются начиная с встроенного ПО (firmware) версии 1.25.
      */
     public void setSyncType(@NonNull BitSet bitSet) throws IOException {
-        setRegistry("RT", Header.OSCILL_1BYTE, bitsToBytes(bitSet));
+        Log.i(TAG, "setSyncType: ", bitSet);
+        setRegistry("RT", Header.OSCILL_1BYTE, bitSet.toBytes());
     }
 
     /**
@@ -313,6 +321,7 @@ public class Oscill extends BaseOscillController {
      * От регистра зависят: нет.
      */
     public int setDelayMaxSyncAuto(int time) throws IOException{
+        Log.i(TAG, "setDelayMaxSyncAuto: ", time);
         return bytesToInt(setRegistry("TA", Header.OSCILL_4BYTE, intToBytes(time)));
     }
 
@@ -325,6 +334,7 @@ public class Oscill extends BaseOscillController {
      * От регистра зависят: нет.
      */
     public int setDelayMaxSyncWait(int time) throws IOException{
+        Log.i(TAG, "setDelayMaxSyncWait: ", time);
         return bytesToInt(setRegistry("TW", Header.OSCILL_4BYTE, intToBytes(time)));
     }
 
@@ -387,7 +397,8 @@ public class Oscill extends BaseOscillController {
      * Регистр зависит от: нет.
      */
     public byte setChanelHWMode(@NonNull BitSet bitSet) throws IOException {
-        return setRegistry("O1", Header.OSCILL_1BYTE, bitsToBytes(bitSet))[0];
+        Log.i(TAG, "setChanelHWMode: ", bitSet);
+        return setRegistry("O1", Header.OSCILL_1BYTE, bitSet.toBytes())[0];
     }
 
     /**
@@ -402,6 +413,7 @@ public class Oscill extends BaseOscillController {
      * От регистра зависят: смещение канала P1, диапазон смещений канала P1h / P1l .
      */
     public int setChanelSensitivity(int value) throws IOException {
+        Log.i(TAG, "setChanelSensitivity: ", value);
         return bytesToInt(setRegistry("V1", Header.OSCILL_2BYTE, intToBytes(value)));
     }
 
@@ -415,6 +427,7 @@ public class Oscill extends BaseOscillController {
      * От регистра зависят: нет.
      */
     public int setChanelOffset(int value) throws IOException {
+        Log.i(TAG, "setChanelOffset: ", value);
         return bytesToInt(setRegistry("P1", Header.OSCILL_2BYTE, intToBytes(value)));
     }
 
@@ -433,7 +446,8 @@ public class Oscill extends BaseOscillController {
      * От регистра зависят: количество выборок QS и QSh
      */
     public byte setChanelSWMode(@NonNull BitSet bitSet) throws IOException {
-        return setRegistry("M1", Header.OSCILL_1BYTE, bitsToBytes(bitSet))[0];
+        Log.i(TAG, "setChanelSWMode: ", bitSet);
+        return setRegistry("M1", Header.OSCILL_1BYTE, bitSet.toBytes())[0];
     }
 
     /**
@@ -453,7 +467,8 @@ public class Oscill extends BaseOscillController {
      * Регистр зависит от: нет.
      */
     public byte setChanelSyncMode(@NonNull BitSet bitSet) throws IOException {
-        return setRegistry("T1", Header.OSCILL_1BYTE, bitsToBytes(bitSet))[0];
+        Log.i(TAG, "setChanelSyncMode: ", bitSet);
+        return setRegistry("T1", Header.OSCILL_1BYTE, bitSet.toBytes())[0];
     }
 
     /**
@@ -467,6 +482,7 @@ public class Oscill extends BaseOscillController {
      * Регистр зависит от: нет.
      */
     public byte setChanelSyncLevel(int value) throws IOException {
+        Log.i(TAG, "setChanelSyncLevel: ", value);
         return setRegistry("S1", Header.OSCILL_1BYTE, intToByte(value))[0];
     }
 
@@ -479,6 +495,7 @@ public class Oscill extends BaseOscillController {
      * При успехе калибровки Oscill возвращает Response-пакет Success.
      */
     public void calibration() throws IOException {
+        Log.i(TAG, "calibration");
         sendCommand("C", Header.OSCILL_EMPTY);
     }
 

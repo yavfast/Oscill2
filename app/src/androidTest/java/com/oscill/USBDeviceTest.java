@@ -6,15 +6,16 @@ import android.hardware.usb.UsbManager;
 import android.util.Log;
 
 import androidx.annotation.NonNull;
-import androidx.test.platform.app.InstrumentationRegistry;
 import androidx.test.ext.junit.runners.AndroidJUnit4;
+import androidx.test.platform.app.InstrumentationRegistry;
 import androidx.test.rule.GrantPermissionRule;
 
-import com.oscill.obex.BaseOscillController;
+import com.oscill.obex.ClientSession;
 import com.oscill.obex.Oscill;
 import com.oscill.obex.ResponseCodes;
 import com.oscill.usb.UsbObexTransport;
 import com.oscill.utils.AppContextWrapper;
+import com.oscill.utils.BitSet;
 
 import org.junit.Before;
 import org.junit.Rule;
@@ -24,9 +25,6 @@ import org.junit.runner.RunWith;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.List;
-
-import com.oscill.obex.ClientSession;
-import com.oscill.obex.HeaderSet;
 
 import usbserial.driver.Cp21xxSerialDriver;
 import usbserial.driver.ProbeTable;
@@ -158,7 +156,7 @@ public class USBDeviceTest {
     @Test
     public void testSingleSync() {
         runTest(oscill -> {
-            oscill.setProcessingType(BaseOscillController.bytesToBits(new byte[]{0,0,0,0,0,0,0,0})); // RS
+            oscill.setProcessingType(BitSet.fromBits(0,0,0,0,0,0,0,0)); // RS
 
             oscill.setCPUTickLength(1200); // MC
 
@@ -175,14 +173,14 @@ public class USBDeviceTest {
             oscill.setMinSamplingCount(0); // AR
             oscill.setAvgSamplingCount(0); // AP
 
-            oscill.setChanelSyncMode(BaseOscillController.bytesToBits(new byte[]{0,0,0,0,0,0,0,0})); // T1
-            oscill.setChanelHWMode(BaseOscillController.bytesToBits(new byte[]{0,0,0,0,0,0,0,0})); // O1
-            oscill.setChanelSWMode(BaseOscillController.bytesToBits(new byte[]{0,0,0,0,0,1,0,0})); // M1
+            oscill.setChanelSyncMode(BitSet.fromBits(0,0,0,0,0,0,0,0)); // T1
+            oscill.setChanelHWMode(BitSet.fromBits(0,0,0,0,0,0,0,0)); // O1
+            oscill.setChanelSWMode(BitSet.fromBits(0,0,0,0,0,1,0,0)); // M1
 
             oscill.setChanelSensitivity(20); // V1
             oscill.setChanelOffset(0); // P1
             oscill.setChanelSyncLevel(0); // S1
-            oscill.setSyncType(BaseOscillController.bytesToBits(new byte[]{0,0,0,0,0,0,1,0})); // RT
+            oscill.setSyncType(BitSet.fromBits(0,0,0,0,0,0,1,0)); // RT
 
 
             oscill.calibration();

@@ -5,7 +5,6 @@ import androidx.annotation.NonNull;
 import com.oscill.utils.Log;
 
 import java.io.IOException;
-import java.util.BitSet;
 
 public class BaseOscillController {
 
@@ -57,28 +56,6 @@ public class BaseOscillController {
         b[3] = (byte)(0xFF & value);
 
         return b;
-    }
-
-    @NonNull
-    public static BitSet bytesToBits(@NonNull byte[] data) {
-        int len = data.length * 8;
-        BitSet res = new BitSet(len);
-        for (int idx = 0; idx < len; idx++) {
-            res.set(idx, ((data[idx / 8] & (1 << (idx % 8))) != 0));
-        }
-        return res;
-    }
-
-    @NonNull
-    public static byte[] bitsToBytes(@NonNull BitSet data) {
-        int size = data.size();
-        byte[] res = new byte[(size + 7) / 8];
-        for (int idx = 0; idx < size; idx++) {
-            if (data.get(idx)) {
-                res[idx / 8] |= 1 << (idx % 8);
-            }
-        }
-        return res;
     }
 
     @NonNull
