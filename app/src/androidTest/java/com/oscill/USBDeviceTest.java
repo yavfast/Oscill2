@@ -3,19 +3,21 @@ package com.oscill;
 import android.content.Context;
 import android.hardware.usb.UsbDevice;
 import android.hardware.usb.UsbManager;
-import android.util.Log;
 
 import androidx.annotation.NonNull;
 import androidx.test.ext.junit.runners.AndroidJUnit4;
 import androidx.test.platform.app.InstrumentationRegistry;
 import androidx.test.rule.GrantPermissionRule;
 
+import com.oscill.controller.OscillConfig;
+import com.oscill.controller.OscillProperty;
 import com.oscill.obex.ClientSession;
-import com.oscill.obex.Oscill;
+import com.oscill.controller.Oscill;
 import com.oscill.obex.ResponseCodes;
 import com.oscill.usb.UsbObexTransport;
 import com.oscill.utils.AppContextWrapper;
-import com.oscill.utils.BitSet;
+import com.oscill.types.BitSet;
+import com.oscill.utils.Log;
 
 import org.junit.Before;
 import org.junit.Rule;
@@ -70,7 +72,7 @@ public class USBDeviceTest {
     }
 
     public interface OscillTest {
-        void run(@NonNull Oscill oscill) throws IOException;
+        void run(@NonNull Oscill oscill) throws Exception;
     }
 
     private void runTest(@NonNull OscillTest test) {
@@ -99,7 +101,7 @@ public class USBDeviceTest {
                 } else {
                     usbObexTransport.requestPermissions();
                 }
-            } catch (IOException e) {
+            } catch (Exception e) {
                 Log.e(TAG, e.getMessage(), e);
             }
 
@@ -144,6 +146,22 @@ public class USBDeviceTest {
     @Test
     public void testRegistry() {
         runTest(oscill -> {
+
+        });
+    }
+
+    @Test
+    public void testOscillConfig() {
+        runTest(oscill -> {
+            OscillConfig config = new OscillConfig(oscill);
+
+            OscillProperty<Float> chanelSensitivity = config.getChanelSensitivity();
+            Log.i(TAG, "chanelSensitivity range: " + chanelSensitivity.getRealRange());
+
+            for (float testValue = 0f; testValue <= 10.5f; testValue += 0.1f) {
+                chanelSensitivity.setRealValue(testValue);
+                Log.i(TAG, "set chanelSensitivity: ", testValue, " -> ", chanelSensitivity.getRealValue());
+            }
 
         });
     }

@@ -1,8 +1,10 @@
-package com.oscill.obex;
+package com.oscill.controller;
 
 import androidx.annotation.NonNull;
 
-import com.oscill.utils.BitSet;
+import com.oscill.obex.ClientSession;
+import com.oscill.obex.Header;
+import com.oscill.types.BitSet;
 import com.oscill.utils.Log;
 
 import java.io.IOException;

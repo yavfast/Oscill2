@@ -1,7 +1,12 @@
-package com.oscill.obex;
+package com.oscill.controller;
 
 import androidx.annotation.NonNull;
 
+import com.oscill.obex.ClientOperation;
+import com.oscill.obex.ClientSession;
+import com.oscill.obex.Header;
+import com.oscill.obex.HeaderSet;
+import com.oscill.obex.ResponseCodes;
 import com.oscill.utils.Log;
 
 import java.io.IOException;

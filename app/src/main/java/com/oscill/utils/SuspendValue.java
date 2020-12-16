@@ -17,6 +17,14 @@ public class SuspendValue<V> {
     }
 
     public final V get() {
+        try {
+            return getOrThrow();
+        } catch (Exception e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
+    public final V getOrThrow() throws Exception {
         if (suspended) {
             synchronized (this) {
                 if (suspended) {

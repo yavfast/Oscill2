@@ -1,4 +1,4 @@
-package com.oscill.utils;
+package com.oscill.types;
 
 import androidx.annotation.NonNull;
 

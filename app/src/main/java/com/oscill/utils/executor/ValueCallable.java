@@ -1,5 +1,5 @@
 package com.oscill.utils.executor;
 
 public interface ValueCallable<V> {
-    V call();
+    V call() throws Exception;
 }
