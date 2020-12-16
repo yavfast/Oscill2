@@ -110,6 +110,16 @@ public final class ClientSession implements ObexSession {
         setRequestInactive();
     }
 
+    public void setSpeed(byte speed) throws IOException {
+        ensureOpen();
+        setRequestActive();
+
+        sendRequest(Header.OSCILL_SPEED, new byte[]{speed});
+        readResponse(Header.OSCILL_SPEED, new HeaderSet());
+
+        setRequestInactive();
+    }
+
     @NonNull
     public HeaderSet connect(@Nullable HeaderSet header) throws IOException {
         ensureOpen();
@@ -188,18 +198,13 @@ public final class ClientSession implements ObexSession {
 
     @NonNull
     public HeaderSet disconnect(@Nullable HeaderSet header) throws IOException {
-        checkConnected();
+//        checkConnected();
         setRequestActive();
-
         ensureOpen();
-        // Determine the header byte array
+
         byte[] head = null;
         if (header != null) {
             head = ObexHelper.createHeader(header, false);
-
-            if ((head.length + 3) > mMaxTxPacketSize) {
-                throw new IOException("Packet size exceeds max packet size");
-            }
         }
 
         HeaderSet returnHeaderSet = new HeaderSet();

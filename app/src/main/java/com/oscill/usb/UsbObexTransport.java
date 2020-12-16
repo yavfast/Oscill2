@@ -12,6 +12,7 @@ import android.os.SystemClock;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
+import com.oscill.obex.ObexTransport;
 import com.oscill.utils.AppContextWrapper;
 import com.oscill.utils.ArrayUtils;
 import com.oscill.utils.ConvertUtils;
@@ -27,9 +28,6 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.util.List;
-import java.util.concurrent.atomic.AtomicBoolean;
-
-import com.oscill.obex.ObexTransport;
 
 import usbserial.driver.Cp21xxSerialDriver;
 import usbserial.driver.ProbeTable;
@@ -142,7 +140,8 @@ public class UsbObexTransport implements ObexTransport {
                 for (UsbSerialPort port : ports) {
                     try {
                         port.open(connection);
-                        port.setParameters(9600, UsbSerialPort.DATABITS_8, UsbSerialPort.STOPBITS_1, UsbSerialPort.PARITY_NONE);
+                        // 9600, 19200, 38400, 57600, 115200, 230400, 460800, 921600
+                        port.setParameters(115200, UsbSerialPort.DATABITS_8, UsbSerialPort.STOPBITS_1, UsbSerialPort.PARITY_NONE);
                         Log.i(TAG, "Open port: ", port);
                         return port;
                     } catch (IOException e) {
@@ -231,11 +230,11 @@ public class UsbObexTransport implements ObexTransport {
 
                         } else {
                             if (count > 0) {
-                                Log.w(TAG, "EOF: " + res);
+                                Log.w(TAG, "EOF: ", res);
                                 break;
                             } else {
                                 // TODO: Maybe internal restart device
-                                Log.w(TAG, "WAIT DATA: " + res);
+                                Log.w(TAG, "WAIT DATA: ", res);
                                 SystemClock.sleep(500L);
                             }
                         }

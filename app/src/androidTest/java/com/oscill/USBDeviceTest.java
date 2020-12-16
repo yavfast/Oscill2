@@ -83,7 +83,9 @@ public class USBDeviceTest {
                     try {
                         ClientSession session = new ClientSession(usbObexTransport);
                         Oscill oscill = new Oscill(session);
+
                         oscill.reset();
+
                         int responseCode = oscill.connect();
                         Log.i(TAG, "Connect result: " + Integer.toHexString(responseCode));
 
@@ -158,17 +160,19 @@ public class USBDeviceTest {
         runTest(oscill -> {
             oscill.setProcessingType(BitSet.fromBits(0,0,0,0,0,0,0,0)); // RS
 
-            oscill.setCPUTickLength(1200); // MC
+//            oscill.setCPUTickLength(1200); // MC
+
+//            oscill.setSpeed(Header.SPEED_115200);
 
             int maxSamplesDataSize = oscill.getMaxSamplesDataSize();
             Log.i(TAG, "Max samples data size: " + maxSamplesDataSize);
             oscill.setSamplesDataSize(maxSamplesDataSize); // QS
 
             oscill.setScanDelay(0); // TD
-            oscill.setSamplesOffset(100); // TC
+            oscill.setSamplesOffset(10); // TC
 
-            oscill.setDelayMaxSyncAuto(1000000); // TA
-            oscill.setDelayMaxSyncWait(1000000); // TW
+            oscill.setDelayMaxSyncAuto(100); // TA
+            oscill.setDelayMaxSyncWait(100); // TW
 
             oscill.setMinSamplingCount(0); // AR
             oscill.setAvgSamplingCount(0); // AP
@@ -182,11 +186,12 @@ public class USBDeviceTest {
             oscill.setChanelSyncLevel(0); // S1
             oscill.setSyncType(BitSet.fromBits(0,0,0,0,0,0,1,0)); // RT
 
-
             oscill.calibration();
-            byte[] data = oscill.getData();
 
-            Log.i(TAG, "Data: " + Arrays.toString(data));
+            for (int idx = 0; idx < 10; idx++) {
+                byte[] data = oscill.getData();
+                Log.i(TAG, "Data: " + Arrays.toString(data));
+            }
         });
     }
 

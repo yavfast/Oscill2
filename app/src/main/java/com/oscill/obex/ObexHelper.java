@@ -162,12 +162,15 @@ public final class ObexHelper {
      * @throws IOException if an invalid header was found
      */
     public static void updateHeaderSet(@NonNull HeaderSet header, @NonNull byte[] headerArray) throws IOException {
+        if (headerArray.length < OBEX_BYTE_SEQ_HEADER_LEN) {
+            return;
+        }
+
+        byte[] data;
+
         int index = 0;
-        int length = 0;
-        int headerID;
-        byte[] data = null;
         while (index < headerArray.length) {
-            headerID = headerArray[index] & 0xFF;
+            int headerID = headerArray[index] & 0xFF;
             switch (headerID & 0xC0) {
 
                 /*
@@ -175,33 +178,23 @@ public final class ObexHelper {
                  * two bytes after the header identifier being the length
                  */
                 case 0x00:
-                    // Fall through
-                    /*
-                     * 0x40 is a byte sequence with the first
-                     * two bytes after the header identifier being the length
-                     */
+//                    header.setHeader(headerID, ObexHelper.convertToUnicode(data, true));
+                    break;
+
+                // Fall through
+                /*
+                 * 0x40 is a byte sequence with the first
+                 * two bytes after the header identifier being the length
+                 */
                 case 0x40:
-                    boolean trimTail = true;
                     index++;
-                    length = ((0xFF & headerArray[index]) << 8) + (0xFF & headerArray[index + 1]);
+                    int length = ((0xFF & headerArray[index]) << 8) + (0xFF & headerArray[index + 1]);
                     index += 2;
-                    if (length <= OBEX_BYTE_SEQ_HEADER_LEN) {
-//                            Log.e(TAG, "Remote sent an OBEX packet with " + "incorrect header length = " + length);
-                        break;
-                    }
                     length -= OBEX_BYTE_SEQ_HEADER_LEN;
                     data = new byte[length];
                     System.arraycopy(headerArray, index, data, 0, length);
-                    if (length == 0 || (length > 0 && (data[length - 1] != 0))) {
-                        trimTail = false;
-                    }
 
                     header.setHeader(headerID, data);
-//                    if ((headerID & 0xC0) == 0x00) {
-//                        header.setHeader(headerID, ObexHelper.convertToUnicode(data, true));
-//                    } else {
-//                        header.setHeader(headerID, data);
-//                    }
 
                     index += length;
                     break;

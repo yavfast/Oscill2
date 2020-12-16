@@ -23,6 +23,10 @@ public class Oscill extends BaseOscillController {
         return getClientSession().connect(null).getResponseCode();
     }
 
+    public int disconnect() throws IOException {
+        return getClientSession().disconnect(null).getResponseCode();
+    }
+
     @NonNull
     public String getDeviceId() throws IOException {
         return bytesToString(getProperty("VNM", Header.OSCILL_4BYTE));
@@ -500,4 +504,13 @@ public class Oscill extends BaseOscillController {
     }
 
 
+    /**
+     * Скорость последовательного порта во время сессии
+     * (начало сессии всегда на скорости 9600 бод) определяется так: speed=1842000/коэфф.
+     * Например, для скорости 115200 нужно установить коэффициент скорости =16 (0x10).
+     */
+    public void setSpeed(byte speed) throws IOException {
+        Log.i(TAG, "setSpeed: ", 1842000 / speed);
+        getClientSession().setSpeed(speed);
+    }
 }

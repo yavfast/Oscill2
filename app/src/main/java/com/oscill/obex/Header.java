@@ -131,12 +131,17 @@ public interface Header {
      * The value of <code>SINGLE_RESPONSE_MODE_PARAMETER</code> is 0x98 (152).
      */
     int SINGLE_RESPONSE_MODE_PARAMETER = 0x98;
+
     int OSCILL_PROPERTY = 0x70;
     int OSCILL_REGISTRY = 0x71;
     int OSCILL_DATA = 0x72;
+    int OSCILL_SPEED = 0x91;
     int OSCILL_CRC = 0xB0;
     int OSCILL_1BYTE = 0xB1;
     int OSCILL_2BYTE = 0xF0;
     int OSCILL_4BYTE = 0xF1;
     int OSCILL_EMPTY = 0x00;
+
+    byte SPEED_921000 = (byte) 0x02;
+    byte SPEED_115200 = (byte) 0x10;
 }
