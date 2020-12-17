@@ -164,6 +164,8 @@ public class USBDeviceTest {
 
             ChanelSensitivity chanelSensitivity = config.getChanelSensitivity();
             Log.i(TAG, "chanelSensitivity range: " + chanelSensitivity.getRealRange());
+            chanelSensitivity.setSensitivity(10f, Dimension.NORMAL);
+            Log.i(TAG, "set chanelSensitivity: " + chanelSensitivity.getRealValue());
 
 //            for (float testValue = 0f; testValue <= 10.5f; testValue += 0.1f) {
 //                chanelSensitivity.setRealValue(testValue);

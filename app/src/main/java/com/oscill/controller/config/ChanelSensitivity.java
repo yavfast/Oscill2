@@ -37,12 +37,16 @@ public class ChanelSensitivity extends OscillProperty<Float> {
 
     @Override
     protected Integer realToNative(@NonNull Float realValue) {
-        return Math.round(200f / realValue);
+        return Math.round(realValue);
     }
 
     @Override
     protected Float nativeToReal(@NonNull Integer nativeValue) {
-        return 200f / nativeValue;
+        return (float)nativeValue;
+    }
+
+    public void setSensitivity(float value, @NonNull Dimension dimension) throws Exception {
+        setRealValue(dimension.toDimension(value, Dimension.MILLI));
     }
 
 }
