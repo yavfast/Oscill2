@@ -17,7 +17,12 @@ public class Unit {
     }
 
     @NonNull
-    public String getUnitName() {
+    public Dimension getDimension() {
+        return dimension;
+    }
+
+    @NonNull
+    public String toString() {
         return dimension.getPrefix() + name;
     }
 }

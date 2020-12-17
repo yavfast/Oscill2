@@ -50,7 +50,6 @@ import androidx.annotation.IdRes;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.annotation.StringRes;
-import androidx.annotation.StyleRes;
 import androidx.annotation.StyleableRes;
 import androidx.appcompat.content.res.AppCompatResources;
 import androidx.appcompat.view.menu.MenuBuilder;
@@ -65,8 +64,9 @@ import androidx.fragment.app.Fragment;
 import androidx.fragment.app.FragmentActivity;
 import androidx.fragment.app.FragmentManager;
 
-import com.oscill.R;
+import com.oscill.types.SuspendValue;
 import com.oscill.utils.executor.Executor;
+import com.oscill.utils.executor.ObjRunnable;
 
 import java.lang.ref.WeakReference;
 import java.lang.reflect.Method;
@@ -483,7 +483,7 @@ public class ViewUtils {
 */
     }
 
-    public static void updateMenu(@NonNull Menu menu, @NonNull Executor.ObjRunnable<Menu> updateMenuTask) {
+    public static void updateMenu(@NonNull Menu menu, @NonNull ObjRunnable<Menu> updateMenuTask) {
         beginUpdateMenu(menu);
         try {
             updateMenuTask.run(menu);

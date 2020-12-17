@@ -30,6 +30,9 @@ public enum Dimension {
     }
 
     public float toDimension(float value, @NonNull Dimension target) {
+        if (this == target) {
+            return value;
+        }
         return value * (multiplier / target.multiplier);
     }
 

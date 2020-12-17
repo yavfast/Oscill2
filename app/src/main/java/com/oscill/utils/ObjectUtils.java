@@ -3,6 +3,8 @@ package com.oscill.utils;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
+import com.oscill.utils.executor.ObjCallable2;
+
 import java.util.Arrays;
 
 public class ObjectUtils {
@@ -21,6 +23,7 @@ public class ObjectUtils {
         }
         throw new IllegalArgumentException("Cast null object");
     }
+
 
     public static <T> boolean equals(@Nullable T obj1, @Nullable T obj2) {
         return obj1 == obj2 || obj1 != null && obj1.equals(obj2);
@@ -46,4 +49,16 @@ public class ObjectUtils {
     public static <T> T getNonNull(@Nullable T value, @NonNull T defValue) {
         return isEmpty(value) ? defValue : value;
     }
+
+    @SuppressWarnings("unchecked")
+    public static <T> boolean equals(@NonNull T objThis, @Nullable Object objOther, @NonNull ObjCallable2<T,T,Boolean> equalsCallback) {
+        if (objThis == objOther) {
+            return true;
+        }
+        if (objOther != null && objOther.getClass() == objThis.getClass()) {
+            return equalsCallback.call(objThis, (T)objOther);
+        }
+        return false;
+    }
+
 }

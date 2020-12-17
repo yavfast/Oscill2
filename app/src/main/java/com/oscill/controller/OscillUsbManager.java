@@ -12,7 +12,7 @@ import com.oscill.usb.UsbObexTransport;
 import com.oscill.utils.AppContextWrapper;
 import com.oscill.utils.Log;
 import com.oscill.utils.executor.EventsController;
-import com.oscill.utils.executor.ObjRunnable;
+import com.oscill.utils.executor.OnResult;
 
 import java.util.List;
 
@@ -26,7 +26,7 @@ public class OscillUsbManager {
 
     private static final String TAG = Log.getTag(OscillUsbManager.class);
 
-    public static void checkDevice(@NonNull ObjRunnable<UsbDevice> onResult) {
+    public static void checkDevice(@NonNull OnResult<UsbDevice> onResult) {
         ProbeTable oscillProbeTable = new ProbeTable();
         oscillProbeTable.addProduct(UsbId.VENDOR_SILABS, 0x840E, Cp21xxSerialDriver.class);
 
@@ -37,12 +37,14 @@ public class OscillUsbManager {
         for (UsbSerialDriver availableDriver : availableDrivers) {
             UsbDevice device = availableDriver.getDevice();
             Log.i(TAG, device.toString());
-            onResult.run(device);
+            onResult.of(device);
             return;
         }
+
+        onResult.error(new IllegalStateException("Device not found"));
     }
 
-    public static void connectToDevice(@NonNull ObjRunnable<Oscill> onResult) {
+    public static void connectToDevice(@NonNull OnResult<Oscill> onResult) {
         UsbObexTransport usbObexTransport = new UsbObexTransport();
         if (usbObexTransport.isDeviceAvailable()) {
             EventsController.unregisterHolder(onResult);
@@ -61,7 +63,9 @@ public class OscillUsbManager {
 
                         if (responseCode == ResponseCodes.OBEX_HTTP_OK) {
                             Log.i(TAG, "Connected");
-                            onResult.run(oscill);
+                            onResult.of(oscill);
+                        } else {
+                            onResult.error(new IllegalStateException("Connect fail"));
                         }
                     } finally {
                         usbObexTransport.disconnect();
@@ -74,10 +78,12 @@ public class OscillUsbManager {
                 }
             } catch (Exception e) {
                 Log.e(TAG, e);
+                onResult.error(e);
             }
 
         } else {
-            Log.w(TAG, "Usb device not Available");
+            Log.w(TAG, "Usb device not available");
+            onResult.error(new IllegalStateException("Usb device not available"));
         }
     }
 

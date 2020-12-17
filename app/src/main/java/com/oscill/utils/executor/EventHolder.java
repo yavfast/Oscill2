@@ -17,14 +17,14 @@ public class EventHolder<E extends IBroadcastEvent> {
 
     private final WeakReference<Object> holderRef;
     private final Class<? extends IBroadcastEvent> clazz;
-    private Executor.ObjRunnable<E> onReceive;
-    private Executor.ObjCallable<E, Boolean> onAcceptEvent;
+    private ObjRunnable<E> onReceive;
+    private ObjCallable<E, Boolean> onAcceptEvent;
     private final boolean runInBackground;
     private final AtomicBoolean isActive = new AtomicBoolean(false);
     private boolean isReceiveOnce = false;
     private final AtomicInteger receiveCounter = new AtomicInteger(0);
 
-    EventHolder(@Nullable Object holder, @NonNull Class<? extends IBroadcastEvent> clazz, @NonNull Executor.ObjRunnable<E> onReceive, boolean runInBackground) {
+    EventHolder(@Nullable Object holder, @NonNull Class<? extends IBroadcastEvent> clazz, @NonNull ObjRunnable<E> onReceive, boolean runInBackground) {
         this.holderRef = new WeakReference<>(holder);
         this.clazz = clazz;
         this.onReceive = onReceive;
@@ -32,7 +32,7 @@ public class EventHolder<E extends IBroadcastEvent> {
     }
 
     @NonNull
-    public EventHolder<E> setOnAcceptEvent(@NonNull Executor.ObjCallable<E, Boolean> onAcceptEvent) {
+    public EventHolder<E> setOnAcceptEvent(@NonNull ObjCallable<E, Boolean> onAcceptEvent) {
         this.onAcceptEvent = onAcceptEvent;
         return this;
     }

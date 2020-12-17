@@ -103,7 +103,7 @@ public class EventsController {
     }
 
     @NonNull
-    private static <E extends IBroadcastEvent> EventHolder<E> onReceiveEvent(@Nullable Object holder, @NonNull Class<E> clazz, @NonNull Executor.ObjRunnable<E> onReceive, boolean runInBackground) {
+    private static <E extends IBroadcastEvent> EventHolder<E> onReceiveEvent(@Nullable Object holder, @NonNull Class<E> clazz, @NonNull ObjRunnable<E> onReceive, boolean runInBackground) {
         EventHolder<E> eventHolder = createEvent(holder, clazz, onReceive, runInBackground);
 
         if (holder == null || runInBackground) {
@@ -116,7 +116,7 @@ public class EventsController {
     }
 
     @NonNull
-    public static <E extends IBroadcastEvent> EventHolder<E> createEvent(@Nullable Object holder, @NonNull Class<E> clazz, @NonNull Executor.ObjRunnable<E> onReceive, boolean runInBackground) {
+    public static <E extends IBroadcastEvent> EventHolder<E> createEvent(@Nullable Object holder, @NonNull Class<E> clazz, @NonNull ObjRunnable<E> onReceive, boolean runInBackground) {
         EventHolder<E> eventHolder = new EventHolder<>(holder, clazz, onReceive, runInBackground);
         Log.d(TAG, "Create: ", eventHolder);
         return eventHolder;
@@ -200,15 +200,15 @@ public class EventsController {
         }, delay);
     }
 
-    public static <E extends IBroadcastEvent> EventHolder<E> onReceiveEvent(@Nullable Object holder, @NonNull Class<E> clazz, @NonNull Executor.ObjRunnable<E> onReceive) {
+    public static <E extends IBroadcastEvent> EventHolder<E> onReceiveEvent(@Nullable Object holder, @NonNull Class<E> clazz, @NonNull ObjRunnable<E> onReceive) {
         return onReceiveEvent(holder, clazz, onReceive, false);
     }
 
-    public static <E extends IBroadcastEvent> EventHolder<E> onReceiveEventAsync(@Nullable Object holder, @NonNull Class<E> clazz, @NonNull Executor.ObjRunnable<E> onReceive) {
+    public static <E extends IBroadcastEvent> EventHolder<E> onReceiveEventAsync(@Nullable Object holder, @NonNull Class<E> clazz, @NonNull ObjRunnable<E> onReceive) {
         return onReceiveEvent(holder, clazz, onReceive, true);
     }
 
-    public static <E extends IBroadcastEvent> EventHolder<E> onReceiveEventAsync(@NonNull Class<E> clazz, @NonNull Executor.ObjRunnable<E> onReceive) {
+    public static <E extends IBroadcastEvent> EventHolder<E> onReceiveEventAsync(@NonNull Class<E> clazz, @NonNull ObjRunnable<E> onReceive) {
         return onReceiveEvent(null, clazz, onReceive, true);
     }
 

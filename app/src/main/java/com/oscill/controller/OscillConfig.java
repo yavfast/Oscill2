@@ -5,6 +5,9 @@ import androidx.annotation.NonNull;
 import com.oscill.controller.config.ChanelSensitivity;
 import com.oscill.controller.config.CpuTickLength;
 import com.oscill.controller.config.RealtimeSamplingPeriod;
+import com.oscill.utils.executor.OnResult;
+
+import java.io.IOException;
 
 public class OscillConfig {
 
@@ -40,5 +43,15 @@ public class OscillConfig {
     @NonNull
     public RealtimeSamplingPeriod getRealtimeSamplingPeriod() {
         return realtimeSamplingPeriod;
+    }
+
+    public void requestData(@NonNull OnResult<OscillData> onResult) {
+        try {
+            byte[] data = oscill.getData();
+            OscillData oscillData = new OscillData(this, data);
+            onResult.of(oscillData);
+        } catch (IOException e) {
+            onResult.error(e);
+        }
     }
 }

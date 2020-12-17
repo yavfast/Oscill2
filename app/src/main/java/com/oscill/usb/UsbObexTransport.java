@@ -18,7 +18,7 @@ import com.oscill.utils.ArrayUtils;
 import com.oscill.utils.ConvertUtils;
 import com.oscill.utils.IOUtils;
 import com.oscill.utils.Log;
-import com.oscill.utils.SuspendValue;
+import com.oscill.types.SuspendValue;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;

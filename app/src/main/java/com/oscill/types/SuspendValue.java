@@ -1,18 +1,18 @@
-package com.oscill.utils;
+package com.oscill.types;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
 import com.oscill.utils.executor.ObjRunnable;
-import com.oscill.utils.executor.ValueCallable;
+import com.oscill.utils.executor.UnsafeCallable;
 
 public class SuspendValue<V> {
 
     private volatile V value;
-    private final ValueCallable<V> callable;
+    private final UnsafeCallable<V> callable;
     private volatile boolean suspended = true;
 
-    public SuspendValue(@NonNull ValueCallable<V> callable) {
+    public SuspendValue(@NonNull UnsafeCallable<V> callable) {
         this.callable = callable;
     }
 
@@ -28,7 +28,7 @@ public class SuspendValue<V> {
         if (suspended) {
             synchronized (this) {
                 if (suspended) {
-                    value = callable.call();
+                    value = callable.unsafeCall();
                     suspended = false;
                 }
             }

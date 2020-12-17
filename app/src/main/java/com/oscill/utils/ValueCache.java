@@ -6,23 +6,23 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.collection.LruCache;
 
-import com.oscill.utils.executor.Executor;
+import com.oscill.utils.executor.ObjCallable;
 
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 public class ValueCache<K,V> {
 
-    private final Executor.ObjCallable<K,V> valueCreator;
+    private final ObjCallable<K,V> valueCreator;
     private final Map<K,Long> cachedKeys = new ConcurrentHashMap<>();
     private final ValuesLruCache cache;
     private long expired = 0L;
 
-    public ValueCache(@NonNull Executor.ObjCallable<K,V> valueCreator) {
+    public ValueCache(@NonNull ObjCallable<K,V> valueCreator) {
         this(Integer.MAX_VALUE, valueCreator);
     }
 
-    public ValueCache(int maxSize, @NonNull Executor.ObjCallable<K,V> valueCreator) {
+    public ValueCache(int maxSize, @NonNull ObjCallable<K,V> valueCreator) {
         this.valueCreator = valueCreator;
         this.cache = new ValuesLruCache(maxSize);
     }

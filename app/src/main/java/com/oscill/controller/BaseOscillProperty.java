@@ -5,7 +5,7 @@ import androidx.annotation.Nullable;
 
 import com.oscill.types.Range;
 import com.oscill.types.Unit;
-import com.oscill.utils.SuspendValue;
+import com.oscill.types.SuspendValue;
 
 public abstract class BaseOscillProperty<T,V> {
 

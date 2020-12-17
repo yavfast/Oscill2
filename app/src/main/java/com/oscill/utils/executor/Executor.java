@@ -11,12 +11,11 @@ import com.oscill.utils.ClassUtils;
 import com.oscill.utils.ExceptionWrapper;
 import com.oscill.utils.Log;
 import com.oscill.utils.ObjectUtils;
-import com.oscill.utils.SuspendValue;
+import com.oscill.types.SuspendValue;
 import com.oscill.utils.executor.runnable.IRunnableOnView;
 import com.oscill.utils.executor.runnable.RunnableOnView;
 
 import java.lang.ref.WeakReference;
-import java.util.Collection;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.ThreadFactory;
@@ -34,6 +33,12 @@ public class Executor {
 
     private static final SuspendValue<ScheduledThreadPoolExecutor> sTaskQueueExecutor = new SuspendValue<>(() -> {
         ScheduledThreadPoolExecutor res = new ScheduledThreadPoolExecutor(1, r -> new Thread(r, "TaskQueueThread"));
+        res.setMaximumPoolSize(1);
+        return res;
+    });
+
+    private static final SuspendValue<ScheduledThreadPoolExecutor> sSyncQueueExecutor = new SuspendValue<>(() -> {
+        ScheduledThreadPoolExecutor res = new ScheduledThreadPoolExecutor(1, r -> new Thread(r, "SyncQueueThread"));
         res.setMaximumPoolSize(1);
         return res;
     });
@@ -84,6 +89,11 @@ public class Executor {
     }
 
     @NonNull
+    public static ScheduledThreadPoolExecutor getSyncQueueExecutor() {
+        return sSyncQueueExecutor.get();
+    }
+
+    @NonNull
     public static Handler getMainHandler() {
         return sUIThreadHandler.get();
     }
@@ -128,6 +138,14 @@ public class Executor {
         ExceptionWrapper wrapper = new ExceptionWrapper(runnable, getMainHandler());
         runInTaskQueue(() -> getMainHandler().postDelayed(wrapper, delay), 0L);
         return wrapper;
+    }
+
+    public static void runInSyncQueue(@NonNull Runnable runnable) {
+        getSyncQueueExecutor().schedule(new ExceptionWrapper(runnable), 0L, TimeUnit.MILLISECONDS);
+    }
+
+    public static void runInSyncQueue(@NonNull Runnable runnable, long delay) {
+        getSyncQueueExecutor().schedule(new ExceptionWrapper(runnable), delay, TimeUnit.MILLISECONDS);
     }
 
     public static IAsyncTask runInBackground(@NonNull Runnable runnable) {
@@ -196,44 +214,6 @@ public class Executor {
             dumpCurrentStack("Sleep in UI thread", true);
         }
         SystemClock.sleep(timeMs);
-    }
-
-    public static void sleepIfTrue(long checkTimeMs, int maxTimeMs, @NonNull ValueCallable<Boolean> callable) {
-        if (checkTimeMs < 0 || maxTimeMs < 0 || maxTimeMs < checkTimeMs) {
-            throw new IllegalArgumentException("Illegal time!");
-        }
-        if (isUIThread()) {
-            dumpCurrentStack("Sleep in UI thread", true);
-        }
-        long now = System.currentTimeMillis();
-        Boolean value = callable.call();
-        while (value != null && value) {
-            SystemClock.sleep(checkTimeMs);
-            if (System.currentTimeMillis() - now > maxTimeMs) {
-                break;
-            }
-            value = callable.call();
-        }
-    }
-
-    public interface ObjRunnable<T> {
-        void run(@NonNull T obj);
-    }
-
-    public interface ObjRunnable2<T1, T2> {
-        void run(@NonNull T1 obj1, @NonNull T2 obj2);
-    }
-
-    public interface ObjCallable<T, V> {
-        V call(@NonNull T obj);
-    }
-
-    public interface ValueCallable<V> {
-        V call();
-    }
-
-    public interface UnsafeRunnable {
-        void run() throws Exception;
     }
 
     public static <T> void doWith(@NonNull T obj, @NonNull ObjRunnable<T> runnableIfExists) {

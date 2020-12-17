@@ -18,6 +18,7 @@ import com.oscill.types.Dimension;
 import com.oscill.utils.AppContextWrapper;
 import com.oscill.utils.Log;
 import com.oscill.utils.executor.Executor;
+import com.oscill.utils.executor.OnResult;
 
 import org.junit.Before;
 import org.junit.Rule;
@@ -53,8 +54,9 @@ public class USBDeviceTest {
     }
 
     private void runTest(@NonNull OscillTest test) {
-        OscillUsbManager.connectToDevice(oscill ->
-                Executor.doSafe(() -> test.run(oscill))
+        OscillUsbManager.connectToDevice(
+                OnResult.doIfPresent(oscill ->
+                    Executor.doSafe(() -> test.run(oscill)))
         );
     }
 
