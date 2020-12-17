@@ -28,4 +28,9 @@ public enum Dimension {
     public float getMultiplier() {
         return multiplier;
     }
+
+    public float toDimension(float value, @NonNull Dimension target) {
+        return value * (multiplier / target.multiplier);
+    }
+
 }

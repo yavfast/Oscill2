@@ -9,6 +9,18 @@ import com.oscill.utils.SuspendValue;
 
 public abstract class BaseOscillProperty<T,V> {
 
+    private final Oscill oscill;
+
+    public BaseOscillProperty(@NonNull Oscill oscill) {
+        super();
+        this.oscill = oscill;
+    }
+
+    @NonNull
+    public Oscill getOscill() {
+        return oscill;
+    }
+
     private final SuspendValue<T> nativeValue = new SuspendValue<>(this::requestNativeValue);
     private final SuspendValue<V> realValue = new SuspendValue<>(this::requestRealValue);
     private final SuspendValue<Unit> realValueUnit = new SuspendValue<>(this::requestRealValueUnit);

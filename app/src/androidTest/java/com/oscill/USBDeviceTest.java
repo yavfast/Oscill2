@@ -11,9 +11,13 @@ import androidx.test.rule.GrantPermissionRule;
 
 import com.oscill.controller.OscillConfig;
 import com.oscill.controller.OscillProperty;
+import com.oscill.controller.config.ChanelSensitivity;
+import com.oscill.controller.config.CpuTickLength;
+import com.oscill.controller.config.RealtimeSamplingPeriod;
 import com.oscill.obex.ClientSession;
 import com.oscill.controller.Oscill;
 import com.oscill.obex.ResponseCodes;
+import com.oscill.types.Dimension;
 import com.oscill.usb.UsbObexTransport;
 import com.oscill.utils.AppContextWrapper;
 import com.oscill.types.BitSet;
@@ -154,11 +158,11 @@ public class USBDeviceTest {
         runTest(oscill -> {
             OscillConfig config = new OscillConfig(oscill);
 
-            OscillProperty<Integer> cpuTickLength = config.getCpuTickLength();
+            CpuTickLength cpuTickLength = config.getCpuTickLength();
             Log.i(TAG, "cpuTickLength range: " + cpuTickLength.getRealRange());
             Log.i(TAG, "cpuTickLength: " + cpuTickLength.getRealValue());
 
-            OscillProperty<Float> chanelSensitivity = config.getChanelSensitivity();
+            ChanelSensitivity chanelSensitivity = config.getChanelSensitivity();
             Log.i(TAG, "chanelSensitivity range: " + chanelSensitivity.getRealRange());
 
 //            for (float testValue = 0f; testValue <= 10.5f; testValue += 0.1f) {
@@ -166,6 +170,10 @@ public class USBDeviceTest {
 //                Log.i(TAG, "set chanelSensitivity: ", testValue, " -> ", chanelSensitivity.getRealValue());
 //            }
 
+            RealtimeSamplingPeriod realtimeSamplingPeriod = config.getRealtimeSamplingPeriod();
+            Log.i(TAG, "realtimeSamplingPeriod range: ", realtimeSamplingPeriod.getRealRange());
+            realtimeSamplingPeriod.setSamplingPeriod(500, Dimension.MICRO, 32);
+            Log.i(TAG, "set realtimeSamplingPeriod: ", realtimeSamplingPeriod.getDivTime(Dimension.MICRO, 32));
         });
     }
 
