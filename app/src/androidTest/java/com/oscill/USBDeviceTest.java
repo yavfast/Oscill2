@@ -24,7 +24,6 @@ import org.junit.Rule;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
-import java.io.IOException;
 import java.util.Arrays;
 import java.util.List;
 
@@ -155,13 +154,17 @@ public class USBDeviceTest {
         runTest(oscill -> {
             OscillConfig config = new OscillConfig(oscill);
 
+            OscillProperty<Integer> cpuTickLength = config.getCpuTickLength();
+            Log.i(TAG, "cpuTickLength range: " + cpuTickLength.getRealRange());
+            Log.i(TAG, "cpuTickLength: " + cpuTickLength.getRealValue());
+
             OscillProperty<Float> chanelSensitivity = config.getChanelSensitivity();
             Log.i(TAG, "chanelSensitivity range: " + chanelSensitivity.getRealRange());
 
-            for (float testValue = 0f; testValue <= 10.5f; testValue += 0.1f) {
-                chanelSensitivity.setRealValue(testValue);
-                Log.i(TAG, "set chanelSensitivity: ", testValue, " -> ", chanelSensitivity.getRealValue());
-            }
+//            for (float testValue = 0f; testValue <= 10.5f; testValue += 0.1f) {
+//                chanelSensitivity.setRealValue(testValue);
+//                Log.i(TAG, "set chanelSensitivity: ", testValue, " -> ", chanelSensitivity.getRealValue());
+//            }
 
         });
     }
