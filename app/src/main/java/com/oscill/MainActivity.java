@@ -3,6 +3,7 @@ package com.oscill;
 import android.graphics.Color;
 import android.os.Bundle;
 
+import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 
 import com.github.mikephil.charting.charts.LineChart;
@@ -71,18 +72,9 @@ public class MainActivity extends AppCompatActivity {
         yAxisRight.setAxisMaximum(100f);
         yAxisRight.setAxisMinimum(-100f);
 
-        setData(500, 180);
-
     }
 
-    private void setData(int count, float range) {
-
-        ArrayList<Entry> values = new ArrayList<>();
-
-        for (int i = 0; i < count; i++) {
-            float val = (float) ((Math.random() * range) - (range / 2f)) * 0.1f;
-            values.add(new Entry(i, val));
-        }
+    private void setData(@NonNull ArrayList<Entry> values) {
 
         LineDataSet dataSet;
         LineData data = chart.getData();

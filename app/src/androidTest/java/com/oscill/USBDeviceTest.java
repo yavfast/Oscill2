@@ -1,27 +1,23 @@
 package com.oscill;
 
 import android.content.Context;
-import android.hardware.usb.UsbDevice;
-import android.hardware.usb.UsbManager;
 
 import androidx.annotation.NonNull;
 import androidx.test.ext.junit.runners.AndroidJUnit4;
 import androidx.test.platform.app.InstrumentationRegistry;
 import androidx.test.rule.GrantPermissionRule;
 
+import com.oscill.controller.Oscill;
 import com.oscill.controller.OscillConfig;
-import com.oscill.controller.OscillProperty;
+import com.oscill.controller.OscillUsbManager;
 import com.oscill.controller.config.ChanelSensitivity;
 import com.oscill.controller.config.CpuTickLength;
 import com.oscill.controller.config.RealtimeSamplingPeriod;
-import com.oscill.obex.ClientSession;
-import com.oscill.controller.Oscill;
-import com.oscill.obex.ResponseCodes;
-import com.oscill.types.Dimension;
-import com.oscill.usb.UsbObexTransport;
-import com.oscill.utils.AppContextWrapper;
 import com.oscill.types.BitSet;
+import com.oscill.types.Dimension;
+import com.oscill.utils.AppContextWrapper;
 import com.oscill.utils.Log;
+import com.oscill.utils.executor.Executor;
 
 import org.junit.Before;
 import org.junit.Rule;
@@ -29,19 +25,7 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 
 import java.util.Arrays;
-import java.util.List;
 
-import usbserial.driver.Cp21xxSerialDriver;
-import usbserial.driver.ProbeTable;
-import usbserial.driver.UsbId;
-import usbserial.driver.UsbSerialDriver;
-import usbserial.driver.UsbSerialProber;
-
-/**
- * Instrumented test, which will execute on an Android device.
- *
- * @see <a href="http://d.android.com/tools/testing">Testing documentation</a>
- */
 @RunWith(AndroidJUnit4.class)
 public class USBDeviceTest {
 
@@ -59,19 +43,9 @@ public class USBDeviceTest {
 
     @Test
     public void testDevicesList() {
-        Context appContext = InstrumentationRegistry.getInstrumentation().getTargetContext();
-
-        ProbeTable oscillProbeTable = new ProbeTable();
-        oscillProbeTable.addProduct(UsbId.VENDOR_SILABS, 0x840E, Cp21xxSerialDriver.class);
-
-        UsbSerialProber oscillProber = new UsbSerialProber(oscillProbeTable);
-        UsbManager manager = (UsbManager) appContext.getSystemService(Context.USB_SERVICE);
-
-        List<UsbSerialDriver> availableDrivers = oscillProber.findAllDrivers(manager);
-        for (UsbSerialDriver availableDriver : availableDrivers) {
-            UsbDevice device = availableDriver.getDevice();
-            Log.i(TAG, device.toString());
-        }
+        OscillUsbManager.checkDevice(device ->
+                Log.i(TAG, "testDevicesList - OK")
+        );
     }
 
     public interface OscillTest {
@@ -79,38 +53,9 @@ public class USBDeviceTest {
     }
 
     private void runTest(@NonNull OscillTest test) {
-        UsbObexTransport usbObexTransport = new UsbObexTransport();
-        if (usbObexTransport.isDeviceAvailable()) {
-            try {
-                usbObexTransport.create();
-                if (usbObexTransport.hasPermissions()) {
-                    usbObexTransport.connect();
-                    try {
-                        ClientSession session = new ClientSession(usbObexTransport);
-                        Oscill oscill = new Oscill(session);
-
-                        oscill.reset();
-
-                        int responseCode = oscill.connect();
-                        Log.i(TAG, "Connect result: " + Integer.toHexString(responseCode));
-
-                        if (responseCode == ResponseCodes.OBEX_HTTP_OK) {
-                            Log.i(TAG, "Connected");
-                            test.run(oscill);
-                        }
-                    } finally {
-                        usbObexTransport.disconnect();
-                    }
-                } else {
-                    usbObexTransport.requestPermissions();
-                }
-            } catch (Exception e) {
-                Log.e(TAG, e.getMessage(), e);
-            }
-
-        } else {
-            Log.w(TAG, "Usb device not Available");
-        }
+        OscillUsbManager.connectToDevice(oscill ->
+                Executor.doSafe(() -> test.run(oscill))
+        );
     }
 
     @Test
