@@ -30,7 +30,7 @@ public class CpuTickLength extends OscillProperty<Integer> {
 
     @Override
     protected Integer requestNativeValue() throws Exception {
-        return getOscill().getCPUTickDefLength();
+        return getOscill().getCPUTickLength();
     }
 
     @Override

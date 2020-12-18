@@ -136,11 +136,10 @@ public class USBDeviceTest {
     @Test
     public void testSingleSync() {
         runTest(oscill -> {
-            oscill.setProcessingType(BitSet.fromBits(0,0,0,0,0,0,0,0)); // RS
-
 //            oscill.setCPUTickLength(1200); // MC
-
 //            oscill.setSpeed(Header.SPEED_115200);
+
+            oscill.setProcessingType(BitSet.fromBits(0,0,0,0,0,0,0,0)); // RS
 
             int maxSamplesDataSize = oscill.getMaxSamplesDataSize();
             Log.i(TAG, "Max samples data size: " + maxSamplesDataSize);

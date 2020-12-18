@@ -67,8 +67,9 @@ public class OscillUsbManager {
                         } else {
                             onResult.error(new IllegalStateException("Connect fail"));
                         }
-                    } finally {
+                    } catch (Throwable e) {
                         usbObexTransport.disconnect();
+                        throw e;
                     }
                 } else {
                     EventsController.onReceiveEventAsync(onResult, OnUsbPermissionResponse.class, event ->

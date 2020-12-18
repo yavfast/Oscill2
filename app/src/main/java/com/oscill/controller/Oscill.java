@@ -85,6 +85,10 @@ public class Oscill extends BaseOscillController {
         return bytesToInt(setRegistry("MC", Header.OSCILL_2BYTE, intToBytes(value)));
     }
 
+    public int getCPUTickLength() throws IOException {
+        return bytesToInt(getRegistry("MC", Header.OSCILL_2BYTE));
+    }
+
     /**
      * Имя свойства: TOl - Минимальный период однократной дискретизации (realtime)
      * Описание свойства:  количество машинных циклов на одну выборку, начиная с которого осцилл допускает
@@ -111,6 +115,10 @@ public class Oscill extends BaseOscillController {
      */
     public int setSamplingPeriod(int value) throws IOException {
         return bytesToInt(setRegistry("TS", Header.OSCILL_4BYTE, intToBytes(value)));
+    }
+
+    public int getSamplingPeriod() throws IOException {
+        return bytesToInt(getRegistry("TS", Header.OSCILL_4BYTE));
     }
 
     /**
@@ -426,6 +434,10 @@ public class Oscill extends BaseOscillController {
     public int setChanelSensitivity(int value) throws IOException {
         Log.i(TAG, "setChanelSensitivity: ", value);
         return bytesToInt(setRegistry("V1", Header.OSCILL_2BYTE, intToBytes(value)));
+    }
+
+    public int getChanelSensitivity() throws IOException {
+        return bytesToInt(getRegistry("V1", Header.OSCILL_2BYTE));
     }
 
     /**

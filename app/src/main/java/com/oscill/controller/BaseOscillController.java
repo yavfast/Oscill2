@@ -104,6 +104,14 @@ public class BaseOscillController {
     }
 
     @NonNull
+    public byte[] getRegistry(@NonNull String registry, int propertyType) throws IOException {
+        HeaderSet headerSet = new HeaderSet();
+        headerSet.setHeader(Header.OSCILL_REGISTRY, registry.getBytes());
+
+        return execute(ClientOperation.OperationType.GET, headerSet, propertyType);
+    }
+
+    @NonNull
     public byte[] sendCommand(@NonNull String command, int propertyType) throws IOException {
         HeaderSet headerSet = new HeaderSet();
         headerSet.setHeader(Header.OSCILL_DATA, command.getBytes());

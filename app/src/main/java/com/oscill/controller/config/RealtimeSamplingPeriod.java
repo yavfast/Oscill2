@@ -32,6 +32,12 @@ public class RealtimeSamplingPeriod extends OscillProperty<Long> {
 
     @NonNull
     @Override
+    protected Integer requestNativeValue() throws Exception {
+        return getOscill().getSamplingPeriod();
+    }
+
+    @NonNull
+    @Override
     protected Range<Integer> requestNativePropertyRange() throws Exception {
         int min = getOscill().getSamplingMinPeriod();
         int max = 167000;

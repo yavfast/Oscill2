@@ -81,8 +81,6 @@ public class UsbObexTransport implements ObexTransport {
 
     @Override
     public void create() throws IOException {
-        close();
-
         UsbSerialDriver usbDriver = getUsbDriverOrThrow();
         Log.i(TAG, "Use USB driver: ", usbDriver);
     }
@@ -205,6 +203,7 @@ public class UsbObexTransport implements ObexTransport {
         UsbInputStream () {
             this(new byte[getMaxReceivePacketSize()]);
         }
+
         UsbInputStream(byte[] buf) {
             super(buf);
             count = 0;

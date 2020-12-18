@@ -379,6 +379,7 @@ public final class ClientSession implements ObexSession {
      */
     public void sendRequest(int opCode, @Nullable byte[] head, @NonNull HeaderSet header) throws IOException {
         sendRequest(opCode, head);
+        SystemClock.sleep(10L);
         readResponse(opCode, header);
     }
 

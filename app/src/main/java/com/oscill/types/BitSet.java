@@ -24,7 +24,7 @@ public class BitSet {
     }
 
     @NonNull
-    public static BitSet fromBytes(@NonNull byte[] data) {
+    public static BitSet fromBytes(@NonNull byte... data) {
         int len = data.length * 8;
         BitSet res = new BitSet(len);
         for (int idx = 0; idx < len; idx++) {

@@ -48,8 +48,12 @@ public class OscillConfig {
     public void requestData(@NonNull OnResult<OscillData> onResult) {
         try {
             byte[] data = oscill.getData();
-            OscillData oscillData = new OscillData(this, data);
-            onResult.of(oscillData);
+            if (data.length > 4) {
+                OscillData oscillData = new OscillData(this, data);
+                onResult.of(oscillData);
+            } else {
+                onResult.empty();
+            }
         } catch (IOException e) {
             onResult.error(e);
         }

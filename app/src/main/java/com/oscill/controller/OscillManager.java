@@ -62,12 +62,8 @@ public class OscillManager {
         Executor.runInSyncQueue(() -> {
             if (isConnected()) {
                 getOscillConfig().requestData(onResult ->
-                        onResult.doIfPresent(oscillData -> {
-                            if (isActive()) {
-                                requestNextData();
-                                EventsController.sendEvent(new OnOscillData(oscillData));
-                            }
-                        }).doIfError(e -> EventsController.sendEvent(new OnOscillError(e)))
+                        onResult.doIfPresent(OscillManager::prepareData)
+                                .doIfError(e -> EventsController.sendEvent(new OnOscillError(e)))
                 );
             }
         });
@@ -75,5 +71,33 @@ public class OscillManager {
 
     public static void pause() {
         isActive.set(false);
+    }
+
+    public static void start() {
+        if (isActive.compareAndSet(false, true)) {
+            doStart();
+        }
+    }
+
+    private static void doStart() {
+        Executor.runInSyncQueue(() -> {
+            if (isConnected()) {
+                getOscillConfig().requestData(onResult ->
+                        onResult.doIfPresent(oscillData -> {
+                            if (isActive()) {
+                                doStart();
+                                prepareData(oscillData);
+                            }
+                        }).doIfError(e -> EventsController.sendEvent(new OnOscillError(e)))
+                );
+            }
+        });
+    }
+
+    private static void prepareData(@NonNull OscillData oscillData) {
+        Executor.runInBackgroundAsync(() -> {
+            oscillData.prepareData();
+            EventsController.sendEvent(new OnOscillData(oscillData));
+        });
     }
 }

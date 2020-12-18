@@ -30,6 +30,12 @@ public class ChanelSensitivity extends OscillProperty<Float> {
         return new Range<>(min, max);
     }
 
+    @NonNull
+    @Override
+    protected Integer requestNativeValue() throws Exception {
+        return getOscill().getChanelSensitivity();
+    }
+
     @Override
     protected Integer onNativeValueChanged(@NonNull Integer nativeValue) throws IOException {
         return getOscill().setChanelSensitivity(nativeValue);

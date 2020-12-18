@@ -38,15 +38,14 @@ public abstract class BaseOscillProperty<T,V> {
     protected abstract Range<T> requestNativePropertyRange() throws Exception;
     protected abstract T onNativeValueChanged(@NonNull T nativeValue) throws Exception;
 
-    @Nullable
+    @NonNull
     protected T requestNativeValue() throws Exception {
-        return null;
+        throw new IllegalStateException("Need set data");
     }
 
-    @Nullable
+    @NonNull
     protected V requestRealValue() throws Exception {
-        T nativeValue = getNativeValue();
-        return nativeValue != null ? nativeToReal(nativeValue) : null;
+        return nativeToReal(getNativeValue());
     }
 
     protected abstract T realToNative(@NonNull V realValue);
