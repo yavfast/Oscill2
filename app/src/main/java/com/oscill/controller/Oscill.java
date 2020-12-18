@@ -82,7 +82,7 @@ public class Oscill extends BaseOscillController {
      */
     public int setCPUTickLength(int value) throws IOException {
         Log.i(TAG, "setCPUTickLength: ", value);
-        return bytesToInt(setRegistry("MC", Header.OSCILL_2BYTE, intToBytes(value)));
+        return bytesToInt(setRegistry("MC", Header.OSCILL_2BYTE, intTo2Bytes(value)));
     }
 
     public int getCPUTickLength() throws IOException {
@@ -115,7 +115,7 @@ public class Oscill extends BaseOscillController {
      */
     public int setSamplingPeriod(int value) throws IOException {
         Log.i(TAG, "setSamplingPeriod: ", value);
-        return bytesToInt(setRegistry("TS", Header.OSCILL_4BYTE, intToBytes(value)));
+        return bytesToInt(setRegistry("TS", Header.OSCILL_4BYTE, intTo4Bytes(value)));
     }
 
     public int getSamplingPeriod() throws IOException {
@@ -237,7 +237,7 @@ public class Oscill extends BaseOscillController {
      */
     public int setSamplesDataSize(int value) throws IOException {
         Log.i(TAG, "setSamplesDataSize: ", value);
-        return bytesToInt(setRegistry("QS", Header.OSCILL_2BYTE, intToBytes(value)));
+        return bytesToInt(setRegistry("QS", Header.OSCILL_2BYTE, intTo2Bytes(value)));
     }
 
     /**
@@ -252,7 +252,7 @@ public class Oscill extends BaseOscillController {
      */
     public int setSamplesOffset(int value) throws IOException {
         Log.i(TAG, "setSamplesOffset: ", value);
-        return bytesToInt(setRegistry("TC", Header.OSCILL_2BYTE, intToBytes(value)));
+        return bytesToInt(setRegistry("TC", Header.OSCILL_2BYTE, intTo2Bytes(value)));
     }
 
     /**
@@ -311,7 +311,7 @@ public class Oscill extends BaseOscillController {
      */
     public int setScanDelay(int value) throws IOException {
         Log.i(TAG, "setScanDelay: ", value);
-        return bytesToInt(setRegistry("TD", Header.OSCILL_4BYTE, intToBytes(value)));
+        return bytesToInt(setRegistry("TD", Header.OSCILL_4BYTE, intTo4Bytes(value)));
     }
 
     /**
@@ -341,7 +341,7 @@ public class Oscill extends BaseOscillController {
      */
     public int setDelayMaxSyncAuto(int time) throws IOException{
         Log.i(TAG, "setDelayMaxSyncAuto: ", time);
-        return bytesToInt(setRegistry("TA", Header.OSCILL_4BYTE, intToBytes(time)));
+        return bytesToInt(setRegistry("TA", Header.OSCILL_4BYTE, intTo4Bytes(time)));
     }
 
     /**
@@ -354,7 +354,7 @@ public class Oscill extends BaseOscillController {
      */
     public int setDelayMaxSyncWait(int time) throws IOException{
         Log.i(TAG, "setDelayMaxSyncWait: ", time);
-        return bytesToInt(setRegistry("TW", Header.OSCILL_4BYTE, intToBytes(time)));
+        return bytesToInt(setRegistry("TW", Header.OSCILL_4BYTE, intTo4Bytes(time)));
     }
 
     /**
@@ -382,11 +382,11 @@ public class Oscill extends BaseOscillController {
      * Пример свойства (базовая модель Oscill): P1h=0x0180, P1l=0xFE80
      */
     public int getChanelOffsetMin() throws IOException {
-        return bytesToInt(getProperty("P1l", Header.OSCILL_2BYTE)); // TODO: signed
+        return signed(bytesToInt(getProperty("P1l", Header.OSCILL_2BYTE)));
     }
 
     public int getChanelOffsetMax() throws IOException {
-        return bytesToInt(getProperty("P1h", Header.OSCILL_2BYTE)); // TODO: signed
+        return signed(bytesToInt(getProperty("P1h", Header.OSCILL_2BYTE)));
     }
 
     /**
@@ -434,7 +434,7 @@ public class Oscill extends BaseOscillController {
      */
     public int setChanelSensitivity(int value) throws IOException {
         Log.i(TAG, "setChanelSensitivity: ", value);
-        return bytesToInt(setRegistry("V1", Header.OSCILL_2BYTE, intToBytes(value)));
+        return bytesToInt(setRegistry("V1", Header.OSCILL_2BYTE, intTo2Bytes(value)));
     }
 
     public int getChanelSensitivity() throws IOException {
@@ -453,7 +453,11 @@ public class Oscill extends BaseOscillController {
      */
     public int setChanelOffset(int value) throws IOException {
         Log.i(TAG, "setChanelOffset: ", value);
-        return bytesToInt(setRegistry("P1", Header.OSCILL_2BYTE, intToBytes(value)));
+        return signed(bytesToInt(setRegistry("P1", Header.OSCILL_2BYTE, intTo2Bytes(value))));
+    }
+
+    public int getChanelOffset() throws IOException {
+        return signed(bytesToInt(getRegistry("P1", Header.OSCILL_2BYTE)));
     }
 
     /**

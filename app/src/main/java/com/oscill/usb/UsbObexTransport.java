@@ -226,6 +226,7 @@ public class UsbObexTransport implements ObexTransport {
 
                         } else if (res == 0) {
                             Log.d(TAG, "WAIT DATA");
+                            SystemClock.sleep(10L);
 
                         } else {
                             if (count > 0) {
@@ -234,7 +235,7 @@ public class UsbObexTransport implements ObexTransport {
                             } else {
                                 // TODO: Maybe internal restart device
                                 Log.w(TAG, "WAIT DATA: ", res);
-                                SystemClock.sleep(500L);
+                                SystemClock.sleep(100L);
                             }
                         }
                     }

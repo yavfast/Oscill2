@@ -10,6 +10,7 @@ import androidx.test.rule.GrantPermissionRule;
 import com.oscill.controller.Oscill;
 import com.oscill.controller.OscillConfig;
 import com.oscill.controller.OscillUsbManager;
+import com.oscill.controller.config.ChanelOffset;
 import com.oscill.controller.config.ChanelSensitivity;
 import com.oscill.controller.config.CpuTickLength;
 import com.oscill.controller.config.RealtimeSamplingPeriod;
@@ -106,13 +107,19 @@ public class USBDeviceTest {
             OscillConfig config = new OscillConfig(oscill);
 
             CpuTickLength cpuTickLength = config.getCpuTickLength();
-            Log.i(TAG, "cpuTickLength range: " + cpuTickLength.getRealRange());
-            Log.i(TAG, "cpuTickLength: " + cpuTickLength.getRealValue());
+            Log.i(TAG, "cpuTickLength range: ", cpuTickLength.getRealRange());
+            Log.i(TAG, "cpuTickLength: ", cpuTickLength.getRealValue());
 
             ChanelSensitivity chanelSensitivity = config.getChanelSensitivity();
-            Log.i(TAG, "chanelSensitivity range: " + chanelSensitivity.getRealRange());
-            chanelSensitivity.setSensitivity(10f, Dimension.NORMAL);
-            Log.i(TAG, "set chanelSensitivity: " + chanelSensitivity.getRealValue());
+            Log.i(TAG, "chanelSensitivity range: ", chanelSensitivity.getRealRange());
+            chanelSensitivity.setSensitivity(1f, Dimension.NORMAL);
+            Log.i(TAG, "set chanelSensitivity: ", chanelSensitivity.getRealValue());
+
+            ChanelOffset chanelOffset = config.getChanelOffset();
+            Log.i(TAG, "chanelOffset range: ", chanelOffset.getRealRange());
+            Log.i(TAG, "chanelOffset range: ", chanelOffset.getNativeRange());
+            chanelOffset.setOffset(-1f, Dimension.NORMAL);
+            Log.i(TAG, "set chanelOffset: ", chanelOffset.getRealValue(), "; ", chanelOffset.getNativeValue());
 
 //            for (float testValue = 0f; testValue <= 10.5f; testValue += 0.1f) {
 //                chanelSensitivity.setRealValue(testValue);
@@ -124,6 +131,8 @@ public class USBDeviceTest {
             Log.i(TAG, "realtimeSamplingPeriod range: ", realtimeSamplingPeriod.getNativeRange());
             realtimeSamplingPeriod.setSamplingPeriod(10, Dimension.MILLI, 32);
             Log.i(TAG, "set realtimeSamplingPeriod: ", realtimeSamplingPeriod.getDivTime(Dimension.MILLI, 32));
+
+
         });
     }
 

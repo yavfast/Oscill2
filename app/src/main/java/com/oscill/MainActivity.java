@@ -108,9 +108,10 @@ public class MainActivity extends AppCompatActivity {
                 oscill.setChanelSWMode(BitSet.fromBits(0,0,0,0,0,1,0,0)); // M1
 
                 oscillConfig.getChanelSensitivity().setSensitivity(20f, Dimension.MILLI);
+                oscillConfig.getChanelOffset().setOffset(0f, Dimension.MILLI);
+
                 oscillConfig.getRealtimeSamplingPeriod().setSamplingPeriod(20f, Dimension.MILLI, 32);
 
-                oscill.setChanelOffset(0); // P1
                 oscill.setChanelSyncLevel(0); // S1
                 oscill.setSyncType(BitSet.fromBits(0,0,0,0,0,0,1,0)); // RT
 

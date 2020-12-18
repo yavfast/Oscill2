@@ -93,6 +93,6 @@ public class OscillData {
     }
 
     private static int byteToInt(byte value) {
-        return (value >= 0 ? value : value + 0xFF) - 0x80;
+        return (value >= 0 ? value : value & 0xFF) - 0x80;
     }
 }

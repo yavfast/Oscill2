@@ -2,6 +2,7 @@ package com.oscill.controller;
 
 import androidx.annotation.NonNull;
 
+import com.oscill.controller.config.ChanelOffset;
 import com.oscill.controller.config.ChanelSensitivity;
 import com.oscill.controller.config.CpuTickLength;
 import com.oscill.controller.config.RealtimeSamplingPeriod;
@@ -14,6 +15,8 @@ public class OscillConfig {
     private final Oscill oscill;
 
     private final ChanelSensitivity chanelSensitivity;
+    private final ChanelOffset chanelOffset;
+
     private final CpuTickLength cpuTickLength;
     private final RealtimeSamplingPeriod realtimeSamplingPeriod;
 
@@ -21,6 +24,7 @@ public class OscillConfig {
         super();
         this.oscill = oscill;
         this.chanelSensitivity = new ChanelSensitivity(oscill);
+        this.chanelOffset = new ChanelOffset(oscill, chanelSensitivity);
         this.cpuTickLength = new CpuTickLength(oscill);
         this.realtimeSamplingPeriod = new RealtimeSamplingPeriod(oscill, cpuTickLength);
     }
@@ -33,6 +37,11 @@ public class OscillConfig {
     @NonNull
     public ChanelSensitivity getChanelSensitivity() {
         return chanelSensitivity;
+    }
+
+    @NonNull
+    public ChanelOffset getChanelOffset() {
+        return chanelOffset;
     }
 
     @NonNull

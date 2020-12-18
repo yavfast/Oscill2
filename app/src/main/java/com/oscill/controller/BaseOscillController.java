@@ -47,12 +47,33 @@ public class BaseOscillController {
         return result;
     }
 
+    public static int signed(int value) {
+        return (value << 16) >> 16;
+    }
+
+    public static int signed(byte value) {
+        return (value << 8) >> 8;
+    }
+
     @NonNull
     public static byte[] intToByte(int value) {
         return new byte[]{(byte) (value & 0xFF)};
     }
 
-    public static byte[] intToBytes(int value) {
+    @NonNull
+    public static byte[] intTo2Bytes(int value) {
+        byte[] b = new byte[4];
+
+        b[0] = 0;
+        b[1] = 0;
+        b[2] = (byte)(0xFF & (value >> 8));
+        b[3] = (byte)(0xFF & value);
+
+        return b;
+    }
+
+    @NonNull
+    public static byte[] intTo4Bytes(int value) {
         byte[] b = new byte[4];
 
         b[0] = (byte)(0xFF & (value >> 24));
