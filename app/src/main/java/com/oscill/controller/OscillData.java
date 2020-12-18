@@ -82,7 +82,7 @@ public class OscillData {
         int dataIdx = 4;
         while (idx < dataSize) {
             tData[idx] = tStep * idx;
-            vData[idx] = ((data[dataIdx] & 0xFF) - 0x81) * vStep;
+            vData[idx] = byteToInt(data[dataIdx]) * vStep;
 
             idx++;
             dataIdx++;
@@ -90,5 +90,9 @@ public class OscillData {
 
         this.tData = tData;
         this.vData = vData;
+    }
+
+    private static int byteToInt(byte value) {
+        return (value >= 0 ? value : value + 0xFF) - 0x80;
     }
 }

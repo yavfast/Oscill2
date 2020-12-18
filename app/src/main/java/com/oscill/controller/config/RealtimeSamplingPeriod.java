@@ -51,12 +51,12 @@ public class RealtimeSamplingPeriod extends OscillProperty<Long> {
 
     @Override
     protected Integer realToNative(@NonNull Long realValue) {
-        return Math.round(256f * realValue / (float)getCpuTickLength().getRealValue());
+        return Math.round(((float)realValue) / (float)getCpuTickLength().getRealValue()) * 256;
     }
 
     @Override
     protected Long nativeToReal(@NonNull Integer nativeValue) {
-        return ((long) nativeValue) * getCpuTickLength().getRealValue() / 256L;
+        return ((long) (nativeValue / 256)) * getCpuTickLength().getRealValue();
     }
 
     public void setSamplingPeriod(float divTime, @NonNull Dimension timeDim, int samplingCountByDiv) throws Exception {

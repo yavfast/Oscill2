@@ -114,6 +114,7 @@ public class Oscill extends BaseOscillController {
      * От регистра зависят: способ оцифровки RS, обработка канала M1, задержка развертки TD.
      */
     public int setSamplingPeriod(int value) throws IOException {
+        Log.i(TAG, "setSamplingPeriod: ", value);
         return bytesToInt(setRegistry("TS", Header.OSCILL_4BYTE, intToBytes(value)));
     }
 
