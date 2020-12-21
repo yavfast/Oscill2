@@ -87,6 +87,8 @@ public final class ClientOperation implements Operation, BaseStream {
 
     private boolean mSendBodyHeader = true;
 
+    private int mBeforeResponseDelay = 0;
+
     /**
      * Creates new OperationImpl to read and write data to a server
      *  @param p       the parent to this object
@@ -120,6 +122,10 @@ public final class ClientOperation implements Operation, BaseStream {
         }
     }
 
+    public void setBeforeResponseDelay(int beforeResponseDelay) {
+        this.mBeforeResponseDelay = beforeResponseDelay;
+    }
+
     /**
      * Allows to set flag which will force GET to be always sent as single packet request with
      * final flag set. This is to improve compatibility with some profiles, i.e. PBAP which
@@ -151,7 +157,7 @@ public final class ClientOperation implements Operation, BaseStream {
              * Since we are not sending any headers or returning any headers then
              * we just need to write and read the same bytes
              */
-            mParent.sendRequest(ObexHelper.OBEX_OPCODE_ABORT, null, mReplyHeader);
+            mParent.sendRequest(ObexHelper.OBEX_OPCODE_ABORT, null, mReplyHeader, mBeforeResponseDelay);
 
             if (mReplyHeader.responseCode != ResponseCodes.OBEX_HTTP_OK) {
                 throw new IOException("Invalid response code from server");
@@ -448,7 +454,7 @@ public final class ClientOperation implements Operation, BaseStream {
 
                 byte[] sendHeader = new byte[end - start];
                 System.arraycopy(headerArray, start, sendHeader, 0, sendHeader.length);
-                mParent.sendRequest(opCode, sendHeader, mReplyHeader);
+                mParent.sendRequest(opCode, sendHeader, mReplyHeader, mBeforeResponseDelay);
 
                 if (mReplyHeader.responseCode != ResponseCodes.OBEX_HTTP_CONTINUE) {
                     return false;
@@ -522,11 +528,11 @@ public final class ClientOperation implements Operation, BaseStream {
         }
 
         if (out.size() == 0) {
-            mParent.sendRequest(opCode, null, mReplyHeader);
+            mParent.sendRequest(opCode, null, mReplyHeader, mBeforeResponseDelay);
             return returnValue;
         }
         if (out.size() > 0) {
-            mParent.sendRequest(opCode, out.toByteArray(), mReplyHeader);
+            mParent.sendRequest(opCode, out.toByteArray(), mReplyHeader, mBeforeResponseDelay);
         }
 
         // send all of the output data in 0x48,
@@ -562,7 +568,7 @@ public final class ClientOperation implements Operation, BaseStream {
                     // And then we wait for the first continue package with the
                     // reply.
                     if (mReplyHeader.responseCode == ResponseCodes.OBEX_HTTP_CONTINUE) {
-                        mParent.sendRequest(ObexHelper.OBEX_OPCODE_GET_FINAL, null, mReplyHeader);
+                        mParent.sendRequest(ObexHelper.OBEX_OPCODE_GET_FINAL, null, mReplyHeader, mBeforeResponseDelay);
                     }
                     if (mReplyHeader.responseCode != ResponseCodes.OBEX_HTTP_CONTINUE) {
                         mOperationDone = true;
@@ -588,7 +594,7 @@ public final class ClientOperation implements Operation, BaseStream {
                     }
 
                     if (mReplyHeader.responseCode == ResponseCodes.OBEX_HTTP_CONTINUE) {
-                        mParent.sendRequest(ObexHelper.OBEX_OPCODE_PUT_FINAL, null, mReplyHeader);
+                        mParent.sendRequest(ObexHelper.OBEX_OPCODE_PUT_FINAL, null, mReplyHeader, mBeforeResponseDelay);
                     }
                     if (mReplyHeader.responseCode != ResponseCodes.OBEX_HTTP_CONTINUE) {
                         mOperationDone = true;
@@ -620,7 +626,7 @@ public final class ClientOperation implements Operation, BaseStream {
         if (mOperationType == OperationType.GET) {
             if ((inStream) && (!mOperationDone)) {
                 // to deal with inputstream in get operation
-                mParent.sendRequest(ObexHelper.OBEX_OPCODE_GET_FINAL, null, mReplyHeader);
+                mParent.sendRequest(ObexHelper.OBEX_OPCODE_GET_FINAL, null, mReplyHeader, mBeforeResponseDelay);
                 /*
                  * Determine if that was not the last packet in the operation
                  */
@@ -730,7 +736,7 @@ public final class ClientOperation implements Operation, BaseStream {
                     }
                 }
                 while (mReplyHeader.responseCode == ResponseCodes.OBEX_HTTP_CONTINUE && !mOperationDone) {
-                    mParent.sendRequest(ObexHelper.OBEX_OPCODE_GET_FINAL, null, mReplyHeader);
+                    mParent.sendRequest(ObexHelper.OBEX_OPCODE_GET_FINAL, null, mReplyHeader, mBeforeResponseDelay);
                     // Regardless of the SRM state, wait for the response.
                 }
                 mOperationDone = true;

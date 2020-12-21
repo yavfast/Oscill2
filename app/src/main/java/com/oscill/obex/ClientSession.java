@@ -377,10 +377,10 @@ public final class ClientSession implements ObexSession {
      * @throws IOException if an IO error occurs
      */
     public void sendRequest(int opCode, @Nullable byte[] head, @NonNull HeaderSet header) throws IOException {
-        sendRequest(opCode, head, header, 0L);
+        sendRequest(opCode, head, header, 0);
     }
 
-    public void sendRequest(int opCode, @Nullable byte[] head, @NonNull HeaderSet header, long responseTimeout) throws IOException {
+    public void sendRequest(int opCode, @Nullable byte[] head, @NonNull HeaderSet header, int responseTimeout) throws IOException {
         sendRequest(opCode, head);
 
         if (responseTimeout > 0L) {

@@ -113,7 +113,7 @@ public class MainActivity extends AppCompatActivity {
                 oscill.setSyncType(BitSet.fromBits(0,0,0,0,0,0,1,0)); // RT
 
                 // WARN: set last
-                oscill.setSamplesDataSize(8 * 32); // QS
+                oscill.setSamplesDataSize(10 * 32); // QS
 
                 oscill.calibration();
 

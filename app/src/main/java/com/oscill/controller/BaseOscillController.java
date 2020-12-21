@@ -85,8 +85,9 @@ public class BaseOscillController {
     }
 
     @NonNull
-    public byte[] execute(@NonNull ClientOperation.OperationType operationType, @NonNull HeaderSet headerSet, int propertyType) throws IOException {
+    public byte[] execute(@NonNull ClientOperation.OperationType operationType, @NonNull HeaderSet headerSet, int propertyType, int beforeResponseDelay) throws IOException {
         ClientOperation resOp = getClientSession().exec(operationType, headerSet);
+        resOp.setBeforeResponseDelay(beforeResponseDelay);
         try {
             int responseCode = resOp.getResponse();
 
@@ -112,7 +113,7 @@ public class BaseOscillController {
         HeaderSet headerSet = new HeaderSet();
         headerSet.setHeader(Header.OSCILL_PROPERTY, property.getBytes());
 
-        return execute(ClientOperation.OperationType.GET, headerSet, propertyType);
+        return execute(ClientOperation.OperationType.GET, headerSet, propertyType, 0);
     }
 
     @NonNull
@@ -121,7 +122,7 @@ public class BaseOscillController {
         headerSet.setHeader(Header.OSCILL_REGISTRY, registry.getBytes());
         headerSet.setHeader(propertyType, data);
 
-        return execute(ClientOperation.OperationType.GET, headerSet, propertyType);
+        return execute(ClientOperation.OperationType.GET, headerSet, propertyType, 0);
     }
 
     @NonNull
@@ -129,7 +130,7 @@ public class BaseOscillController {
         HeaderSet headerSet = new HeaderSet();
         headerSet.setHeader(Header.OSCILL_REGISTRY, registry.getBytes());
 
-        return execute(ClientOperation.OperationType.GET, headerSet, propertyType);
+        return execute(ClientOperation.OperationType.GET, headerSet, propertyType, 0);
     }
 
     @NonNull
@@ -137,7 +138,7 @@ public class BaseOscillController {
         HeaderSet headerSet = new HeaderSet();
         headerSet.setHeader(Header.OSCILL_DATA, command.getBytes());
 
-        return execute(ClientOperation.OperationType.PUT, headerSet, propertyType);
+        return execute(ClientOperation.OperationType.PUT, headerSet, propertyType, 0);
     }
 
     /**
@@ -151,11 +152,11 @@ public class BaseOscillController {
      * возвращается пакет Success с заголовком 0x72 = “D” и пустым заголовком 0x49.
      */
     @NonNull
-    public byte[] getData() throws IOException {
+    public byte[] getData(int beforeResponseDelay) throws IOException {
         HeaderSet headerSet = new HeaderSet();
         headerSet.setHeader(Header.OSCILL_DATA, "D".getBytes());
 
-        return execute(ClientOperation.OperationType.GET, headerSet, Header.END_OF_BODY);
+        return execute(ClientOperation.OperationType.GET, headerSet, Header.END_OF_BODY, beforeResponseDelay);
     }
 
 }

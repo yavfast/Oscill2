@@ -6,6 +6,7 @@ import com.oscill.controller.config.ChanelOffset;
 import com.oscill.controller.config.ChanelSensitivity;
 import com.oscill.controller.config.CpuTickLength;
 import com.oscill.controller.config.RealtimeSamplingPeriod;
+import com.oscill.types.Dimension;
 import com.oscill.utils.executor.OnResult;
 
 import java.io.IOException;
@@ -56,7 +57,8 @@ public class OscillConfig {
 
     public void requestData(@NonNull OnResult<OscillData> onResult) {
         try {
-            byte[] data = oscill.getData();
+            int responseTimeout = (int)realtimeSamplingPeriod.getDivTime(Dimension.MILLI, 32 * 10);
+            byte[] data = oscill.getData(responseTimeout);
             if (data.length > 4) {
                 OscillData oscillData = new OscillData(this, data);
                 onResult.of(oscillData);
