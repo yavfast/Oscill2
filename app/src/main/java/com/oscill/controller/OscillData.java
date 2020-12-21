@@ -86,13 +86,14 @@ public class OscillData {
 
         dataInfo = BitSet.fromBytes(data[0]);
         chanelInfo = BitSet.fromBytes(data[2]);
-        int headerDataSize = Oscill.bytesToInt(new byte[]{data[4], data[5]});
 
         dataSize = data.length - DATA_HEADER_SIZE;
 
-        if (headerDataSize != dataSize) {
-            Log.w(TAG, "Wrong data size: ", dataSize, "; expected: ", headerDataSize);
-        }
+        // TODO:
+//        int headerDataSize = Oscill.bytesToInt(new byte[]{data[4], data[5]});
+//        if (headerDataSize != dataSize) {
+//            Log.w(TAG, "Wrong data size: ", dataSize, "; expected: ", headerDataSize);
+//        }
     }
 
     public void prepareData() {
