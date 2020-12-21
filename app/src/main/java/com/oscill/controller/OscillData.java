@@ -6,8 +6,13 @@ import com.oscill.controller.config.ChanelSensitivity;
 import com.oscill.types.BitSet;
 import com.oscill.types.Dimension;
 import com.oscill.types.Range;
+import com.oscill.utils.Log;
 
 public class OscillData {
+
+    private static final String TAG = Log.getTag(OscillData.class);
+
+    private static final int DATA_HEADER_SIZE = 6;
 
     private final OscillConfig config;
     public final byte[] data;
@@ -81,8 +86,13 @@ public class OscillData {
 
         dataInfo = BitSet.fromBytes(data[0]);
         chanelInfo = BitSet.fromBytes(data[2]);
-//        dataSize = Oscill.bytesToInt(new byte[]{data[4], data[5]}); // TODO:
-        dataSize = data.length - 4;
+        int headerDataSize = Oscill.bytesToInt(new byte[]{data[4], data[5]});
+
+        dataSize = data.length - DATA_HEADER_SIZE;
+
+        if (headerDataSize != dataSize) {
+            Log.w(TAG, "Wrong data size: ", dataSize, "; expected: ", headerDataSize);
+        }
     }
 
     public void prepareData() {
@@ -95,7 +105,7 @@ public class OscillData {
         float vStep = this.vStep;
 
         int idx = 0;
-        int dataIdx = 4;
+        int dataIdx = DATA_HEADER_SIZE;
         while (idx < dataSize) {
             tData[idx] = tStep * idx;
             vData[idx] = byteToInt(data[dataIdx]) * vStep;

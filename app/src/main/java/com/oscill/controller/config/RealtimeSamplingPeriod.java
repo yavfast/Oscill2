@@ -13,15 +13,22 @@ import static com.oscill.types.Dimension.PICO;
 public class RealtimeSamplingPeriod extends OscillProperty<Long> {
 
     private final CpuTickLength cpuTickLength;
+    private final SamplesCount samplesCount;
 
-    public RealtimeSamplingPeriod(@NonNull Oscill oscill, @NonNull CpuTickLength cpuTickLength) {
+    public RealtimeSamplingPeriod(@NonNull Oscill oscill, @NonNull CpuTickLength cpuTickLength, @NonNull SamplesCount samplesCount) {
         super(oscill);
         this.cpuTickLength = cpuTickLength;
+        this.samplesCount = samplesCount;
     }
 
     @NonNull
     public CpuTickLength getCpuTickLength() {
         return cpuTickLength;
+    }
+
+    @NonNull
+    public SamplesCount getSamplesCount() {
+        return samplesCount;
     }
 
     @NonNull
@@ -59,13 +66,13 @@ public class RealtimeSamplingPeriod extends OscillProperty<Long> {
         return ((long) (nativeValue / 256)) * getCpuTickLength().getRealValue();
     }
 
-    public void setSamplingPeriod(float divTime, @NonNull Dimension timeDim, int samplingCountByDiv) throws Exception {
-        float samplingTime = timeDim.toDimension(divTime / (float) samplingCountByDiv, PICO);
+    public void setSamplingPeriod(float divTime, @NonNull Dimension timeDim) throws Exception {
+        float samplingTime = timeDim.toDimension(divTime / (float) getSamplesCount().getSamplesByDivCount(), PICO);
         setRealValue((long)samplingTime);
     }
 
-    public float getDivTime(@NonNull Dimension timeDim, int samplingCountByDiv) {
-        return PICO.toDimension(getRealValue() * samplingCountByDiv, timeDim);
+    public float getDivTime(@NonNull Dimension timeDim) {
+        return PICO.toDimension(getRealValue() * getSamplesCount().getSamplesByDivCount(), timeDim);
     }
 
     public float getSampleTime(@NonNull Dimension timeDim) {

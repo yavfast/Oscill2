@@ -48,4 +48,9 @@ public class CpuTickLength extends OscillProperty<Integer> {
         return nativeValue * 10;
     }
 
+    public void setCPUFreq(int cpuFreq, @NonNull Dimension dimension) throws Exception {
+        float tickLength = Dimension.NORMAL.toDimension(1f, Dimension.PICO) / dimension.toDimension(cpuFreq, Dimension.NORMAL);
+        setRealValue(Math.round(tickLength));
+    }
+
 }

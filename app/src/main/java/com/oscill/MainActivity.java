@@ -89,6 +89,8 @@ public class MainActivity extends AppCompatActivity {
             try {
                 Oscill oscill = oscillConfig.getOscill();
 
+                oscillConfig.getCpuTickLength().setCPUFreq(60, Dimension.MEGA);
+
                 oscill.setProcessingType(BitSet.fromBits(0,0,0,0,0,0,0,0)); // RS
 
                 oscill.setScanDelay(0); // TD
@@ -104,16 +106,15 @@ public class MainActivity extends AppCompatActivity {
                 oscill.setChanelHWMode(BitSet.fromBits(0,0,0,0,0,0,0,0)); // O1
                 oscill.setChanelSWMode(BitSet.fromBits(0,0,0,0,0,1,0,0)); // M1
 
-                oscillConfig.getChanelSensitivity().setSensitivity(20f, Dimension.MILLI);
+                oscillConfig.getChanelSensitivity().setSensitivity(50f, Dimension.MILLI);
                 oscillConfig.getChanelOffset().setOffset(0f, Dimension.MILLI);
-
-                oscillConfig.getRealtimeSamplingPeriod().setSamplingPeriod(5f, Dimension.MILLI, 32);
 
                 oscill.setChanelSyncLevel(0); // S1
                 oscill.setSyncType(BitSet.fromBits(0,0,0,0,0,0,1,0)); // RT
 
                 // WARN: set last
-                oscill.setSamplesDataSize(10 * 32); // QS
+                oscillConfig.getSamplesCount().setSamplesCount(10, 30);
+                oscillConfig.getRealtimeSamplingPeriod().setSamplingPeriod(5f, Dimension.MILLI);
 
                 oscill.calibration();
 

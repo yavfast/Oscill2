@@ -6,6 +6,7 @@ import com.oscill.controller.config.ChanelOffset;
 import com.oscill.controller.config.ChanelSensitivity;
 import com.oscill.controller.config.CpuTickLength;
 import com.oscill.controller.config.RealtimeSamplingPeriod;
+import com.oscill.controller.config.SamplesCount;
 import com.oscill.types.Dimension;
 import com.oscill.utils.executor.OnResult;
 
@@ -20,6 +21,7 @@ public class OscillConfig {
 
     private final CpuTickLength cpuTickLength;
     private final RealtimeSamplingPeriod realtimeSamplingPeriod;
+    private final SamplesCount samplesCount;
 
     public OscillConfig(@NonNull Oscill oscill) {
         super();
@@ -27,7 +29,8 @@ public class OscillConfig {
         this.chanelSensitivity = new ChanelSensitivity(oscill);
         this.chanelOffset = new ChanelOffset(oscill, chanelSensitivity);
         this.cpuTickLength = new CpuTickLength(oscill);
-        this.realtimeSamplingPeriod = new RealtimeSamplingPeriod(oscill, cpuTickLength);
+        this.samplesCount = new SamplesCount(oscill);
+        this.realtimeSamplingPeriod = new RealtimeSamplingPeriod(oscill, cpuTickLength, samplesCount);
     }
 
     @NonNull
@@ -55,9 +58,14 @@ public class OscillConfig {
         return realtimeSamplingPeriod;
     }
 
+    @NonNull
+    public SamplesCount getSamplesCount() {
+        return samplesCount;
+    }
+
     public void requestData(@NonNull OnResult<OscillData> onResult) {
         try {
-            int responseTimeout = (int)realtimeSamplingPeriod.getDivTime(Dimension.MILLI, 32 * 10);
+            int responseTimeout = (int)realtimeSamplingPeriod.getDivTime(Dimension.MILLI);
             byte[] data = oscill.getData(responseTimeout);
             if (data.length > 4) {
                 OscillData oscillData = new OscillData(this, data);

@@ -240,6 +240,10 @@ public class Oscill extends BaseOscillController {
         return bytesToInt(setRegistry("QS", Header.OSCILL_2BYTE, intTo2Bytes(value)));
     }
 
+    public int getSamplesDataSize() throws IOException {
+        return bytesToInt(getRegistry("QS", Header.OSCILL_2BYTE));
+    }
+
     /**
      * Имя регистра: TC - Центровка развертки
      * Формат регистра: 2 байта, беззнаковый

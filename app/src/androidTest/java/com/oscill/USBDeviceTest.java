@@ -129,8 +129,8 @@ public class USBDeviceTest {
             RealtimeSamplingPeriod realtimeSamplingPeriod = config.getRealtimeSamplingPeriod();
             Log.i(TAG, "realtimeSamplingPeriod range: ", realtimeSamplingPeriod.getRealRange());
             Log.i(TAG, "realtimeSamplingPeriod range: ", realtimeSamplingPeriod.getNativeRange());
-            realtimeSamplingPeriod.setSamplingPeriod(50, Dimension.MILLI, 32);
-            Log.i(TAG, "set realtimeSamplingPeriod: ", realtimeSamplingPeriod.getDivTime(Dimension.MILLI, 32));
+            realtimeSamplingPeriod.setSamplingPeriod(50, Dimension.MILLI);
+            Log.i(TAG, "set realtimeSamplingPeriod: ", realtimeSamplingPeriod.getDivTime(Dimension.MILLI));
 
 
         });
@@ -176,7 +176,7 @@ public class USBDeviceTest {
             oscill.calibration();
 
             for (int idx = 0; idx < 10; idx++) {
-                byte[] data = oscill.getData();
+                byte[] data = oscill.getData(0);
                 Log.i(TAG, "Data: " + Arrays.toString(data));
             }
         });
