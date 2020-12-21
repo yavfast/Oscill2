@@ -10,7 +10,12 @@ import com.oscill.types.Unit;
 
 import java.io.IOException;
 
+import static com.oscill.types.Dimension.MILLI;
+
 public class ChanelSensitivity extends OscillProperty<Float> {
+
+    private static final float DIV_COUNT = 8f;
+    private static final float STEPS_BY_DIV = 32f;
 
     public ChanelSensitivity(@NonNull Oscill oscill) {
         super(oscill);
@@ -54,5 +59,16 @@ public class ChanelSensitivity extends OscillProperty<Float> {
     public void setSensitivity(float value, @NonNull Dimension dimension) throws Exception {
         setRealValue(dimension.toDimension(value, Dimension.MILLI));
     }
+
+    public float getSensitivityStep(@NonNull Dimension timeDim) {
+        return MILLI.toDimension(getRealValue(), timeDim) / STEPS_BY_DIV;
+    }
+
+    @NonNull
+    public Range<Float> getSensitivityRange(@NonNull Dimension timeDim) {
+        float vMax = MILLI.toDimension(getRealValue(), timeDim) * DIV_COUNT / 2f;
+        return new Range<>(-vMax, vMax);
+    }
+
 
 }

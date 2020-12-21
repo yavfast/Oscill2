@@ -188,7 +188,7 @@ public final class ObexHelper {
                  */
                 case 0x40:
                     index++;
-                    int length = ((0xFF & headerArray[index]) << 8) + (0xFF & headerArray[index + 1]);
+                    int length = convertToInt(new byte[]{headerArray[index], headerArray[index + 1]});
                     index += 2;
                     length -= OBEX_BYTE_SEQ_HEADER_LEN;
                     data = new byte[length];
@@ -380,39 +380,18 @@ public final class ObexHelper {
         return new String(data);
     }
     /**
-     * Converts the byte array to a long.
+     * Converts the byte array to a int.
      * @param data the byte array to convert to a long
-     * @return the byte array as a long
+     * @return the byte array as a int
      */
-    // TODO:
-    public static int convertToLong(@NonNull byte[] data) {
-        int result = 0;
-        int value = 0;
-        int power = 0;
-
-        for (int i = (data.length - 1); i >= 0; i--) {
-            value = data[i];
-            if (value < 0) {
-                value += 256;
-            }
-
-            result = result | (value << power);
-            power += 8;
-        }
-
-        return result;
-    }
-
-    // TODO:
     public static int convertToInt(@NonNull byte[] data) {
         int result = 0;
-        int value = 0;
+        int value;
         int power = 0;
 
         for (int i = (data.length - 1); i >= 0; i--) {
             value = data[i] & 0xFF;
-
-            result = result | (value << power);
+            result |= value << power;
             power += 8;
         }
 

@@ -88,6 +88,10 @@ public class OscillManager {
                                 doStart();
                                 prepareData(oscillData);
                             }
+                        }).doIfEmpty(() -> {
+                            if (isActive()) {
+                                doStart();
+                            }
                         }).doIfError(e -> EventsController.sendEvent(new OnOscillError(e)))
                 );
             }

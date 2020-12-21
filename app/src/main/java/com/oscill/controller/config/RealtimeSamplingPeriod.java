@@ -67,4 +67,9 @@ public class RealtimeSamplingPeriod extends OscillProperty<Long> {
     public float getDivTime(@NonNull Dimension timeDim, int samplingCountByDiv) {
         return PICO.toDimension(getRealValue() * samplingCountByDiv, timeDim);
     }
+
+    public float getSampleTime(@NonNull Dimension timeDim) {
+        return PICO.toDimension(getRealValue(), timeDim);
+    }
+
 }

@@ -46,7 +46,6 @@ import java.io.OutputStream;
 
 /**
  * This class in an implementation of the OBEX ClientSession.
- * @hide
  */
 public final class ClientSession implements ObexSession {
 
@@ -306,7 +305,7 @@ public final class ClientSession implements ObexSession {
 
             /* len_hi | len_lo */
             byte[] header = read(input, 2);
-            int length = (header[0] << 8) | header[1];
+            int length = ObexHelper.convertToInt(header);
 
             if (length <= ObexHelper.BASE_PACKET_LENGTH) {
                 return;
@@ -361,7 +360,7 @@ public final class ClientSession implements ObexSession {
 
         /* version | flags | len_hi | len_lo */
         byte[] header = read(input, 4);
-        mMaxTxPacketSize = (header[2] << 8) | header[3];
+        mMaxTxPacketSize = ObexHelper.convertToInt(new byte[]{header[2], header[3]});
 
         length -= header.length;
         return read(input, length);
@@ -378,8 +377,16 @@ public final class ClientSession implements ObexSession {
      * @throws IOException if an IO error occurs
      */
     public void sendRequest(int opCode, @Nullable byte[] head, @NonNull HeaderSet header) throws IOException {
+        sendRequest(opCode, head, header, 0L);
+    }
+
+    public void sendRequest(int opCode, @Nullable byte[] head, @NonNull HeaderSet header, long responseTimeout) throws IOException {
         sendRequest(opCode, head);
-        SystemClock.sleep(10L);
+
+        if (responseTimeout > 0L) {
+            SystemClock.sleep(responseTimeout);
+        }
+
         readResponse(opCode, header);
     }
 

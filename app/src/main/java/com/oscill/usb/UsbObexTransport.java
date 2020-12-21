@@ -235,7 +235,7 @@ public class UsbObexTransport implements ObexTransport {
                             } else {
                                 // TODO: Maybe internal restart device
                                 Log.w(TAG, "WAIT DATA: ", res);
-                                SystemClock.sleep(100L);
+                                SystemClock.sleep(500L);
                             }
                         }
                     }

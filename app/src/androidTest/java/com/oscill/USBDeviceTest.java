@@ -129,7 +129,7 @@ public class USBDeviceTest {
             RealtimeSamplingPeriod realtimeSamplingPeriod = config.getRealtimeSamplingPeriod();
             Log.i(TAG, "realtimeSamplingPeriod range: ", realtimeSamplingPeriod.getRealRange());
             Log.i(TAG, "realtimeSamplingPeriod range: ", realtimeSamplingPeriod.getNativeRange());
-            realtimeSamplingPeriod.setSamplingPeriod(10, Dimension.MILLI, 32);
+            realtimeSamplingPeriod.setSamplingPeriod(50, Dimension.MILLI, 32);
             Log.i(TAG, "set realtimeSamplingPeriod: ", realtimeSamplingPeriod.getDivTime(Dimension.MILLI, 32));
 
 
@@ -151,10 +151,6 @@ public class USBDeviceTest {
 
             oscill.setProcessingType(BitSet.fromBits(0,0,0,0,0,0,0,0)); // RS
 
-            int maxSamplesDataSize = oscill.getMaxSamplesDataSize();
-            Log.i(TAG, "Max samples data size: " + maxSamplesDataSize);
-            oscill.setSamplesDataSize(maxSamplesDataSize); // QS
-
             oscill.setScanDelay(0); // TD
             oscill.setSamplesOffset(10); // TC
 
@@ -172,6 +168,10 @@ public class USBDeviceTest {
             oscill.setChanelOffset(0); // P1
             oscill.setChanelSyncLevel(0); // S1
             oscill.setSyncType(BitSet.fromBits(0,0,0,0,0,0,1,0)); // RT
+
+            int maxSamplesDataSize = oscill.getMaxSamplesDataSize();
+            Log.i(TAG, "Max samples data size: " + maxSamplesDataSize);
+            oscill.setSamplesDataSize(8 * 30); // QS
 
             oscill.calibration();
 

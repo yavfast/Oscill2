@@ -217,7 +217,7 @@ public final class ClientOperation implements Operation, BaseStream {
      */
     public int getLength() {
         byte[] data = mReplyHeader.getHeader(Header.TYPE);
-        return data != null ? ObexHelper.convertToLong(data) : -1;
+        return data != null ? ObexHelper.convertToInt(data) : -1;
     }
 
     /**

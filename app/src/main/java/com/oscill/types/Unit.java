@@ -6,7 +6,7 @@ public class Unit {
 
     public static final String VOLT = "V";
     public static final String HERZ = "Hz";
-    public static final String SECOND = "Sec";
+    public static final String SECOND = "s";
 
     private final Dimension dimension;
     private final String name;

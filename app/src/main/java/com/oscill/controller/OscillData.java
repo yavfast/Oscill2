@@ -2,18 +2,26 @@ package com.oscill.controller;
 
 import androidx.annotation.NonNull;
 
+import com.oscill.controller.config.ChanelSensitivity;
 import com.oscill.types.BitSet;
+import com.oscill.types.Dimension;
+import com.oscill.types.Range;
 
 public class OscillData {
 
-    public final OscillConfig config;
+    private final OscillConfig config;
     public final byte[] data;
 
-    public float tStep;
-    public float vStep;
+    private float tStep;
+    private float vStep;
+    private float vMin;
+    private float vMax;
+
+    private float vOffset;
+
     public int dataSize;
-    public BitSet dataInfo;
-    public BitSet chanelInfo;
+    private BitSet dataInfo;
+    private BitSet chanelInfo;
 
     public float[] tData;
     public float[] vData;
@@ -60,12 +68,20 @@ public class OscillData {
      * 100   – выборка АЦП соотв. выборке вых.массива (один байт на выборку)
      */
     private void prepareDataInfo() {
-        this.tStep = config.getRealtimeSamplingPeriod().getRealValue();
-        this.vStep = config.getChanelSensitivity().getRealValue();
+        this.tStep = config.getRealtimeSamplingPeriod().getSampleTime(Dimension.MILLI);
+
+        ChanelSensitivity chanelSensitivity = config.getChanelSensitivity();
+        this.vStep = chanelSensitivity.getSensitivityStep(Dimension.MILLI);
+
+        this.vOffset = config.getChanelOffset().getRealValue();
+
+        Range<Float> vRange = chanelSensitivity.getSensitivityRange(Dimension.MILLI);
+        this.vMax = vRange.getUpper() + vOffset;
+        this.vMin = vRange.getLower() + vOffset;
 
         dataInfo = BitSet.fromBytes(data[0]);
         chanelInfo = BitSet.fromBytes(data[2]);
-//        dataSize = Oscill.bytesToInt(new byte[]{data[4], data[5]});
+//        dataSize = Oscill.bytesToInt(new byte[]{data[4], data[5]}); // TODO:
         dataSize = data.length - 4;
     }
 
@@ -75,8 +91,8 @@ public class OscillData {
 
         byte[] data = this.data;
         int dataSize = this.dataSize;
-        float tStep = 0.1f;//this.tStep;
-        float vStep = this.vStep / 32f;
+        float tStep = this.tStep;
+        float vStep = this.vStep;
 
         int idx = 0;
         int dataIdx = 4;
@@ -95,4 +111,13 @@ public class OscillData {
     private static int byteToInt(byte value) {
         return (value >= 0 ? value : value & 0xFF) - 0x80;
     }
+
+    public float getMaxV() {
+        return vMax;
+    }
+
+    public float getMinV() {
+        return vMin;
+    }
+
 }
