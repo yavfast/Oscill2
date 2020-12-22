@@ -329,9 +329,15 @@ public class Oscill extends BaseOscillController {
      * От регистра зависят: использование регистра TA или TW
      * Примечание: свободный и бесконечно ждущий запуски поддерживаются начиная с встроенного ПО (firmware) версии 1.25.
      */
-    public void setSyncType(@NonNull BitSet bitSet) throws IOException {
+    @NonNull
+    public BitSet setSyncType(@NonNull BitSet bitSet) throws IOException {
         Log.i(TAG, "setSyncType: ", bitSet);
-        setRegistry("RT", Header.OSCILL_1BYTE, bitSet.toBytes());
+        return BitSet.fromBytes(setRegistry("RT", Header.OSCILL_1BYTE, bitSet.toBytes()));
+    }
+
+    @NonNull
+    public BitSet getSyncType() throws IOException {
+        return BitSet.fromBytes(getRegistry("RT", Header.OSCILL_1BYTE));
     }
 
     /**
@@ -502,9 +508,15 @@ public class Oscill extends BaseOscillController {
      * От регистра зависят: нет.
      * Регистр зависит от: нет.
      */
-    public byte setChanelSyncMode(@NonNull BitSet bitSet) throws IOException {
+    @NonNull
+    public BitSet setChanelSyncMode(@NonNull BitSet bitSet) throws IOException {
         Log.i(TAG, "setChanelSyncMode: ", bitSet);
-        return setRegistry("T1", Header.OSCILL_1BYTE, bitSet.toBytes())[0];
+        return BitSet.fromBytes(setRegistry("T1", Header.OSCILL_1BYTE, bitSet.toBytes()));
+    }
+
+    @NonNull
+    public BitSet getChanelSyncMode() throws IOException {
+        return BitSet.fromBytes(getRegistry("T1", Header.OSCILL_1BYTE));
     }
 
     /**
@@ -517,9 +529,13 @@ public class Oscill extends BaseOscillController {
      * От регистра зависят: нет.
      * Регистр зависит от: нет.
      */
-    public byte setChanelSyncLevel(int value) throws IOException {
+    public int setChanelSyncLevel(int value) throws IOException {
         Log.i(TAG, "setChanelSyncLevel: ", value);
-        return setRegistry("S1", Header.OSCILL_1BYTE, intToByte(value))[0];
+        return bytesToInt(setRegistry("S1", Header.OSCILL_1BYTE, intToByte(value)));
+    }
+
+    public int getChanelSyncLevel() throws IOException {
+        return bytesToInt(getRegistry("S1", Header.OSCILL_1BYTE));
     }
 
     /**

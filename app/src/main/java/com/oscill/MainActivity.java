@@ -17,6 +17,7 @@ import com.github.mikephil.charting.interfaces.datasets.ILineDataSet;
 import com.oscill.controller.Oscill;
 import com.oscill.controller.OscillData;
 import com.oscill.controller.OscillManager;
+import com.oscill.controller.config.SyncType;
 import com.oscill.events.OnOscillConnected;
 import com.oscill.events.OnOscillData;
 import com.oscill.events.OnOscillError;
@@ -96,21 +97,22 @@ public class MainActivity extends AppCompatActivity {
                 oscill.setScanDelay(0); // TD
                 oscill.setSamplesOffset(10); // TC
 
-                oscill.setDelayMaxSyncAuto(100); // TA
-                oscill.setDelayMaxSyncWait(100); // TW
+                oscill.setDelayMaxSyncAuto(500); // TA
+                oscill.setDelayMaxSyncWait(500); // TW
 
                 oscill.setMinSamplingCount(0); // AR
                 oscill.setAvgSamplingCount(0); // AP
 
-                oscill.setChanelSyncMode(BitSet.fromBits(0,0,0,0,0,0,0,0)); // T1
                 oscill.setChanelHWMode(BitSet.fromBits(0,0,0,0,0,0,0,0)); // O1
                 oscill.setChanelSWMode(BitSet.fromBits(0,0,0,0,0,1,0,0)); // M1
 
                 oscillConfig.getChanelSensitivity().setSensitivity(20f, Dimension.MILLI);
                 oscillConfig.getChanelOffset().setOffset(0f, Dimension.MILLI);
 
-                oscill.setChanelSyncLevel(0); // S1
-                oscill.setSyncType(BitSet.fromBits(0,0,0,0,0,0,1,0)); // RT
+                oscillConfig.getChanelSyncMode().setSyncByFront(true);
+
+                oscill.setChanelSyncLevel(10); // S1
+                oscillConfig.getSyncType().setSyncTypeMode(SyncType.SyncTypeMode.FREE);
 
                 // WARN: set last
                 oscillConfig.getSamplesCount().setSamplesCount(10, 50);
