@@ -12,6 +12,7 @@ import com.oscill.usb.UsbObexTransport;
 import com.oscill.utils.AppContextWrapper;
 import com.oscill.utils.Log;
 import com.oscill.utils.executor.EventsController;
+import com.oscill.utils.executor.Executor;
 import com.oscill.utils.executor.OnResult;
 
 import java.util.List;
@@ -45,47 +46,49 @@ public class OscillUsbManager {
     }
 
     public static void connectToDevice(@NonNull OnResult<Oscill> onResult) {
-        UsbObexTransport usbObexTransport = new UsbObexTransport();
-        if (usbObexTransport.isDeviceAvailable()) {
-            EventsController.unregisterHolder(onResult);
-            try {
-                usbObexTransport.create();
-                if (usbObexTransport.hasPermissions()) {
-                    usbObexTransport.connect();
-                    try {
-                        ClientSession session = new ClientSession(usbObexTransport);
-                        Oscill oscill = new Oscill(session);
+        Executor.runInSyncQueue(() -> {
+            UsbObexTransport usbObexTransport = new UsbObexTransport();
+            if (usbObexTransport.isDeviceAvailable()) {
+                EventsController.unregisterHolder(onResult);
+                try {
+                    usbObexTransport.create();
+                    if (usbObexTransport.hasPermissions()) {
+                        usbObexTransport.connect();
+                        try {
+                            ClientSession session = new ClientSession(usbObexTransport);
+                            Oscill oscill = new Oscill(session);
 
-                        oscill.reset();
+                            oscill.reset();
 
-                        int responseCode = oscill.connect();
-                        Log.i(TAG, "Connect result: " + Integer.toHexString(responseCode));
+                            int responseCode = oscill.connect();
+                            Log.i(TAG, "Connect result: " + Integer.toHexString(responseCode));
 
-                        if (responseCode == ResponseCodes.OBEX_HTTP_OK) {
-                            Log.i(TAG, "Connected");
-                            onResult.of(oscill);
-                        } else {
-                            onResult.error(new IllegalStateException("Connect fail"));
+                            if (responseCode == ResponseCodes.OBEX_HTTP_OK) {
+                                Log.i(TAG, "Connected");
+                                onResult.of(oscill);
+                            } else {
+                                onResult.error(new IllegalStateException("Connect fail"));
+                            }
+                        } catch (Throwable e) {
+                            usbObexTransport.disconnect();
+                            throw e;
                         }
-                    } catch (Throwable e) {
-                        usbObexTransport.disconnect();
-                        throw e;
+                    } else {
+                        EventsController.onReceiveEventAsync(onResult, OnUsbPermissionResponse.class, event ->
+                                connectToDevice(onResult)
+                        );
+                        usbObexTransport.requestPermissions();
                     }
-                } else {
-                    EventsController.onReceiveEventAsync(onResult, OnUsbPermissionResponse.class, event ->
-                            connectToDevice(onResult)
-                    );
-                    usbObexTransport.requestPermissions();
+                } catch (Exception e) {
+                    Log.e(TAG, e);
+                    onResult.error(e);
                 }
-            } catch (Exception e) {
-                Log.e(TAG, e);
-                onResult.error(e);
-            }
 
-        } else {
-            Log.w(TAG, "Usb device not available");
-            onResult.error(new IllegalStateException("Usb device not available"));
-        }
+            } else {
+                Log.w(TAG, "Usb device not available");
+                onResult.error(new IllegalStateException("Usb device not available"));
+            }
+        });
     }
 
 }

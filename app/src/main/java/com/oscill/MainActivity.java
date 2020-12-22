@@ -66,7 +66,7 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onResume() {
         super.onResume();
-
+        EventsController.resumeEvents(onOscillConnected, onOscillData, onOscillError);
     }
 
     @Override
