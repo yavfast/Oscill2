@@ -49,7 +49,7 @@ public class SamplesCount extends OscillProperty<Integer> {
     }
 
     @Override
-    protected Integer onNativeValueChanged(@NonNull Integer nativeValue) throws Exception {
+    protected Integer applyNativeValue(@NonNull Integer nativeValue) throws Exception {
         return getOscill().setSamplesDataSize(nativeValue);
     }
 

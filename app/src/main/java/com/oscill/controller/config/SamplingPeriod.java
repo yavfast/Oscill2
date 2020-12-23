@@ -10,25 +10,41 @@ import com.oscill.types.Unit;
 
 import static com.oscill.types.Dimension.PICO;
 
-public class RealtimeSamplingPeriod extends OscillProperty<Long> {
+public class SamplingPeriod extends OscillProperty<Long> {
 
     private final CpuTickLength cpuTickLength;
     private final SamplesCount samplesCount;
+    private final ProcessingTypeMode processingTypeMode;
 
-    public RealtimeSamplingPeriod(@NonNull Oscill oscill, @NonNull CpuTickLength cpuTickLength, @NonNull SamplesCount samplesCount) {
+    public SamplingPeriod(@NonNull Oscill oscill,
+                          @NonNull CpuTickLength cpuTickLength,
+                          @NonNull SamplesCount samplesCount,
+                          @NonNull ProcessingTypeMode processingTypeMode) {
         super(oscill);
+
         this.cpuTickLength = cpuTickLength;
+        cpuTickLength.addLinkedSetting(this);
+
         this.samplesCount = samplesCount;
+        samplesCount.addLinkedSetting(this);
+
+        this.processingTypeMode = processingTypeMode;
+        processingTypeMode.addLinkedSetting(this);
     }
 
     @NonNull
-    public CpuTickLength getCpuTickLength() {
+    private CpuTickLength getCpuTickLength() {
         return cpuTickLength;
     }
 
     @NonNull
-    public SamplesCount getSamplesCount() {
+    private SamplesCount getSamplesCount() {
         return samplesCount;
+    }
+
+    @NonNull
+    private ProcessingTypeMode getProcessingTypeMode() {
+        return processingTypeMode;
     }
 
     @NonNull
@@ -52,7 +68,7 @@ public class RealtimeSamplingPeriod extends OscillProperty<Long> {
     }
 
     @Override
-    protected Integer onNativeValueChanged(@NonNull Integer nativeValue) throws Exception {
+    protected Integer applyNativeValue(@NonNull Integer nativeValue) throws Exception {
         return getOscill().setSamplingPeriod(nativeValue);
     }
 

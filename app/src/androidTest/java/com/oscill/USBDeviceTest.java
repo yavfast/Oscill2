@@ -13,7 +13,7 @@ import com.oscill.controller.OscillUsbManager;
 import com.oscill.controller.config.ChanelOffset;
 import com.oscill.controller.config.ChanelSensitivity;
 import com.oscill.controller.config.CpuTickLength;
-import com.oscill.controller.config.RealtimeSamplingPeriod;
+import com.oscill.controller.config.SamplingPeriod;
 import com.oscill.types.BitSet;
 import com.oscill.types.Dimension;
 import com.oscill.utils.AppContextWrapper;
@@ -127,11 +127,11 @@ public class USBDeviceTest {
 //                Log.i(TAG, "set chanelSensitivity: ", testValue, " -> ", chanelSensitivity.getRealValue());
 //            }
 
-            RealtimeSamplingPeriod realtimeSamplingPeriod = config.getRealtimeSamplingPeriod();
-            Log.i(TAG, "realtimeSamplingPeriod range: ", realtimeSamplingPeriod.getRealRange());
-            Log.i(TAG, "realtimeSamplingPeriod range: ", realtimeSamplingPeriod.getNativeRange());
-            realtimeSamplingPeriod.setSamplingPeriod(50, Dimension.MILLI);
-            Log.i(TAG, "set realtimeSamplingPeriod: ", realtimeSamplingPeriod.getDivTime(Dimension.MILLI));
+            SamplingPeriod samplingPeriod = config.getSamplingPeriod();
+            Log.i(TAG, "realtimeSamplingPeriod range: ", samplingPeriod.getRealRange());
+            Log.i(TAG, "realtimeSamplingPeriod range: ", samplingPeriod.getNativeRange());
+            samplingPeriod.setSamplingPeriod(50, Dimension.MILLI);
+            Log.i(TAG, "set realtimeSamplingPeriod: ", samplingPeriod.getDivTime(Dimension.MILLI));
 
 
         });

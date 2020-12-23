@@ -14,7 +14,9 @@ public class ChanelOffset extends OscillProperty<Float> {
 
     public ChanelOffset(@NonNull Oscill oscill, @NonNull ChanelSensitivity chanelSensitivity) {
         super(oscill);
+
         this.chanelSensitivity = chanelSensitivity;
+        chanelSensitivity.addLinkedSetting(this);
     }
 
     @NonNull
@@ -38,7 +40,7 @@ public class ChanelOffset extends OscillProperty<Float> {
     }
 
     @Override
-    protected Integer onNativeValueChanged(@NonNull Integer nativeValue) throws Exception {
+    protected Integer applyNativeValue(@NonNull Integer nativeValue) throws Exception {
         return getOscill().setChanelOffset(nativeValue);
     }
 

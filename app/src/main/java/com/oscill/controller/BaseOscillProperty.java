@@ -1,33 +1,23 @@
 package com.oscill.controller;
 
+import androidx.annotation.CallSuper;
 import androidx.annotation.NonNull;
-import androidx.annotation.Nullable;
 
 import com.oscill.types.Range;
-import com.oscill.types.Unit;
 import com.oscill.types.SuspendValue;
+import com.oscill.types.Unit;
 import com.oscill.utils.Log;
+import com.oscill.utils.ObjectUtils;
 
-public abstract class BaseOscillProperty<T,V> {
+public abstract class BaseOscillProperty<T,V> extends BaseOscillSetting {
 
-    private final String TAG = Log.getTag(this.getClass());
-
-    private final Oscill oscill;
-
-    public BaseOscillProperty(@NonNull Oscill oscill) {
-        super();
-        this.oscill = oscill;
-    }
-
-    @NonNull
-    public Oscill getOscill() {
-        return oscill;
+    protected BaseOscillProperty(@NonNull Oscill oscill) {
+        super(oscill);
     }
 
     private final SuspendValue<T> nativeValue = new SuspendValue<>(this::requestNativeValue);
     private final SuspendValue<V> realValue = new SuspendValue<>(this::requestRealValue);
     private final SuspendValue<Unit> realValueUnit = new SuspendValue<>(this::requestRealValueUnit);
-
 
     private final SuspendValue<Range<T>> nativeRange = new SuspendValue<>(this::requestNativePropertyRange);
     private final SuspendValue<Range<V>> realRange = new SuspendValue<>(() -> {
@@ -35,11 +25,20 @@ public abstract class BaseOscillProperty<T,V> {
         return new Range<>(nativeToReal(nativeRange.getLower()), nativeToReal(nativeRange.getUpper()));
     });
 
+    @Override
+    protected void onReset() {
+        nativeValue.reset();
+        realValue.reset();
+
+        nativeRange.reset();
+        realRange.reset();
+    }
+
     @NonNull
     protected abstract Unit requestRealValueUnit();
     @NonNull
     protected abstract Range<T> requestNativePropertyRange() throws Exception;
-    protected abstract T onNativeValueChanged(@NonNull T nativeValue) throws Exception;
+    protected abstract T applyNativeValue(@NonNull T nativeValue) throws Exception;
 
     @NonNull
     protected T requestNativeValue() throws Exception {
@@ -47,7 +46,7 @@ public abstract class BaseOscillProperty<T,V> {
     }
 
     @NonNull
-    protected V requestRealValue() throws Exception {
+    private V requestRealValue() throws Exception {
         return nativeToReal(getNativeValue());
     }
 
@@ -77,8 +76,8 @@ public abstract class BaseOscillProperty<T,V> {
         return realRange.getOrThrow();
     }
 
-    public void setRealValue(@NonNull V value) throws Exception {
-        if (!this.realValue.hasValue() || this.realValue.get() != value) {
+    protected void setRealValue(@NonNull V value) throws Exception {
+        if (!this.realValue.hasValue() || !ObjectUtils.equals(this.realValue.get(), value)) {
             this.realValue.set(value);
             setNativeValue(realToNative(value));
             onRealValueChanged(this.realValue.get()); // realValue maybe changed
@@ -86,7 +85,7 @@ public abstract class BaseOscillProperty<T,V> {
     }
 
     @NonNull
-    public T checkNativeRange(@NonNull T value) throws Exception {
+    private T checkNativeRange(@NonNull T value) throws Exception {
         Comparable<T> comparable = (Comparable<T>)value;
         Range<T> nativeRange = getNativeRange();
         if (comparable.compareTo(nativeRange.getLower()) < 0) {
@@ -103,11 +102,18 @@ public abstract class BaseOscillProperty<T,V> {
     public void setNativeValue(@NonNull T value) throws Exception {
         value = checkNativeRange(value);
 
-        if (!this.nativeValue.hasValue() || this.nativeValue.get() != value) {
-            T nativeValue = onNativeValueChanged(value);
+        boolean hasValue = this.nativeValue.hasValue();
+        if (!hasValue || !ObjectUtils.equals(this.nativeValue.get(), value)) {
+            T nativeValue = applyNativeValue(value);
             this.nativeValue.set(nativeValue);
-            this.realValue.set(nativeToReal(nativeValue));
+            onNativeValueChanged(nativeValue);
         }
+    }
+
+    @CallSuper
+    protected void onNativeValueChanged(@NonNull T value) {
+        this.realValue.reset();
+        resetLinkedSettings();
     }
 
     protected void onRealValueChanged(@NonNull V value) {

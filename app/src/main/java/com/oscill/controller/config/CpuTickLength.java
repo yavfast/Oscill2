@@ -28,13 +28,14 @@ public class CpuTickLength extends OscillProperty<Integer> {
         return new Range<>(min, max);
     }
 
+    @NonNull
     @Override
     protected Integer requestNativeValue() throws Exception {
         return getOscill().getCPUTickLength();
     }
 
     @Override
-    protected Integer onNativeValueChanged(@NonNull Integer nativeValue) throws Exception {
+    protected Integer applyNativeValue(@NonNull Integer nativeValue) throws Exception {
         return getOscill().setCPUTickLength(nativeValue);
     }
 

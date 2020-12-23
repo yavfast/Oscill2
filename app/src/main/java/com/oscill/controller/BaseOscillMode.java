@@ -6,19 +6,17 @@ import com.oscill.types.BitSet;
 import com.oscill.types.SuspendValue;
 import com.oscill.utils.ObjectUtils;
 
-public abstract class BaseOscillMode {
+public abstract class BaseOscillMode extends BaseOscillSetting {
 
-    private final Oscill oscill;
     private final SuspendValue<BitSet> mode = new SuspendValue<>(this::requestMode);
 
     public BaseOscillMode(@NonNull Oscill oscill) {
-        super();
-        this.oscill = oscill;
+        super(oscill);
     }
 
-    @NonNull
-    public Oscill getOscill() {
-        return oscill;
+    @Override
+    protected void onReset() {
+        mode.reset();
     }
 
     @NonNull

@@ -23,7 +23,6 @@ import com.oscill.controller.config.SyncTypeMode;
 import com.oscill.events.OnOscillConnected;
 import com.oscill.events.OnOscillData;
 import com.oscill.events.OnOscillError;
-import com.oscill.types.BitSet;
 import com.oscill.types.Dimension;
 import com.oscill.utils.Log;
 import com.oscill.utils.ViewUtils;
@@ -128,7 +127,7 @@ public class MainActivity extends AppCompatActivity {
 
                 // WARN: set last
                 oscillConfig.getSamplesCount().setSamplesCount(10, 50);
-                oscillConfig.getRealtimeSamplingPeriod().setSamplingPeriod(5f, Dimension.MILLI);
+                oscillConfig.getSamplingPeriod().setSamplingPeriod(5f, Dimension.MILLI);
 
                 oscill.calibration();
 

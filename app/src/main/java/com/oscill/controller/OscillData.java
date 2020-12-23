@@ -73,7 +73,7 @@ public class OscillData {
      * 100   – выборка АЦП соотв. выборке вых.массива (один байт на выборку)
      */
     private void prepareDataInfo() {
-        this.tStep = config.getRealtimeSamplingPeriod().getSampleTime(Dimension.MILLI);
+        this.tStep = config.getSamplingPeriod().getSampleTime(Dimension.MILLI);
 
         ChanelSensitivity chanelSensitivity = config.getChanelSensitivity();
         this.vStep = chanelSensitivity.getSensitivityStep(Dimension.MILLI);

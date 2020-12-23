@@ -14,7 +14,9 @@ public class ChanelSyncLevel extends OscillProperty<Float> {
 
     public ChanelSyncLevel(@NonNull Oscill oscill, @NonNull ChanelSensitivity chanelSensitivity) {
         super(oscill);
+
         this.chanelSensitivity = chanelSensitivity;
+        chanelSensitivity.addLinkedSetting(this);
     }
 
     @NonNull
@@ -36,7 +38,7 @@ public class ChanelSyncLevel extends OscillProperty<Float> {
     }
 
     @Override
-    protected Integer onNativeValueChanged(@NonNull Integer nativeValue) throws Exception {
+    protected Integer applyNativeValue(@NonNull Integer nativeValue) throws Exception {
         return getOscill().setChanelSyncLevel(nativeValue);
     }
 

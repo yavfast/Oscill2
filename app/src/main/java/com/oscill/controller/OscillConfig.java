@@ -10,7 +10,7 @@ import com.oscill.controller.config.ChanelSyncLevel;
 import com.oscill.controller.config.ChanelSyncMode;
 import com.oscill.controller.config.CpuTickLength;
 import com.oscill.controller.config.ProcessingTypeMode;
-import com.oscill.controller.config.RealtimeSamplingPeriod;
+import com.oscill.controller.config.SamplingPeriod;
 import com.oscill.controller.config.SamplesCount;
 import com.oscill.controller.config.SyncTypeMode;
 import com.oscill.types.Dimension;
@@ -30,7 +30,7 @@ public class OscillConfig {
     private final ChanelSyncLevel chanelSyncLevel;
 
     private final CpuTickLength cpuTickLength;
-    private final RealtimeSamplingPeriod realtimeSamplingPeriod;
+    private final SamplingPeriod samplingPeriod;
     private final SamplesCount samplesCount;
 
     private final SyncTypeMode syncTypeMode;
@@ -48,12 +48,12 @@ public class OscillConfig {
         this.chanelSWMode = new ChanelSWMode(oscill);
         this.chanelSyncLevel = new ChanelSyncLevel(oscill, chanelSensitivity);
 
-        this.cpuTickLength = new CpuTickLength(oscill);
-        this.samplesCount = new SamplesCount(oscill);
-        this.realtimeSamplingPeriod = new RealtimeSamplingPeriod(oscill, cpuTickLength, samplesCount);
-
         this.syncTypeMode = new SyncTypeMode(oscill);
         this.processingTypeMode = new ProcessingTypeMode(oscill);
+
+        this.cpuTickLength = new CpuTickLength(oscill);
+        this.samplesCount = new SamplesCount(oscill);
+        this.samplingPeriod = new SamplingPeriod(oscill, cpuTickLength, samplesCount, processingTypeMode);
     }
 
     @NonNull
@@ -97,8 +97,8 @@ public class OscillConfig {
     }
 
     @NonNull
-    public RealtimeSamplingPeriod getRealtimeSamplingPeriod() {
-        return realtimeSamplingPeriod;
+    public SamplingPeriod getSamplingPeriod() {
+        return samplingPeriod;
     }
 
     @NonNull
@@ -118,7 +118,7 @@ public class OscillConfig {
 
     public void requestData(@NonNull OnResult<OscillData> onResult) {
         try {
-            int responseTimeout = (int)realtimeSamplingPeriod.getDivTime(Dimension.MILLI);
+            int responseTimeout = (int) samplingPeriod.getDivTime(Dimension.MILLI);
             byte[] data = oscill.getData(responseTimeout);
             if (data.length > 4) {
                 OscillData oscillData = new OscillData(this, data);
