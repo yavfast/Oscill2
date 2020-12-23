@@ -159,31 +159,31 @@ public class MainActivity extends AppCompatActivity {
         chart.setScaleEnabled(true);
         chart.setPinchZoom(true);
 
-        XAxis xAxis = chart.getXAxis();
+        initXAxis(chart.getXAxis());
+
+        initYAxis(chart.getAxisLeft());
+        initYAxis(chart.getAxisRight());
+    }
+
+    private void initYAxis(@NonNull YAxis yAxis) {
+        yAxis.enableGridDashedLine(2f, 2f, 0f);
+        yAxis.setDrawGridLinesBehindData(false);
+        yAxis.setZeroLineWidth(2f);
+        yAxis.setGridColor(Color.GRAY);
+        yAxis.setAxisLineColor(Color.GRAY);
+        yAxis.setTextColor(Color.WHITE);
+        yAxis.setLabelCount(8);
+    }
+
+    private void initXAxis(@NonNull XAxis xAxis) {
+        xAxis.setPosition(XAxis.XAxisPosition.BOTH_SIDED);
         xAxis.setGridColor(Color.GRAY);
         xAxis.setAxisLineColor(Color.GRAY);
         xAxis.setTextColor(Color.WHITE);
         xAxis.setAvoidFirstLastClipping(false);
         xAxis.enableGridDashedLine(2f, 2f, 0f);
         xAxis.setDrawGridLinesBehindData(false);
-
-        YAxis yAxisLeft = chart.getAxisLeft();
-        YAxis yAxisRight = chart.getAxisRight();
-
-        yAxisLeft.enableGridDashedLine(2f, 2f, 0f);
-        yAxisLeft.setDrawGridLinesBehindData(false);
-        yAxisLeft.setZeroLineWidth(2f);
-        yAxisLeft.setGridColor(Color.GRAY);
-        yAxisLeft.setAxisLineColor(Color.GRAY);
-        yAxisLeft.setTextColor(Color.WHITE);
-
-        yAxisRight.enableGridDashedLine(2f, 2f, 0f);
-        yAxisRight.setDrawGridLinesBehindData(false);
-        yAxisRight.setZeroLineWidth(2f);
-        yAxisRight.setGridColor(Color.GRAY);
-        yAxisRight.setAxisLineColor(Color.GRAY);
-        yAxisRight.setTextColor(Color.WHITE);
-
+        xAxis.setLabelCount(10);
     }
 
     private void prepareData(@NonNull OscillData oscillData) {
@@ -199,15 +199,17 @@ public class MainActivity extends AppCompatActivity {
         Executor.runInUIThreadAsync(() -> setData(oscillData, values));
     }
 
-    private void setData(@NonNull OscillData oscillData, @NonNull ArrayList<Entry> values) {
-        YAxis yAxisLeft = chart.getAxisLeft();
-        YAxis yAxisRight = chart.getAxisRight();
+    private void updateYAxis(@NonNull YAxis yAxis, @NonNull OscillData oscillData) {
         float maxV = oscillData.getMaxV();
         float minV = oscillData.getMinV();
-        yAxisLeft.setAxisMaximum(maxV);
-        yAxisLeft.setAxisMinimum(minV);
-        yAxisRight.setAxisMaximum(maxV);
-        yAxisRight.setAxisMinimum(minV);
+
+        yAxis.setAxisMaximum(maxV);
+        yAxis.setAxisMinimum(minV);
+    }
+
+    private void setData(@NonNull OscillData oscillData, @NonNull ArrayList<Entry> values) {
+        updateYAxis(chart.getAxisLeft(), oscillData);
+        updateYAxis(chart.getAxisRight(), oscillData);
 
         LineDataSet dataSet;
         LineData data = chart.getData();
