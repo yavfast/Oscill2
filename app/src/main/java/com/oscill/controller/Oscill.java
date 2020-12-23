@@ -431,9 +431,15 @@ public class Oscill extends BaseOscillController {
      * От регистра зависят: нет
      * Регистр зависит от: нет.
      */
-    public byte setChanelHWMode(@NonNull BitSet bitSet) throws IOException {
+    @NonNull
+    public BitSet setChanelHWMode(@NonNull BitSet bitSet) throws IOException {
         Log.i(TAG, "setChanelHWMode: ", bitSet);
-        return setRegistry("O1", Header.OSCILL_1BYTE, bitSet.toBytes())[0];
+        return BitSet.fromBytes(setRegistry("O1", Header.OSCILL_1BYTE, bitSet.toBytes()));
+    }
+
+    @NonNull
+    public BitSet getChanelHWMode() throws IOException {
+        return BitSet.fromBytes(getRegistry("O1", Header.OSCILL_1BYTE));
     }
 
     /**

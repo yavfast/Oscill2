@@ -93,10 +93,10 @@ public class MainActivity extends AppCompatActivity {
 
                 oscillConfig.getCpuTickLength().setCPUFreq(50, Dimension.MEGA);
 
-                ProcessingTypeMode processingTypeMode = oscillConfig.getProcessingTypeMode();
-                processingTypeMode.setProcessingType(ProcessingTypeMode.ProcessingType.REALTIME);
-                processingTypeMode.setDataOutputType(ProcessingTypeMode.DataOutputType.POST_PROCESSING);
-                processingTypeMode.setBufferType(ProcessingTypeMode.BufferType.SYNC);
+                oscillConfig.getProcessingTypeMode()
+                        .setProcessingType(ProcessingTypeMode.ProcessingType.REALTIME)
+                        .setDataOutputType(ProcessingTypeMode.DataOutputType.POST_PROCESSING)
+                        .setBufferType(ProcessingTypeMode.BufferType.SYNC);
 
                 oscill.setScanDelay(0); // TD
                 oscill.setSamplesOffset(10); // TC
@@ -107,7 +107,12 @@ public class MainActivity extends AppCompatActivity {
                 oscill.setMinSamplingCount(0); // AR
                 oscill.setAvgSamplingCount(0); // AP
 
-                oscill.setChanelHWMode(BitSet.fromBits(0,0,0,0,0,0,0,0)); // O1
+                oscillConfig.getChanelHWMode()
+                        .setChanelEnabled(true)
+                        .setACMode(false)
+                        .setFilter3kHz(false)
+                        .setFilter3MHz(false);
+
                 oscill.setChanelSWMode(BitSet.fromBits(0,0,0,0,0,1,0,0)); // M1
 
                 oscillConfig.getChanelSensitivity().setSensitivity(Sensitivity._100_mV);

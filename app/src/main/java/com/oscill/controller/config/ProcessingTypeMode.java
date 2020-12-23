@@ -50,8 +50,10 @@ public class ProcessingTypeMode extends BaseOscillMode {
         SYNC, ROLL
     }
 
-    public void setProcessingType(@NonNull ProcessingType type) throws Exception {
+    @NonNull
+    public ProcessingTypeMode setProcessingType(@NonNull ProcessingType type) throws Exception {
         apply(getMode().set(0, type == ProcessingType.RIS));
+        return this;
     }
 
     @NonNull
@@ -59,8 +61,10 @@ public class ProcessingTypeMode extends BaseOscillMode {
         return getMode().get(0) ? ProcessingType.RIS : ProcessingType.REALTIME;
     }
 
-    public void setDataOutputType(@NonNull DataOutputType type) throws Exception {
+    @NonNull
+    public ProcessingTypeMode setDataOutputType(@NonNull DataOutputType type) throws Exception {
         apply(getMode().set(1, type == DataOutputType.REALTIME));
+        return this;
     }
 
     @NonNull
@@ -68,8 +72,10 @@ public class ProcessingTypeMode extends BaseOscillMode {
         return getMode().get(1) ? DataOutputType.REALTIME : DataOutputType.POST_PROCESSING;
     }
 
-    public void setBufferType(@NonNull BufferType type) throws Exception {
+    @NonNull
+    public ProcessingTypeMode setBufferType(@NonNull BufferType type) throws Exception {
         apply(getMode().set(2, type == BufferType.ROLL));
+        return this;
     }
 
     @NonNull

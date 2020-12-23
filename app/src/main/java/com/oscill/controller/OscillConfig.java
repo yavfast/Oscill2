@@ -2,6 +2,7 @@ package com.oscill.controller;
 
 import androidx.annotation.NonNull;
 
+import com.oscill.controller.config.ChanelHWMode;
 import com.oscill.controller.config.ChanelOffset;
 import com.oscill.controller.config.ChanelSensitivity;
 import com.oscill.controller.config.ChanelSyncMode;
@@ -22,6 +23,7 @@ public class OscillConfig {
     private final ChanelSensitivity chanelSensitivity;
     private final ChanelOffset chanelOffset;
     private final ChanelSyncMode chanelSyncMode;
+    private final ChanelHWMode chanelHWMode;
 
     private final CpuTickLength cpuTickLength;
     private final RealtimeSamplingPeriod realtimeSamplingPeriod;
@@ -38,6 +40,7 @@ public class OscillConfig {
         this.chanelSensitivity = new ChanelSensitivity(oscill);
         this.chanelOffset = new ChanelOffset(oscill, chanelSensitivity);
         this.chanelSyncMode = new ChanelSyncMode(oscill);
+        this.chanelHWMode = new ChanelHWMode(oscill);
 
         this.cpuTickLength = new CpuTickLength(oscill);
         this.samplesCount = new SamplesCount(oscill);
@@ -65,6 +68,11 @@ public class OscillConfig {
     @NonNull
     public ChanelSyncMode getChanelSyncMode() {
         return chanelSyncMode;
+    }
+
+    @NonNull
+    public ChanelHWMode getChanelHWMode() {
+        return chanelHWMode;
     }
 
     @NonNull
