@@ -380,11 +380,11 @@ public class Oscill extends BaseOscillController {
      * Свойство зависит от: нет.
      * Пример свойства (базовая модель Oscill): V1h=0x2710 (10В/дел), V1l=0x0014 (20мВ/дел)
      */
-    public int getChanelSensitivityMin() throws IOException {
+    public int getChanelSensitivityLow() throws IOException {
         return bytesToInt(getProperty("V1l", Header.OSCILL_2BYTE));
     }
 
-    public int getChanelSensitivityMax() throws IOException {
+    public int getChanelSensitivityHigh() throws IOException {
         return bytesToInt(getProperty("V1h", Header.OSCILL_2BYTE));
     }
 

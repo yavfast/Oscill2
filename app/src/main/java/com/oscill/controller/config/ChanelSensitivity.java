@@ -30,9 +30,9 @@ public class ChanelSensitivity extends OscillProperty<Float> {
     @NonNull
     @Override
     protected Range<Integer> requestNativePropertyRange() throws Exception {
-        int min = getOscill().getChanelSensitivityMin();
-        int max = getOscill().getChanelSensitivityMax();
-        return new Range<>(min, max);
+        int low = getOscill().getChanelSensitivityLow();
+        int high = getOscill().getChanelSensitivityHigh();
+        return new Range<>(high, low);
     }
 
     @NonNull
@@ -72,6 +72,10 @@ public class ChanelSensitivity extends OscillProperty<Float> {
     public Range<Float> getSensitivityRange(@NonNull Dimension timeDim) {
         float vMax = MILLI.toDimension(getRealValue(), timeDim) * DIV_COUNT / 2f;
         return new Range<>(-vMax, vMax);
+    }
+
+    public float getResolution() {
+        return DIV_COUNT * STEPS_BY_DIV;
     }
 
 

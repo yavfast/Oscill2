@@ -6,8 +6,11 @@ import androidx.annotation.Nullable;
 import com.oscill.types.Range;
 import com.oscill.types.Unit;
 import com.oscill.types.SuspendValue;
+import com.oscill.utils.Log;
 
 public abstract class BaseOscillProperty<T,V> {
+
+    private final String TAG = Log.getTag(this.getClass());
 
     private final Oscill oscill;
 
@@ -82,7 +85,24 @@ public abstract class BaseOscillProperty<T,V> {
         }
     }
 
+    @NonNull
+    public T checkNativeRange(@NonNull T value) throws Exception {
+        Comparable<T> comparable = (Comparable<T>)value;
+        Range<T> nativeRange = getNativeRange();
+        if (comparable.compareTo(nativeRange.getLower()) < 0) {
+            Log.w(TAG, "Out of range: ", nativeRange, "; value: ", value);
+            return nativeRange.getLower();
+        }
+        if (comparable.compareTo(nativeRange.getUpper()) > 0) {
+            Log.w(TAG, "Out of range: ", nativeRange, "; value: ", value);
+            return nativeRange.getUpper();
+        }
+        return value;
+    }
+
     public void setNativeValue(@NonNull T value) throws Exception {
+        value = checkNativeRange(value);
+
         if (!this.nativeValue.hasValue() || this.nativeValue.get() != value) {
             T nativeValue = onNativeValueChanged(value);
             this.nativeValue.set(nativeValue);

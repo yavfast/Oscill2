@@ -6,6 +6,7 @@ import com.oscill.controller.config.ChanelHWMode;
 import com.oscill.controller.config.ChanelOffset;
 import com.oscill.controller.config.ChanelSWMode;
 import com.oscill.controller.config.ChanelSensitivity;
+import com.oscill.controller.config.ChanelSyncLevel;
 import com.oscill.controller.config.ChanelSyncMode;
 import com.oscill.controller.config.CpuTickLength;
 import com.oscill.controller.config.ProcessingTypeMode;
@@ -26,6 +27,7 @@ public class OscillConfig {
     private final ChanelSyncMode chanelSyncMode;
     private final ChanelHWMode chanelHWMode;
     private final ChanelSWMode chanelSWMode;
+    private final ChanelSyncLevel chanelSyncLevel;
 
     private final CpuTickLength cpuTickLength;
     private final RealtimeSamplingPeriod realtimeSamplingPeriod;
@@ -44,6 +46,7 @@ public class OscillConfig {
         this.chanelSyncMode = new ChanelSyncMode(oscill);
         this.chanelHWMode = new ChanelHWMode(oscill);
         this.chanelSWMode = new ChanelSWMode(oscill);
+        this.chanelSyncLevel = new ChanelSyncLevel(oscill, chanelSensitivity);
 
         this.cpuTickLength = new CpuTickLength(oscill);
         this.samplesCount = new SamplesCount(oscill);
@@ -81,6 +84,11 @@ public class OscillConfig {
     @NonNull
     public ChanelSWMode getChanelSWMode() {
         return chanelSWMode;
+    }
+
+    @NonNull
+    public ChanelSyncLevel getChanelSyncLevel() {
+        return chanelSyncLevel;
     }
 
     @NonNull

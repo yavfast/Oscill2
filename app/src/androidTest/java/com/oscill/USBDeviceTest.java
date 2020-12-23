@@ -87,8 +87,8 @@ public class USBDeviceTest {
 
             Log.i(TAG, "Max preload samples: " + oscill.getMaxPreloadSamples());
             Log.i(TAG, "Max samples data size: " + oscill.getMaxSamplesDataSize());
-            Log.i(TAG, "Chanel sensitivity min: " + oscill.getChanelSensitivityMin());
-            Log.i(TAG, "Chanel sensitivity max: " + oscill.getChanelSensitivityMax());
+            Log.i(TAG, "Chanel sensitivity min: " + oscill.getChanelSensitivityLow());
+            Log.i(TAG, "Chanel sensitivity max: " + oscill.getChanelSensitivityHigh());
             Log.i(TAG, "Chanel offset min: " + oscill.getChanelOffsetMin());
             Log.i(TAG, "Chanel offset max: " + oscill.getChanelOffsetMax());
             Log.i(TAG, "Chanel delay: " + oscill.getChanelDelay());

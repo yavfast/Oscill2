@@ -123,7 +123,7 @@ public class MainActivity extends AppCompatActivity {
                         .setSyncByFront(true)
                         .setHistFront(false);
 
-                oscill.setChanelSyncLevel(20); // S1
+                oscillConfig.getChanelSyncLevel().setNativeValue(20);
                 oscillConfig.getSyncTypeMode().setSyncType(SyncTypeMode.SyncType.FREE);
 
                 // WARN: set last
