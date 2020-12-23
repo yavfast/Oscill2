@@ -2,7 +2,6 @@ package com.oscill;
 
 import android.graphics.Color;
 import android.os.Bundle;
-import android.os.SystemClock;
 
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
@@ -17,7 +16,9 @@ import com.github.mikephil.charting.interfaces.datasets.ILineDataSet;
 import com.oscill.controller.Oscill;
 import com.oscill.controller.OscillData;
 import com.oscill.controller.OscillManager;
-import com.oscill.controller.config.SyncType;
+import com.oscill.controller.config.ProcessingTypeMode;
+import com.oscill.controller.config.Sensitivity;
+import com.oscill.controller.config.SyncTypeMode;
 import com.oscill.events.OnOscillConnected;
 import com.oscill.events.OnOscillData;
 import com.oscill.events.OnOscillError;
@@ -92,7 +93,10 @@ public class MainActivity extends AppCompatActivity {
 
                 oscillConfig.getCpuTickLength().setCPUFreq(50, Dimension.MEGA);
 
-                oscill.setProcessingType(BitSet.fromBits(0,0,0,0,0,0,0,0)); // RS
+                ProcessingTypeMode processingTypeMode = oscillConfig.getProcessingTypeMode();
+                processingTypeMode.setProcessingType(ProcessingTypeMode.ProcessingType.REALTIME);
+                processingTypeMode.setDataOutputType(ProcessingTypeMode.DataOutputType.POST_PROCESSING);
+                processingTypeMode.setBufferType(ProcessingTypeMode.BufferType.SYNC);
 
                 oscill.setScanDelay(0); // TD
                 oscill.setSamplesOffset(10); // TC
@@ -106,13 +110,13 @@ public class MainActivity extends AppCompatActivity {
                 oscill.setChanelHWMode(BitSet.fromBits(0,0,0,0,0,0,0,0)); // O1
                 oscill.setChanelSWMode(BitSet.fromBits(0,0,0,0,0,1,0,0)); // M1
 
-                oscillConfig.getChanelSensitivity().setSensitivity(20f, Dimension.MILLI);
+                oscillConfig.getChanelSensitivity().setSensitivity(Sensitivity._100_mV);
                 oscillConfig.getChanelOffset().setOffset(0f, Dimension.MILLI);
 
                 oscillConfig.getChanelSyncMode().setSyncByFront(true);
 
                 oscill.setChanelSyncLevel(10); // S1
-                oscillConfig.getSyncType().setSyncTypeMode(SyncType.SyncTypeMode.FREE);
+                oscillConfig.getSyncTypeMode().setSyncType(SyncTypeMode.SyncType.FREE);
 
                 // WARN: set last
                 oscillConfig.getSamplesCount().setSamplesCount(10, 50);
@@ -161,12 +165,14 @@ public class MainActivity extends AppCompatActivity {
 
         yAxisLeft.enableGridDashedLine(2f, 2f, 0f);
         yAxisLeft.setDrawGridLinesBehindData(false);
+        yAxisLeft.setZeroLineWidth(2f);
         yAxisLeft.setGridColor(Color.GRAY);
         yAxisLeft.setAxisLineColor(Color.GRAY);
         yAxisLeft.setTextColor(Color.WHITE);
 
         yAxisRight.enableGridDashedLine(2f, 2f, 0f);
         yAxisRight.setDrawGridLinesBehindData(false);
+        yAxisRight.setZeroLineWidth(2f);
         yAxisRight.setGridColor(Color.GRAY);
         yAxisRight.setAxisLineColor(Color.GRAY);
         yAxisRight.setTextColor(Color.WHITE);

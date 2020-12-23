@@ -6,9 +6,9 @@ import com.oscill.controller.BaseOscillMode;
 import com.oscill.controller.Oscill;
 import com.oscill.types.BitSet;
 
-public class SyncType extends BaseOscillMode {
+public class SyncTypeMode extends BaseOscillMode {
 
-    public SyncType(@NonNull Oscill oscill) {
+    public SyncTypeMode(@NonNull Oscill oscill) {
         super(oscill);
     }
 
@@ -36,11 +36,11 @@ public class SyncType extends BaseOscillMode {
      * Примечание: свободный и бесконечно ждущий запуски поддерживаются начиная с встроенного ПО (firmware) версии 1.25.
      */
 
-    public enum SyncTypeMode {
+    public enum SyncType {
         AUTO, WAIT_TIMEOUT, FREE, WAIT
     }
 
-    public void setSyncTypeMode(@NonNull SyncTypeMode mode) throws Exception {
+    public void setSyncType(@NonNull SyncType mode) throws Exception {
         BitSet modeBitSet = null;
         switch (mode) {
             case AUTO:

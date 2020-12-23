@@ -6,9 +6,10 @@ import com.oscill.controller.config.ChanelOffset;
 import com.oscill.controller.config.ChanelSensitivity;
 import com.oscill.controller.config.ChanelSyncMode;
 import com.oscill.controller.config.CpuTickLength;
+import com.oscill.controller.config.ProcessingTypeMode;
 import com.oscill.controller.config.RealtimeSamplingPeriod;
 import com.oscill.controller.config.SamplesCount;
-import com.oscill.controller.config.SyncType;
+import com.oscill.controller.config.SyncTypeMode;
 import com.oscill.types.Dimension;
 import com.oscill.utils.executor.OnResult;
 
@@ -26,7 +27,8 @@ public class OscillConfig {
     private final RealtimeSamplingPeriod realtimeSamplingPeriod;
     private final SamplesCount samplesCount;
 
-    private final SyncType syncType;
+    private final SyncTypeMode syncTypeMode;
+    private final ProcessingTypeMode processingTypeMode;
 
     public OscillConfig(@NonNull Oscill oscill) {
         super();
@@ -41,7 +43,8 @@ public class OscillConfig {
         this.samplesCount = new SamplesCount(oscill);
         this.realtimeSamplingPeriod = new RealtimeSamplingPeriod(oscill, cpuTickLength, samplesCount);
 
-        this.syncType = new SyncType(oscill);
+        this.syncTypeMode = new SyncTypeMode(oscill);
+        this.processingTypeMode = new ProcessingTypeMode(oscill);
     }
 
     @NonNull
@@ -80,8 +83,13 @@ public class OscillConfig {
     }
 
     @NonNull
-    public SyncType getSyncType() {
-        return syncType;
+    public SyncTypeMode getSyncTypeMode() {
+        return syncTypeMode;
+    }
+
+    @NonNull
+    public ProcessingTypeMode getProcessingTypeMode() {
+        return processingTypeMode;
     }
 
     public void requestData(@NonNull OnResult<OscillData> onResult) {

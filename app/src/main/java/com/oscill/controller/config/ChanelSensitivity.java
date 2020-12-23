@@ -56,6 +56,10 @@ public class ChanelSensitivity extends OscillProperty<Float> {
         return (float)nativeValue;
     }
 
+    public void setSensitivity(@NonNull Sensitivity sensitivity) throws Exception {
+        setSensitivity(sensitivity.getValue(), sensitivity.getDimension());
+    }
+
     public void setSensitivity(float value, @NonNull Dimension dimension) throws Exception {
         setRealValue(dimension.toDimension(value, Dimension.MILLI));
     }

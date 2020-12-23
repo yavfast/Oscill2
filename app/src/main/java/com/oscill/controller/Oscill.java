@@ -141,6 +141,11 @@ public class Oscill extends BaseOscillController {
         return BitSet.fromBytes(setRegistry("RS", Header.OSCILL_1BYTE, values.toBytes()));
     }
 
+    @NonNull
+    public BitSet getProcessingType() throws IOException {
+        return BitSet.fromBytes(getRegistry("RS", Header.OSCILL_1BYTE));
+    }
+
     /**
      * Имя свойства: TPl - Минимальный период параллельной/бесконечной дискретизации
      * Формат свойства: 4 байта, беззнаковый
