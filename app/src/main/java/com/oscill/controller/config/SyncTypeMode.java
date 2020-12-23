@@ -37,27 +37,36 @@ public class SyncTypeMode extends BaseOscillMode {
      */
 
     public enum SyncType {
-        AUTO, WAIT_TIMEOUT, FREE, WAIT
+        AUTO            (BitSet.fromBits(0, 0)),
+        WAIT_TIMEOUT    (BitSet.fromBits(0, 1)),
+        FREE            (BitSet.fromBits(1, 0)),
+        WAIT            (BitSet.fromBits(1, 1));
+
+        private final BitSet bitSet;
+
+        SyncType(@NonNull BitSet bitSet) {
+            this.bitSet = bitSet;
+        }
+
+        @NonNull
+        BitSet getBitSet() {
+            return bitSet;
+        }
     }
 
     public void setSyncType(@NonNull SyncType mode) throws Exception {
-        BitSet modeBitSet = null;
-        switch (mode) {
-            case AUTO:
-                modeBitSet = BitSet.fromBits(0, 0);
-                break;
-            case WAIT_TIMEOUT:
-                modeBitSet = BitSet.fromBits(0, 1);
-                break;
-            case FREE:
-                modeBitSet = BitSet.fromBits(1, 0);
-                break;
-            case WAIT:
-                modeBitSet = BitSet.fromBits(1, 1);
-                break;
-        }
+        apply(mode.getBitSet());
+    }
 
-        apply(modeBitSet);
+    @NonNull
+    public SyncType getSyncType() {
+        BitSet mode = getMode();
+        for (SyncType syncType : SyncType.values()) {
+            if (syncType.getBitSet().equals(mode)) {
+                return syncType;
+            }
+        }
+        return SyncType.AUTO;
     }
 
 }

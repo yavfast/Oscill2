@@ -21,6 +21,7 @@ import com.oscill.utils.Log;
 import com.oscill.utils.executor.Executor;
 import com.oscill.utils.executor.OnResult;
 
+import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
@@ -180,6 +181,17 @@ public class USBDeviceTest {
                 Log.i(TAG, "Data: " + Arrays.toString(data));
             }
         });
+    }
+
+    @Test
+    public void testBitSet() {
+        Assert.assertArrayEquals(BitSet.fromBits(0, 0, 0, 0, 1, 1, 0, 0).toBytes(), new byte[]{(byte)0x0C});
+        Assert.assertArrayEquals(BitSet.fromBits(1, 1, 0, 0).toBytes(), new byte[]{(byte)0x0C});
+
+        Assert.assertArrayEquals(BitSet.fromBits(1, 0, 0, 0, 1, 1, 0, 0).toBytes(), new byte[]{(byte)0x8C});
+
+        Assert.assertEquals(BitSet.fromBits(1, 0, 0, 0, 1, 1, 0, 0), BitSet.fromBytes((byte)0x8C));
+
     }
 
 }

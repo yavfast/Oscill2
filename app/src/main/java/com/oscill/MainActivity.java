@@ -16,6 +16,7 @@ import com.github.mikephil.charting.interfaces.datasets.ILineDataSet;
 import com.oscill.controller.Oscill;
 import com.oscill.controller.OscillData;
 import com.oscill.controller.OscillManager;
+import com.oscill.controller.config.ChanelSWMode;
 import com.oscill.controller.config.ProcessingTypeMode;
 import com.oscill.controller.config.Sensitivity;
 import com.oscill.controller.config.SyncTypeMode;
@@ -91,7 +92,7 @@ public class MainActivity extends AppCompatActivity {
             try {
                 Oscill oscill = oscillConfig.getOscill();
 
-                oscillConfig.getCpuTickLength().setCPUFreq(50, Dimension.MEGA);
+                oscillConfig.getCpuTickLength().setCPUFreq(60, Dimension.MEGA);
 
                 oscillConfig.getProcessingTypeMode()
                         .setProcessingType(ProcessingTypeMode.ProcessingType.REALTIME)
@@ -113,14 +114,16 @@ public class MainActivity extends AppCompatActivity {
                         .setFilter3kHz(false)
                         .setFilter3MHz(false);
 
-                oscill.setChanelSWMode(BitSet.fromBits(0,0,0,0,0,1,0,0)); // M1
+                oscillConfig.getChanelSWMode().setSWMode(ChanelSWMode.SWMode.NORMAL);
 
-                oscillConfig.getChanelSensitivity().setSensitivity(Sensitivity._100_mV);
+                oscillConfig.getChanelSensitivity().setSensitivity(Sensitivity._200_mV);
                 oscillConfig.getChanelOffset().setOffset(0f, Dimension.MILLI);
 
-                oscillConfig.getChanelSyncMode().setSyncByFront(true);
+                oscillConfig.getChanelSyncMode()
+                        .setSyncByFront(true)
+                        .setHistFront(false);
 
-                oscill.setChanelSyncLevel(10); // S1
+                oscill.setChanelSyncLevel(20); // S1
                 oscillConfig.getSyncTypeMode().setSyncType(SyncTypeMode.SyncType.FREE);
 
                 // WARN: set last

@@ -1,6 +1,11 @@
 package com.oscill.types;
 
 import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
+
+import com.oscill.utils.ObjectUtils;
+
+import java.util.Arrays;
 
 public class BitSet {
 
@@ -42,7 +47,7 @@ public class BitSet {
         int len = data.length * 8;
         BitSet res = new BitSet(len);
         for (int idx = 0; idx < len; idx++) {
-            res.set(len - idx - 1, ((data[idx / 8] & (1 << (idx % 8))) != 0));
+            res.set(idx, ((data[idx / 8] & (1 << (idx % 8))) != 0));
         }
         return res;
     }
@@ -52,7 +57,8 @@ public class BitSet {
             return;
         }
 
-        byte[] data = new byte[nbits];
+        int size = ((nbits + 7) / 8) * 8;
+        byte[] data = new byte[size];
 
         if (bits != null) {
             System.arraycopy(bits, 0, data, 0, bits.length);
@@ -79,7 +85,7 @@ public class BitSet {
         int size = size();
         byte[] res = new byte[(size + 7) / 8];
         for (int idx = 0; idx < size; idx++) {
-            if (get(size - idx - 1)) {
+            if (get(idx)) {
                 res[idx / 8] |= 1 << (idx % 8);
             }
         }
@@ -97,5 +103,12 @@ public class BitSet {
         }
         sb.append('}');
         return sb.toString();
+    }
+
+    @Override
+    public boolean equals(@Nullable Object obj) {
+        return ObjectUtils.equals(this, obj, (obj1, obj2) ->
+                Arrays.equals(obj1.bits, obj2.bits)
+        );
     }
 }

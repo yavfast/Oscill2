@@ -498,9 +498,15 @@ public class Oscill extends BaseOscillController {
      * TS (режимы невозможны при малых периодах дискретизации)
      * От регистра зависят: количество выборок QS и QSh
      */
-    public byte setChanelSWMode(@NonNull BitSet bitSet) throws IOException {
+    @NonNull
+    public BitSet setChanelSWMode(@NonNull BitSet bitSet) throws IOException {
         Log.i(TAG, "setChanelSWMode: ", bitSet);
-        return setRegistry("M1", Header.OSCILL_1BYTE, bitSet.toBytes())[0];
+        return BitSet.fromBytes(setRegistry("M1", Header.OSCILL_1BYTE, bitSet.toBytes()));
+    }
+
+    @NonNull
+    public BitSet getChanelSWMode() throws IOException {
+        return BitSet.fromBytes(getRegistry("M1", Header.OSCILL_1BYTE));
     }
 
     /**

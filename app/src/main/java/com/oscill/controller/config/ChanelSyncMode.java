@@ -41,40 +41,50 @@ public class ChanelSyncMode extends BaseOscillMode {
      * Регистр зависит от: нет.
      */
 
-    public void setHistBack(boolean enabled) throws Exception {
+    @NonNull
+    public ChanelSyncMode setHistBack(boolean enabled) throws Exception {
         apply(getMode().set(0, enabled).set(1, enabled));
+        return this;
     }
 
     public boolean hasHistBack() {
         return getMode().get(0);
     }
 
-    public void setHistFront(boolean enabled) throws Exception {
+    @NonNull
+    public ChanelSyncMode setHistFront(boolean enabled) throws Exception {
         apply(getMode().set(2, enabled).set(3, enabled));
+        return this;
     }
 
     public boolean hasHistFront() {
         return getMode().get(2);
     }
 
-    public void setSyncByBack(boolean enabled) throws Exception {
+    @NonNull
+    public ChanelSyncMode setSyncByBack(boolean enabled) throws Exception {
         apply(getMode().set(4, enabled));
+        return this;
     }
 
     public boolean hasSyncByBack() {
         return getMode().get(4);
     }
 
-    public void setSyncByFront(boolean enabled) throws Exception {
+    @NonNull
+    public ChanelSyncMode setSyncByFront(boolean enabled) throws Exception {
         apply(getMode().set(5, enabled));
+        return this;
     }
 
     public boolean hasSyncByFront() {
         return getMode().get(5);
     }
 
-    public void setLFSync(boolean enabled) throws Exception {
+    @NonNull
+    public ChanelSyncMode setLFSync(boolean enabled) throws Exception {
         apply(getMode().set(6, enabled).set(7, enabled));
+        return this;
     }
 
     public boolean hasLFSync() {

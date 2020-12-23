@@ -4,6 +4,7 @@ import androidx.annotation.NonNull;
 
 import com.oscill.types.BitSet;
 import com.oscill.types.SuspendValue;
+import com.oscill.utils.ObjectUtils;
 
 public abstract class BaseOscillMode {
 
@@ -32,6 +33,9 @@ public abstract class BaseOscillMode {
     protected abstract BitSet onModeChanged(@NonNull BitSet bitSet) throws Exception;
 
     protected void apply(@NonNull BitSet bitSet) throws Exception {
+        if (mode.hasValue() && ObjectUtils.equals(mode.get(), bitSet)) {
+            return;
+        }
         mode.set(onModeChanged(bitSet));
     }
 
