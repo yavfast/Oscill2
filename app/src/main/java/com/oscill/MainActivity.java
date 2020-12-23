@@ -99,7 +99,6 @@ public class MainActivity extends AppCompatActivity {
                         .setBufferType(ProcessingTypeMode.BufferType.SYNC);
 
                 oscill.setScanDelay(0); // TD
-                oscill.setSamplesOffset(10); // TC
 
                 oscill.setDelayMaxSyncAuto(500); // TA
                 oscill.setDelayMaxSyncWait(500); // TW
@@ -128,6 +127,7 @@ public class MainActivity extends AppCompatActivity {
                 // WARN: set last
                 oscillConfig.getSamplesCount().setSamplesCount(10, 50);
                 oscillConfig.getSamplingPeriod().setSamplingPeriod(5f, Dimension.MILLI);
+                oscillConfig.getSamplesOffset().setOffset(10f, Dimension.MILLI);
 
                 oscill.calibration();
 

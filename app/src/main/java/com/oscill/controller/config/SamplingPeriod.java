@@ -14,12 +14,10 @@ public class SamplingPeriod extends OscillProperty<Long> {
 
     private final CpuTickLength cpuTickLength;
     private final SamplesCount samplesCount;
-    private final ProcessingTypeMode processingTypeMode;
 
     public SamplingPeriod(@NonNull Oscill oscill,
                           @NonNull CpuTickLength cpuTickLength,
-                          @NonNull SamplesCount samplesCount,
-                          @NonNull ProcessingTypeMode processingTypeMode) {
+                          @NonNull SamplesCount samplesCount) {
         super(oscill);
 
         this.cpuTickLength = cpuTickLength;
@@ -27,9 +25,6 @@ public class SamplingPeriod extends OscillProperty<Long> {
 
         this.samplesCount = samplesCount;
         samplesCount.addLinkedSetting(this);
-
-        this.processingTypeMode = processingTypeMode;
-        processingTypeMode.addLinkedSetting(this);
     }
 
     @NonNull
@@ -40,11 +35,6 @@ public class SamplingPeriod extends OscillProperty<Long> {
     @NonNull
     private SamplesCount getSamplesCount() {
         return samplesCount;
-    }
-
-    @NonNull
-    private ProcessingTypeMode getProcessingTypeMode() {
-        return processingTypeMode;
     }
 
     @NonNull

@@ -264,6 +264,10 @@ public class Oscill extends BaseOscillController {
         return bytesToInt(setRegistry("TC", Header.OSCILL_2BYTE, intTo2Bytes(value)));
     }
 
+    public int getSamplesOffset() throws IOException {
+        return bytesToInt(getRegistry("TC", Header.OSCILL_2BYTE));
+    }
+
     /**
      * Имя регистра: AP - Количество проходов при усреднении/пиковом режиме
      * Формат регистра: 1 байт. В регистре хранится количество проходов (значение должно быть степенью 2х) минус единица,

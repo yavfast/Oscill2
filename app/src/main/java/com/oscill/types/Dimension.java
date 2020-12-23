@@ -33,7 +33,7 @@ public enum Dimension {
         if (this == target) {
             return value;
         }
-        return value * (multiplier / target.multiplier);
+        return (value * multiplier) / target.multiplier;
     }
 
 }

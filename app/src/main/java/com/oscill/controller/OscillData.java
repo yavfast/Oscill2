@@ -18,6 +18,8 @@ public class OscillData {
     public final byte[] data;
 
     private float tStep;
+    private float tOffset;
+
     private float vStep;
     private float vMin;
     private float vMax;
@@ -74,6 +76,7 @@ public class OscillData {
      */
     private void prepareDataInfo() {
         this.tStep = config.getSamplingPeriod().getSampleTime(Dimension.MILLI);
+        this.tOffset = config.getSamplesOffset().getOffset(Dimension.MILLI);
 
         ChanelSensitivity chanelSensitivity = config.getChanelSensitivity();
         this.vStep = chanelSensitivity.getSensitivityStep(Dimension.MILLI);
@@ -103,12 +106,13 @@ public class OscillData {
         byte[] data = this.data;
         int dataSize = this.dataSize;
         float tStep = this.tStep;
+        float tOffset = this.tOffset;
         float vStep = this.vStep;
 
         int idx = 0;
         int dataIdx = DATA_HEADER_SIZE;
         while (idx < dataSize) {
-            tData[idx] = tStep * idx;
+            tData[idx] = (tStep * idx) - tOffset;
             vData[idx] = byteToInt(data[dataIdx]) * vStep;
 
             idx++;

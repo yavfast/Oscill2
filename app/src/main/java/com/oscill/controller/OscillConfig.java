@@ -10,6 +10,7 @@ import com.oscill.controller.config.ChanelSyncLevel;
 import com.oscill.controller.config.ChanelSyncMode;
 import com.oscill.controller.config.CpuTickLength;
 import com.oscill.controller.config.ProcessingTypeMode;
+import com.oscill.controller.config.SamplesOffset;
 import com.oscill.controller.config.SamplingPeriod;
 import com.oscill.controller.config.SamplesCount;
 import com.oscill.controller.config.SyncTypeMode;
@@ -30,6 +31,7 @@ public class OscillConfig extends BaseOscillSetting {
     private final CpuTickLength cpuTickLength;
     private final SamplingPeriod samplingPeriod;
     private final SamplesCount samplesCount;
+    private final SamplesOffset samplesOffset;
 
     private final SyncTypeMode syncTypeMode;
     private final ProcessingTypeMode processingTypeMode;
@@ -49,7 +51,8 @@ public class OscillConfig extends BaseOscillSetting {
 
         this.cpuTickLength = new CpuTickLength(oscill);
         this.samplesCount = new SamplesCount(oscill, chanelSWMode);
-        this.samplingPeriod = new SamplingPeriod(oscill, cpuTickLength, samplesCount, processingTypeMode);
+        this.samplingPeriod = new SamplingPeriod(oscill, cpuTickLength, samplesCount);
+        this.samplesOffset = new SamplesOffset(oscill, samplingPeriod, samplesCount);
     }
 
     @Override
@@ -100,6 +103,11 @@ public class OscillConfig extends BaseOscillSetting {
     @NonNull
     public SamplesCount getSamplesCount() {
         return samplesCount;
+    }
+
+    @NonNull
+    public SamplesOffset getSamplesOffset() {
+        return samplesOffset;
     }
 
     @NonNull
