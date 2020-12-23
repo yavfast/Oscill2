@@ -19,7 +19,7 @@ public abstract class BaseOscillSetting {
     }
 
     @NonNull
-    protected Oscill getOscill() {
+    public Oscill getOscill() {
         return oscill;
     }
 

@@ -18,9 +18,7 @@ import com.oscill.utils.executor.OnResult;
 
 import java.io.IOException;
 
-public class OscillConfig {
-
-    private final Oscill oscill;
+public class OscillConfig extends BaseOscillSetting {
 
     private final ChanelSensitivity chanelSensitivity;
     private final ChanelOffset chanelOffset;
@@ -37,9 +35,7 @@ public class OscillConfig {
     private final ProcessingTypeMode processingTypeMode;
 
     public OscillConfig(@NonNull Oscill oscill) {
-        super();
-
-        this.oscill = oscill;
+        super(oscill);
 
         this.chanelSensitivity = new ChanelSensitivity(oscill);
         this.chanelOffset = new ChanelOffset(oscill, chanelSensitivity);
@@ -52,13 +48,13 @@ public class OscillConfig {
         this.processingTypeMode = new ProcessingTypeMode(oscill);
 
         this.cpuTickLength = new CpuTickLength(oscill);
-        this.samplesCount = new SamplesCount(oscill);
+        this.samplesCount = new SamplesCount(oscill, chanelSWMode);
         this.samplingPeriod = new SamplingPeriod(oscill, cpuTickLength, samplesCount, processingTypeMode);
     }
 
-    @NonNull
-    public Oscill getOscill() {
-        return oscill;
+    @Override
+    protected void onReset() {
+        // TODO:
     }
 
     @NonNull
@@ -118,8 +114,8 @@ public class OscillConfig {
 
     public void requestData(@NonNull OnResult<OscillData> onResult) {
         try {
-            int responseTimeout = (int) samplingPeriod.getDivTime(Dimension.MILLI);
-            byte[] data = oscill.getData(responseTimeout);
+            int responseTimeout = (int) getSamplingPeriod().getDivTime(Dimension.MILLI);
+            byte[] data = getOscill().getData(responseTimeout);
             if (data.length > 4) {
                 OscillData oscillData = new OscillData(this, data);
                 onResult.of(oscillData);
