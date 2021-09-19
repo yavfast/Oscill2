@@ -67,4 +67,9 @@ public class SuspendValue<V> {
         }
     }
 
+    @NonNull
+    @Override
+    public String toString() {
+        return !suspended ? String.valueOf(value) : "none";
+    }
 }

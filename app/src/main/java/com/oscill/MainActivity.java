@@ -22,6 +22,7 @@ import com.oscill.controller.OscillData;
 import com.oscill.controller.OscillManager;
 import com.oscill.controller.config.ChanelSWMode;
 import com.oscill.controller.config.ProcessingTypeMode;
+import com.oscill.controller.config.SamplingTime;
 import com.oscill.controller.config.Sensitivity;
 import com.oscill.controller.config.SyncTypeMode;
 import com.oscill.events.OnOscillConnected;
@@ -68,6 +69,7 @@ public class MainActivity extends AppCompatActivity {
 
     ImageView timeUpBtn;
     ImageView timeDownBtn;
+    TextView timeDivText;
 
     private final EventHolder<?> onOscillConnected = EventsController.onReceiveEvent(this, OnOscillConnected.class, event ->
             onOscillConnected()
@@ -157,12 +159,13 @@ public class MainActivity extends AppCompatActivity {
 
         timeUpBtn = findViewById(R.id.timeUpBtn);
         timeUpBtn.setOnClickListener(v -> {
-
+            doChangeTimeByDiv(+1);
         });
         timeDownBtn = findViewById(R.id.timeDownBtn);
         timeDownBtn.setOnClickListener(v -> {
-
+            doChangeTimeByDiv(-1);
         });
+        timeDivText = findViewById(R.id.timeDivText);
 
         initChart();
         chart.setOnClickListener(v ->
@@ -183,6 +186,30 @@ public class MainActivity extends AppCompatActivity {
         });
     }
 
+    private void doChangeTimeByDiv(int step) {
+        OscillManager.runConfigTask(oscillConfig -> {
+            SamplingTime curSamplingTime = oscillConfig.getSamplingPeriod().getSamplingPeriod();
+            SamplingTime newSamplingTime = curSamplingTime.getNext(step);
+
+            oscillConfig.getSamplingPeriod().setSamplingPeriod(newSamplingTime);
+            updateTimeByDiv();
+        });
+    }
+
+    private void updateTimeByDiv() {
+        OscillManager.runConfigTask(oscillConfig -> {
+            SamplingTime curSamplingTime = oscillConfig.getSamplingPeriod().getSamplingPeriod();
+            updateTimeByDiv(curSamplingTime);
+        });
+    }
+
+    private void updateTimeByDiv(@NonNull SamplingTime samplingTime) {
+        runOnActivity(() ->
+                timeDivText.setText(
+                        StringUtils.concat(String.valueOf(samplingTime.getValue()), " ", samplingTime.getDimension().getPrefix(), "s"))
+        );
+    }
+
     private void updateVoltByDiv() {
         OscillManager.runConfigTask(oscillConfig -> {
             Sensitivity curSensitivity = oscillConfig.getChannelSensitivity().getSensitivity();
@@ -191,9 +218,10 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void updateVoltByDiv(@NonNull Sensitivity sensitivity) {
-        runOnActivity(() -> {
-            voltDivText.setText(StringUtils.concat(String.valueOf(sensitivity.getValue()), " ", sensitivity.getDimension().getPrefix(), "V"));
-        });
+        runOnActivity(() ->
+                voltDivText.setText(
+                        StringUtils.concat(String.valueOf(sensitivity.getValue()), " ", sensitivity.getDimension().getPrefix(), "V"))
+        );
     }
 
     @Override
@@ -318,9 +346,9 @@ public class MainActivity extends AppCompatActivity {
             oscillConfig.getSyncTypeMode().setSyncType(SyncTypeMode.SyncType.FREE);
 
             // WARN: set last
-            oscillConfig.getSamplesCount().setSamplesCount(10, 50);
-            oscillConfig.getSamplingPeriod().setSamplingPeriod(5f, Dimension.MILLI);
-            oscillConfig.getSamplesOffset().setOffset(10f, Dimension.MILLI);
+            oscillConfig.getSamplesCount().setSamplesCount(10, 32);
+            oscillConfig.getSamplingPeriod().setSamplingPeriod(SamplingTime._1_ms);
+            oscillConfig.getSamplesOffset().setOffset(0f, Dimension.MILLI);
 
             oscill.calibration();
 
@@ -334,6 +362,7 @@ public class MainActivity extends AppCompatActivity {
         runOnActivity(() -> {
             updateActivityButtons();
             updateVoltByDiv();
+            updateTimeByDiv();
         });
     }
 

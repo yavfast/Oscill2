@@ -13,12 +13,12 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
 import com.oscill.obex.ObexTransport;
+import com.oscill.types.SuspendValue;
 import com.oscill.utils.AppContextWrapper;
 import com.oscill.utils.ArrayUtils;
 import com.oscill.utils.ConvertUtils;
 import com.oscill.utils.IOUtils;
 import com.oscill.utils.Log;
-import com.oscill.types.SuspendValue;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -337,7 +337,7 @@ public class UsbObexTransport implements ObexTransport {
 
     @Override
     public int getMaxReceivePacketSize() {
-        return 4096;
+        return 4 * 1024;
     }
 
 }
