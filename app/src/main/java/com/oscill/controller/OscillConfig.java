@@ -5,14 +5,14 @@ import androidx.annotation.NonNull;
 import com.oscill.controller.config.ChanelHWMode;
 import com.oscill.controller.config.ChanelOffset;
 import com.oscill.controller.config.ChanelSWMode;
-import com.oscill.controller.config.ChannelSensitivity;
 import com.oscill.controller.config.ChanelSyncLevel;
 import com.oscill.controller.config.ChanelSyncMode;
+import com.oscill.controller.config.ChannelSensitivity;
 import com.oscill.controller.config.CpuTickLength;
 import com.oscill.controller.config.ProcessingTypeMode;
+import com.oscill.controller.config.SamplesCount;
 import com.oscill.controller.config.SamplesOffset;
 import com.oscill.controller.config.SamplingPeriod;
-import com.oscill.controller.config.SamplesCount;
 import com.oscill.controller.config.SyncTypeMode;
 import com.oscill.types.Dimension;
 import com.oscill.utils.executor.OnResult;
@@ -122,7 +122,7 @@ public class OscillConfig extends BaseOscillSetting {
 
     public void requestData(@NonNull OnResult<OscillData> onResult) {
         try {
-            int responseTimeout = (int) getSamplingPeriod().getDivTime(Dimension.MILLI);
+            int responseTimeout = (int) getSamplingPeriod().getRequestTime(Dimension.MILLI);
             byte[] data = getOscill().getData(responseTimeout);
             if (data.length > 4) {
                 OscillData oscillData = new OscillData(this, data);

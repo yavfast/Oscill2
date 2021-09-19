@@ -346,7 +346,7 @@ public class MainActivity extends AppCompatActivity {
             oscillConfig.getSyncTypeMode().setSyncType(SyncTypeMode.SyncType.FREE);
 
             // WARN: set last
-            oscillConfig.getSamplesCount().setSamplesCount(10, 32);
+            oscillConfig.getSamplesCount().setSamplesCount(10, 64);
             oscillConfig.getSamplingPeriod().setSamplingPeriod(SamplingTime._1_ms);
             oscillConfig.getSamplesOffset().setOffset(0f, Dimension.MILLI);
 

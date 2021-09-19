@@ -284,7 +284,7 @@ public class UsbObexTransport implements ObexTransport {
 
         public void dumpBuf() {
             if (count > 0) {
-                Log.i(TAG, "Read: ", ConvertUtils.bytesToHexStr(buf, count));
+                Log.i(TAG, "Read: [", count, "]", ConvertUtils.bytesToHexStr(buf, count));
             }
         }
     }
