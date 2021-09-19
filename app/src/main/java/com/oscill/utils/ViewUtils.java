@@ -601,14 +601,14 @@ public class ViewUtils {
         return (getSystemUiVisibility(activity) != 0);
     }
 
-    public static void showToast(@NonNull String message, int duration) {
+    public static void showToast(@Nullable String message, int duration) {
         if (StringUtils.isNotEmpty(message)) {
             Log.i("Toast", message);
             Executor.runInUIThread(() -> Toast.makeText(AppContextWrapper.getAppContext(), message, duration).show());
         }
     }
 
-    public static void showToast(@NonNull final String message) {
+    public static void showToast(@Nullable String message) {
         showToast(message, Toast.LENGTH_LONG);
     }
 

@@ -1,3 +1,21 @@
 <resources>
     <string name="app_name">Oscill</string>
+    <string name="active">Active:</string>
+    <string name="run">Run</string>
+    <string name="stop">Stop</string>
+    <string name="single">Single</string>
+    <string name="channel">Channel</string>
+    <string name="norm">Norm</string>
+    <string name="peak">Peak</string>
+    <string name="avg">Avg</string>
+    <string name="high_res">High Res</string>
+    <string name="ac">AC</string>
+    <string name="gnd">Gnd</string>
+    <string name="hi_filter">Hi Filter</string>
+    <string name="lo_filter">Lo Filter</string>
+    <string name="trigger">Trigger</string>
+    <string name="volt_div">Volt / Div</string>
+    <string name="time_div">Time / Div</string>
+    <string name="connected">connected</string>
+    <string name="disconnected">disconnected</string>
 </resources>

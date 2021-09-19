@@ -5,7 +5,7 @@ import androidx.annotation.NonNull;
 import com.oscill.controller.config.ChanelHWMode;
 import com.oscill.controller.config.ChanelOffset;
 import com.oscill.controller.config.ChanelSWMode;
-import com.oscill.controller.config.ChanelSensitivity;
+import com.oscill.controller.config.ChannelSensitivity;
 import com.oscill.controller.config.ChanelSyncLevel;
 import com.oscill.controller.config.ChanelSyncMode;
 import com.oscill.controller.config.CpuTickLength;
@@ -21,7 +21,7 @@ import java.io.IOException;
 
 public class OscillConfig extends BaseOscillSetting {
 
-    private final ChanelSensitivity chanelSensitivity;
+    private final ChannelSensitivity channelSensitivity;
     private final ChanelOffset chanelOffset;
     private final ChanelSyncMode chanelSyncMode;
     private final ChanelHWMode chanelHWMode;
@@ -39,12 +39,12 @@ public class OscillConfig extends BaseOscillSetting {
     public OscillConfig(@NonNull Oscill oscill) {
         super(oscill);
 
-        this.chanelSensitivity = new ChanelSensitivity(oscill);
-        this.chanelOffset = new ChanelOffset(oscill, chanelSensitivity);
+        this.channelSensitivity = new ChannelSensitivity(oscill);
+        this.chanelOffset = new ChanelOffset(oscill, channelSensitivity);
         this.chanelSyncMode = new ChanelSyncMode(oscill);
         this.chanelHWMode = new ChanelHWMode(oscill);
         this.chanelSWMode = new ChanelSWMode(oscill);
-        this.chanelSyncLevel = new ChanelSyncLevel(oscill, chanelSensitivity);
+        this.chanelSyncLevel = new ChanelSyncLevel(oscill, channelSensitivity);
 
         this.syncTypeMode = new SyncTypeMode(oscill);
         this.processingTypeMode = new ProcessingTypeMode(oscill);
@@ -61,8 +61,8 @@ public class OscillConfig extends BaseOscillSetting {
     }
 
     @NonNull
-    public ChanelSensitivity getChanelSensitivity() {
-        return chanelSensitivity;
+    public ChannelSensitivity getChannelSensitivity() {
+        return channelSensitivity;
     }
 
     @NonNull

@@ -2,8 +2,12 @@ package com.oscill;
 
 import android.graphics.Color;
 import android.os.Bundle;
+import android.widget.Button;
+import android.widget.ImageView;
+import android.widget.TextView;
 
 import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 
 import com.github.mikephil.charting.charts.LineChart;
@@ -25,6 +29,7 @@ import com.oscill.events.OnOscillData;
 import com.oscill.events.OnOscillError;
 import com.oscill.types.Dimension;
 import com.oscill.utils.Log;
+import com.oscill.utils.StringUtils;
 import com.oscill.utils.ViewUtils;
 import com.oscill.utils.executor.EventHolder;
 import com.oscill.utils.executor.EventsController;
@@ -36,7 +41,33 @@ public class MainActivity extends AppCompatActivity {
 
     private final static String TAG = Log.getTag(MainActivity.class);
 
-    private LineChart chart;
+    LineChart chart;
+
+    TextView activeText;
+    TextView activeStateText;
+    Button runBtn;
+    Button singleRunBtn;
+
+    TextView normBtn;
+    TextView peakBtn;
+    TextView avgBtn;
+    TextView hiResBtn;
+
+    TextView acdcBtn;
+    TextView gndBtn;
+    TextView highFilterBtn;
+    TextView lowFilterBtn;
+
+    ImageView triggerStartBtn;
+    ImageView triggerEndBtn;
+    ImageView triggerFreeBtn;
+
+    ImageView voltUpBtn;
+    ImageView voltDownBtn;
+    TextView voltDivText;
+
+    ImageView timeUpBtn;
+    ImageView timeDownBtn;
 
     private final EventHolder<?> onOscillConnected = EventsController.onReceiveEvent(this, OnOscillConnected.class, event ->
             onOscillConnected()
@@ -56,6 +87,83 @@ public class MainActivity extends AppCompatActivity {
 
         setContentView(R.layout.activity_main);
 
+        activeText = findViewById(R.id.activeText);
+        activeStateText = findViewById(R.id.activeStateText);
+
+        runBtn = findViewById(R.id.runBtn);
+        runBtn.setOnClickListener(v -> doStartStop());
+
+        singleRunBtn = findViewById(R.id.singleRunBtn);
+        singleRunBtn.setOnClickListener(v -> doSingleStart());
+
+        normBtn = findViewById(R.id.normBtn);
+        normBtn.setOnClickListener(v ->
+            setSWMode(ChanelSWMode.SWMode.NORMAL)
+        );
+
+        peakBtn = findViewById(R.id.peakBtn);
+        peakBtn.setOnClickListener(v ->
+            setSWMode(ChanelSWMode.SWMode.PEAK_1)
+        );
+        avgBtn = findViewById(R.id.avgBtn);
+        avgBtn.setOnClickListener(v ->
+            setSWMode(ChanelSWMode.SWMode.AVG)
+        );
+        hiResBtn = findViewById(R.id.hiResBtn);
+        hiResBtn.setOnClickListener(v ->
+            setSWMode(ChanelSWMode.SWMode.AVG_HIRES)
+        );
+
+        gndBtn = findViewById(R.id.gndBtn);
+        gndBtn.setOnClickListener(v -> {
+
+        });
+
+        acdcBtn = findViewById(R.id.acdcBtn);
+        acdcBtn.setOnClickListener(v -> {
+
+        });
+        highFilterBtn = findViewById(R.id.highFilterBtn);
+        highFilterBtn.setOnClickListener(v -> {
+
+        });
+        lowFilterBtn = findViewById(R.id.lowFilterBtn);
+        lowFilterBtn.setOnClickListener(v -> {
+
+        });
+
+        triggerStartBtn = findViewById(R.id.triggerStartBtn);
+        triggerStartBtn.setOnClickListener(v -> {
+
+        });
+        triggerEndBtn = findViewById(R.id.triggerEndBtn);
+        triggerEndBtn.setOnClickListener(v -> {
+
+        });
+        triggerFreeBtn = findViewById(R.id.triggerFreeBtn);
+        triggerFreeBtn.setOnClickListener(v -> {
+
+        });
+
+        voltUpBtn = findViewById(R.id.voltUpBtn);
+        voltUpBtn.setOnClickListener(v ->
+            doChangeVoltByDiv(+1)
+        );
+        voltDownBtn = findViewById(R.id.voltDownBtn);
+        voltDownBtn.setOnClickListener(v ->
+            doChangeVoltByDiv(-1)
+        );
+        voltDivText = findViewById(R.id.voltDivText);
+
+        timeUpBtn = findViewById(R.id.timeUpBtn);
+        timeUpBtn.setOnClickListener(v -> {
+
+        });
+        timeDownBtn = findViewById(R.id.timeDownBtn);
+        timeDownBtn.setOnClickListener(v -> {
+
+        });
+
         initChart();
         chart.setOnClickListener(v ->
                 OscillManager.requestNextData()
@@ -63,6 +171,29 @@ public class MainActivity extends AppCompatActivity {
 
         EventsController.resumeEvents(onOscillConnected, onOscillData, onOscillError);
         connectToDevice();
+    }
+
+    private void doChangeVoltByDiv(int step) {
+        OscillManager.runConfigTask(oscillConfig -> {
+            Sensitivity curSensitivity = oscillConfig.getChannelSensitivity().getSensitivity();
+            Sensitivity newSensitivity = curSensitivity.getNext(step);
+
+            oscillConfig.getChannelSensitivity().setSensitivity(newSensitivity);
+            updateVoltByDiv();
+        });
+    }
+
+    private void updateVoltByDiv() {
+        OscillManager.runConfigTask(oscillConfig -> {
+            Sensitivity curSensitivity = oscillConfig.getChannelSensitivity().getSensitivity();
+            updateVoltByDiv(curSensitivity);
+        });
+    }
+
+    private void updateVoltByDiv(@NonNull Sensitivity sensitivity) {
+        runOnActivity(() -> {
+            voltDivText.setText(StringUtils.concat(String.valueOf(sensitivity.getValue()), " ", sensitivity.getDimension().getPrefix(), "V"));
+        });
     }
 
     @Override
@@ -78,6 +209,69 @@ public class MainActivity extends AppCompatActivity {
         super.onPause();
     }
 
+    private void doStartStop() {
+        Executor.runInSyncQueue(() -> {
+            try {
+                if (!OscillManager.isConnected()) {
+                    OscillManager.init();
+                    return;
+                }
+
+                if (!OscillManager.isActive()) {
+                    OscillManager.start();
+                    return;
+                }
+
+                OscillManager.pause();
+            } finally {
+                updateActivityButtons();
+            }
+        });
+    }
+
+    private void runOnActivity(@NonNull Runnable runnable) {
+        Executor.runInUIThread(this, activity -> runnable.run());
+    }
+
+    private void updateActivityButtons() {
+        runOnActivity(() -> {
+            if (!OscillManager.isConnected()) {
+                activeStateText.setText(R.string.disconnected);
+            } else {
+                activeStateText.setText(R.string.connected);
+            }
+
+            if (OscillManager.isActive()) {
+                runBtn.setText(R.string.stop);
+            } else {
+                runBtn.setText(R.string.run);
+            }
+        });
+    }
+
+    private void doSingleStart() {
+        if (OscillManager.isConnected() && !OscillManager.isActive()) {
+            OscillManager.requestNextData();
+        }
+    }
+
+    private void setSWMode(@NonNull ChanelSWMode.SWMode swMode) {
+        updateSWModeButtons(swMode);
+        OscillManager.runConfigTask(oscillConfig -> {
+            oscillConfig.getChanelSWMode().setSWMode(swMode);
+            updateSWModeButtons(oscillConfig.getChanelSWMode().getSWMode());
+        });
+    }
+
+    private void updateSWModeButtons(@Nullable ChanelSWMode.SWMode mode) {
+        runOnActivity(() -> {
+            normBtn.setPressed(mode == ChanelSWMode.SWMode.NORMAL);
+            peakBtn.setPressed(mode == ChanelSWMode.SWMode.PEAK_1);
+            avgBtn.setPressed(mode == ChanelSWMode.SWMode.AVG);
+            hiResBtn.setPressed(mode == ChanelSWMode.SWMode.AVG_HIRES);
+        });
+    }
+
     private void connectToDevice() {
         if (OscillManager.isConnected()) {
             OscillManager.requestNextData();
@@ -88,59 +282,65 @@ public class MainActivity extends AppCompatActivity {
 
     private void onOscillConnected() {
         OscillManager.runConfigTask(oscillConfig -> {
-            try {
-                Oscill oscill = oscillConfig.getOscill();
+            Oscill oscill = oscillConfig.getOscill();
 
-                oscillConfig.getCpuTickLength().setCPUFreq(60, Dimension.MEGA);
+            oscillConfig.getCpuTickLength().setCPUFreq(60, Dimension.MEGA);
 
-                oscillConfig.getProcessingTypeMode()
-                        .setProcessingType(ProcessingTypeMode.ProcessingType.REALTIME)
-                        .setDataOutputType(ProcessingTypeMode.DataOutputType.POST_PROCESSING)
-                        .setBufferType(ProcessingTypeMode.BufferType.SYNC);
+            oscillConfig.getProcessingTypeMode()
+                    .setProcessingType(ProcessingTypeMode.ProcessingType.REALTIME)
+                    .setDataOutputType(ProcessingTypeMode.DataOutputType.POST_PROCESSING)
+                    .setBufferType(ProcessingTypeMode.BufferType.SYNC);
 
-                oscill.setScanDelay(0); // TD
+            oscill.setScanDelay(0); // TD
 
-                oscill.setDelayMaxSyncAuto(500); // TA
-                oscill.setDelayMaxSyncWait(500); // TW
+            oscill.setDelayMaxSyncAuto(500); // TA
+            oscill.setDelayMaxSyncWait(500); // TW
 
-                oscill.setMinSamplingCount(0); // AR
-                oscill.setAvgSamplingCount(0); // AP
+            oscill.setMinSamplingCount(0); // AR
+            oscill.setAvgSamplingCount(0); // AP
 
-                oscillConfig.getChanelHWMode()
-                        .setChanelEnabled(true)
-                        .setACMode(false)
-                        .setFilter3kHz(false)
-                        .setFilter3MHz(false);
+            oscillConfig.getChanelHWMode()
+                    .setChanelEnabled(true)
+                    .setACMode(false)
+                    .setFilter3kHz(false)
+                    .setFilter3MHz(false);
 
-                oscillConfig.getChanelSWMode().setSWMode(ChanelSWMode.SWMode.NORMAL);
+            oscillConfig.getChanelSWMode().setSWMode(ChanelSWMode.SWMode.NORMAL);
 
-                oscillConfig.getChanelSensitivity().setSensitivity(Sensitivity._200_mV);
-                oscillConfig.getChanelOffset().setOffset(0f, Dimension.MILLI);
+            oscillConfig.getChannelSensitivity().setSensitivity(Sensitivity._200_mV);
+            oscillConfig.getChanelOffset().setOffset(0f, Dimension.MILLI);
 
-                oscillConfig.getChanelSyncMode()
-                        .setSyncByFront(true)
-                        .setHistFront(false);
+            oscillConfig.getChanelSyncMode()
+                    .setSyncByFront(true)
+                    .setHistFront(false);
 
-                oscillConfig.getChanelSyncLevel().setNativeValue(20);
-                oscillConfig.getSyncTypeMode().setSyncType(SyncTypeMode.SyncType.FREE);
+            oscillConfig.getChanelSyncLevel().setNativeValue(20);
+            oscillConfig.getSyncTypeMode().setSyncType(SyncTypeMode.SyncType.FREE);
 
-                // WARN: set last
-                oscillConfig.getSamplesCount().setSamplesCount(10, 50);
-                oscillConfig.getSamplingPeriod().setSamplingPeriod(5f, Dimension.MILLI);
-                oscillConfig.getSamplesOffset().setOffset(10f, Dimension.MILLI);
+            // WARN: set last
+            oscillConfig.getSamplesCount().setSamplesCount(10, 50);
+            oscillConfig.getSamplingPeriod().setSamplingPeriod(5f, Dimension.MILLI);
+            oscillConfig.getSamplesOffset().setOffset(10f, Dimension.MILLI);
 
-                oscill.calibration();
+            oscill.calibration();
 
-                OscillManager.start();
-            } catch (Exception e) {
-                onOscillError(e);
-            }
+            OscillManager.start();
+
+            updateSettings();
+        });
+    }
+
+    private void updateSettings() {
+        runOnActivity(() -> {
+            updateActivityButtons();
+            updateVoltByDiv();
         });
     }
 
     private void onOscillError(@NonNull Throwable e) {
         Log.e(TAG, e);
         ViewUtils.showToast(e.getMessage());
+        updateActivityButtons();
     }
 
     private void initChart() {

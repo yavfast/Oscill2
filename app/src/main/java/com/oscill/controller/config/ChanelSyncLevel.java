@@ -10,13 +10,13 @@ import com.oscill.types.Unit;
 
 public class ChanelSyncLevel extends OscillProperty<Float> {
 
-    private final ChanelSensitivity chanelSensitivity;
+    private final ChannelSensitivity channelSensitivity;
 
-    public ChanelSyncLevel(@NonNull Oscill oscill, @NonNull ChanelSensitivity chanelSensitivity) {
+    public ChanelSyncLevel(@NonNull Oscill oscill, @NonNull ChannelSensitivity channelSensitivity) {
         super(oscill);
 
-        this.chanelSensitivity = chanelSensitivity;
-        chanelSensitivity.addLinkedSetting(this);
+        this.channelSensitivity = channelSensitivity;
+        channelSensitivity.addLinkedSetting(this);
     }
 
     @NonNull
@@ -44,15 +44,15 @@ public class ChanelSyncLevel extends OscillProperty<Float> {
 
     @Override
     protected Integer realToNative(@NonNull Float realValue) {
-        Range<Float> sensitivityRange = chanelSensitivity.getSensitivityRange(Dimension.MILLI);
-        float resolution = chanelSensitivity.getResolution();
+        Range<Float> sensitivityRange = channelSensitivity.getSensitivityRange(Dimension.MILLI);
+        float resolution = channelSensitivity.getResolution();
         return Math.round(realValue / (sensitivityRange.getUpper() / resolution));
     }
 
     @Override
     protected Float nativeToReal(@NonNull Integer nativeValue) {
-        Range<Float> sensitivityRange = chanelSensitivity.getSensitivityRange(Dimension.MILLI);
-        float resolution = chanelSensitivity.getResolution();
+        Range<Float> sensitivityRange = channelSensitivity.getSensitivityRange(Dimension.MILLI);
+        float resolution = channelSensitivity.getResolution();
         return (sensitivityRange.getUpper() / resolution) * nativeValue;
     }
 }

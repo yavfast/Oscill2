@@ -10,13 +10,13 @@ import com.oscill.types.Unit;
 
 public class ChanelOffset extends OscillProperty<Float> {
 
-    private final ChanelSensitivity chanelSensitivity;
+    private final ChannelSensitivity channelSensitivity;
 
-    public ChanelOffset(@NonNull Oscill oscill, @NonNull ChanelSensitivity chanelSensitivity) {
+    public ChanelOffset(@NonNull Oscill oscill, @NonNull ChannelSensitivity channelSensitivity) {
         super(oscill);
 
-        this.chanelSensitivity = chanelSensitivity;
-        chanelSensitivity.addLinkedSetting(this);
+        this.channelSensitivity = channelSensitivity;
+        channelSensitivity.addLinkedSetting(this);
     }
 
     @NonNull
@@ -46,12 +46,12 @@ public class ChanelOffset extends OscillProperty<Float> {
 
     @Override
     protected Integer realToNative(@NonNull Float realValue) {
-        return Math.round(realValue / (chanelSensitivity.getRealValue() * 8f / 256f));
+        return Math.round(realValue / (channelSensitivity.getRealValue() * 8f / 256f));
     }
 
     @Override
     protected Float nativeToReal(@NonNull Integer nativeValue) {
-        return (chanelSensitivity.getRealValue() * 8f / 256f) * nativeValue;
+        return (channelSensitivity.getRealValue() * 8f / 256f) * nativeValue;
     }
 
     public void setOffset(float value, @NonNull Dimension dimension) throws Exception {

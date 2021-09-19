@@ -11,7 +11,7 @@ import com.oscill.controller.Oscill;
 import com.oscill.controller.OscillConfig;
 import com.oscill.controller.OscillUsbManager;
 import com.oscill.controller.config.ChanelOffset;
-import com.oscill.controller.config.ChanelSensitivity;
+import com.oscill.controller.config.ChannelSensitivity;
 import com.oscill.controller.config.CpuTickLength;
 import com.oscill.controller.config.SamplingPeriod;
 import com.oscill.types.BitSet;
@@ -111,10 +111,10 @@ public class USBDeviceTest {
             Log.i(TAG, "cpuTickLength range: ", cpuTickLength.getRealRange());
             Log.i(TAG, "cpuTickLength: ", cpuTickLength.getRealValue());
 
-            ChanelSensitivity chanelSensitivity = config.getChanelSensitivity();
-            Log.i(TAG, "chanelSensitivity range: ", chanelSensitivity.getRealRange());
-            chanelSensitivity.setSensitivity(1f, Dimension.NORMAL);
-            Log.i(TAG, "set chanelSensitivity: ", chanelSensitivity.getRealValue());
+            ChannelSensitivity channelSensitivity = config.getChannelSensitivity();
+            Log.i(TAG, "chanelSensitivity range: ", channelSensitivity.getRealRange());
+            channelSensitivity.setSensitivity(1f, Dimension.NORMAL);
+            Log.i(TAG, "set chanelSensitivity: ", channelSensitivity.getRealValue());
 
             ChanelOffset chanelOffset = config.getChanelOffset();
             Log.i(TAG, "chanelOffset range: ", chanelOffset.getRealRange());

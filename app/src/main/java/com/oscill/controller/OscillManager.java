@@ -9,6 +9,7 @@ import com.oscill.types.SuspendValue;
 import com.oscill.utils.executor.EventsController;
 import com.oscill.utils.executor.Executor;
 import com.oscill.utils.executor.ObjRunnable;
+import com.oscill.utils.executor.UnsafeObjRunnable;
 
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -50,10 +51,14 @@ public class OscillManager {
         });
     }
 
-    public static void runConfigTask(@NonNull ObjRunnable<OscillConfig> task) {
+    public static void runConfigTask(@NonNull UnsafeObjRunnable<OscillConfig> task) {
         Executor.runInSyncQueue(() -> {
             if (isConnected()) {
-                task.run(getOscillConfig());
+                try {
+                    task.run(getOscillConfig());
+                } catch (Throwable e) {
+                    EventsController.sendEvent(new OnOscillError(e));
+                }
             }
         });
     }

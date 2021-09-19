@@ -30,8 +30,25 @@ public enum Sensitivity {
         return value;
     }
 
+    public float getValue(@NonNull Dimension dimension) {
+        return Math.round(getDimension().toDimension(value, dimension));
+    }
+
     @NonNull
     public Dimension getDimension() {
         return dimension;
+    }
+
+    @NonNull
+    public Sensitivity getNext(int step) {
+        Sensitivity[] values = values();
+        int curIdx = ordinal();
+        int newIdx = curIdx + step;
+        if (newIdx < 0) {
+            newIdx = 0;
+        } else if (newIdx >= values.length) {
+            newIdx = values.length - 1;
+        }
+        return values[newIdx];
     }
 }

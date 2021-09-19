@@ -2,7 +2,7 @@ package com.oscill.controller;
 
 import androidx.annotation.NonNull;
 
-import com.oscill.controller.config.ChanelSensitivity;
+import com.oscill.controller.config.ChannelSensitivity;
 import com.oscill.types.BitSet;
 import com.oscill.types.Dimension;
 import com.oscill.types.Range;
@@ -78,12 +78,12 @@ public class OscillData {
         this.tStep = config.getSamplingPeriod().getSampleTime(Dimension.MILLI);
         this.tOffset = config.getSamplesOffset().getOffset(Dimension.MILLI);
 
-        ChanelSensitivity chanelSensitivity = config.getChanelSensitivity();
-        this.vStep = chanelSensitivity.getSensitivityStep(Dimension.MILLI);
+        ChannelSensitivity channelSensitivity = config.getChannelSensitivity();
+        this.vStep = channelSensitivity.getSensitivityStep(Dimension.MILLI);
 
         this.vOffset = config.getChanelOffset().getRealValue();
 
-        Range<Float> vRange = chanelSensitivity.getSensitivityRange(Dimension.MILLI);
+        Range<Float> vRange = channelSensitivity.getSensitivityRange(Dimension.MILLI);
         this.vMax = vRange.getUpper() + vOffset;
         this.vMin = vRange.getLower() + vOffset;
 
