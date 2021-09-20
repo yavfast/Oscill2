@@ -198,7 +198,7 @@ public class UsbObexTransport implements ObexTransport {
 
     private class UsbInputStream extends ByteArrayInputStream {
 
-        private final byte[] readBuf = new byte[1024];
+        private final byte[] readBuf = new byte[4096];
 
         UsbInputStream () {
             this(new byte[getMaxReceivePacketSize()]);
