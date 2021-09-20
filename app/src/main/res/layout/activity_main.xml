@@ -85,11 +85,11 @@
         <LinearLayout
             android:orientation="horizontal"
             android:layout_width="match_parent"
-            android:layout_height="40dp">
+            android:layout_height="36dp">
 
             <androidx.appcompat.widget.AppCompatTextView
                 android:id="@+id/normBtn"
-                android:textSize="10sp"
+                android:textSize="12sp"
                 android:layout_width="40dp"
                 android:layout_height="match_parent"
                 android:gravity="center"
@@ -98,7 +98,7 @@
 
             <androidx.appcompat.widget.AppCompatTextView
                 android:id="@+id/peakBtn"
-                android:textSize="10sp"
+                android:textSize="12sp"
                 android:layout_width="40dp"
                 android:layout_height="match_parent"
                 android:gravity="center"
@@ -107,7 +107,7 @@
 
             <androidx.appcompat.widget.AppCompatTextView
                 android:id="@+id/avgBtn"
-                android:textSize="10sp"
+                android:textSize="12sp"
                 android:layout_width="40dp"
                 android:layout_height="match_parent"
                 android:gravity="center"
@@ -115,8 +115,8 @@
                 />
 
             <androidx.appcompat.widget.AppCompatTextView
-                android:id="@+id/hiResBtn"
-                android:textSize="10sp"
+                android:id="@+id/avgHiResBtn"
+                android:textSize="12sp"
                 android:layout_width="40dp"
                 android:layout_height="match_parent"
                 android:gravity="center"
@@ -128,11 +128,20 @@
         <LinearLayout
             android:orientation="horizontal"
             android:layout_width="match_parent"
-            android:layout_height="40dp">
+            android:layout_height="36dp">
 
             <androidx.appcompat.widget.AppCompatTextView
-                android:id="@+id/acdcBtn"
-                android:textSize="10sp"
+                android:id="@+id/dcBtn"
+                android:textSize="12sp"
+                android:layout_width="48dp"
+                android:layout_height="match_parent"
+                android:gravity="center"
+                android:text="@string/dc"
+                />
+
+            <androidx.appcompat.widget.AppCompatTextView
+                android:id="@+id/acBtn"
+                android:textSize="12sp"
                 android:layout_width="48dp"
                 android:layout_height="match_parent"
                 android:gravity="center"
@@ -141,34 +150,41 @@
 
             <androidx.appcompat.widget.AppCompatTextView
                 android:id="@+id/gndBtn"
-                android:textSize="10sp"
+                android:textSize="12sp"
                 android:layout_width="40dp"
                 android:layout_height="match_parent"
                 android:gravity="center"
                 android:text="@string/gnd"
                 />
 
-            <androidx.appcompat.widget.AppCompatTextView
-                android:id="@+id/highFilterBtn"
-                android:textSize="10sp"
-                android:layout_width="40dp"
-                android:layout_height="match_parent"
-                android:gravity="center"
-                android:text="@string/hi_filter"
-                />
-
-            <androidx.appcompat.widget.AppCompatTextView
-                android:id="@+id/lowFilterBtn"
-                android:textSize="10sp"
-                android:layout_width="40dp"
-                android:layout_height="match_parent"
-                android:gravity="center"
-                android:text="@string/lo_filter"
-                />
-
         </LinearLayout>
 
+    <LinearLayout
+        android:orientation="horizontal"
+        android:layout_width="match_parent"
+        android:layout_height="36dp">
+
         <androidx.appcompat.widget.AppCompatTextView
+            android:id="@+id/highFilterBtn"
+            android:textSize="12sp"
+            android:layout_width="40dp"
+            android:layout_height="match_parent"
+            android:gravity="center"
+            android:text="@string/hi_filter"
+            />
+
+        <androidx.appcompat.widget.AppCompatTextView
+            android:id="@+id/lowFilterBtn"
+            android:textSize="12sp"
+            android:layout_width="40dp"
+            android:layout_height="match_parent"
+            android:gravity="center"
+            android:text="@string/lo_filter"
+            />
+
+    </LinearLayout>
+
+    <androidx.appcompat.widget.AppCompatTextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:text="@string/trigger"

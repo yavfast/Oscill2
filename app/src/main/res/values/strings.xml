@@ -8,14 +8,15 @@
     <string name="norm">Norm</string>
     <string name="peak">Peak</string>
     <string name="avg">Avg</string>
-    <string name="high_res">High Res</string>
+    <string name="high_res">Avg\nHi Res</string>
     <string name="ac">AC</string>
     <string name="gnd">Gnd</string>
-    <string name="hi_filter">Hi Filter</string>
-    <string name="lo_filter">Lo Filter</string>
+    <string name="hi_filter">Hi\nFilter</string>
+    <string name="lo_filter">Lo\nFilter</string>
     <string name="trigger">Trigger</string>
     <string name="volt_div">Volt / Div</string>
     <string name="time_div">Time / Div</string>
     <string name="connected">connected</string>
     <string name="disconnected">disconnected</string>
+    <string name="dc">DC</string>
 </resources>

@@ -2,6 +2,7 @@ package com.oscill.controller;
 
 import androidx.annotation.NonNull;
 
+import com.oscill.controller.config.ChanelSWMode;
 import com.oscill.controller.config.ChannelSensitivity;
 import com.oscill.types.BitSet;
 import com.oscill.types.Dimension;
@@ -29,9 +30,11 @@ public class OscillData {
     public int dataSize;
     private BitSet dataInfo;
     private BitSet chanelInfo;
+    private ChanelSWMode.SWMode swMode;
 
     public float[] tData;
     public float[] vData;
+    public float[] vData2;
 
     public OscillData(@NonNull OscillConfig config, @NonNull byte[] data) {
         this.config = config;
@@ -68,7 +71,7 @@ public class OscillData {
      *
      * Первый байт атрибутов канала
      * Биты 210.  Формат выборок
-     * 100   –  усреднение  (один байт на выборку)
+     * 000   –  усреднение  (один байт на выборку)
      * 001   - режим высокого разрешения: два байта на одну выборку
      * 010   – пиковый режим: один байт (мин или макс) на выборку (interlaced)
      * 011   – пиковый режим: два байта (мин и макс) на одну выборку
@@ -89,8 +92,9 @@ public class OscillData {
 
         dataInfo = BitSet.fromBytes(data[0]);
         chanelInfo = BitSet.fromBytes(data[2]);
+        swMode = ChanelSWMode.SWMode.getSWMode(chanelInfo);
 
-        dataSize = data.length - DATA_HEADER_SIZE;
+        dataSize = (data.length - DATA_HEADER_SIZE) / swMode.getDataSize();
 
         // TODO:
 //        int headerDataSize = Oscill.bytesToInt(new byte[]{data[4], data[5]});
@@ -100,6 +104,24 @@ public class OscillData {
     }
 
     public void prepareData() {
+        switch (swMode) {
+            case NORMAL:
+            case AVG:
+            case PEAK_1:
+                prepareSimpleData();
+                break;
+
+            case AVG_HIRES:
+                prepareAvgHiResData();
+                break;
+
+            case PEAK_2:
+                preparePeak2Data();
+                break;
+        }
+    }
+
+    private void prepareSimpleData() {
         float[] tData = new float[dataSize];
         float[] vData = new float[dataSize];
 
@@ -107,24 +129,73 @@ public class OscillData {
         int dataSize = this.dataSize;
         float tStep = this.tStep;
         float tOffset = this.tOffset;
-        float vStep = this.vStep;
+        float vStep = Math.abs(getMaxV() - getMinV()) / (float) 0xff;
+        float vMin = getMinV();
 
         int idx = 0;
         int dataIdx = DATA_HEADER_SIZE;
         while (idx < dataSize) {
             tData[idx] = (tStep * idx) - tOffset;
-            vData[idx] = byteToInt(data[dataIdx]) * vStep;
+            vData[idx] = vMin + (data[dataIdx++] & 0xff) * vStep;
 
             idx++;
-            dataIdx++;
         }
 
         this.tData = tData;
         this.vData = vData;
     }
 
-    private static int byteToInt(byte value) {
-        return (value >= 0 ? value : value & 0xFF) - 0x80;
+    private void prepareAvgHiResData() {
+        float[] tData = new float[dataSize];
+        float[] vData = new float[dataSize];
+
+        byte[] data = this.data;
+        int dataSize = this.dataSize;
+        float tStep = this.tStep;
+        float tOffset = this.tOffset;
+        float vStep = Math.abs(getMaxV() - getMinV()) / (float) 0xffff;
+        float vMin = getMinV();
+
+        int value;
+        int idx = 0;
+        int dataIdx = DATA_HEADER_SIZE;
+        while (idx < dataSize) {
+            tData[idx] = (tStep * idx) - tOffset;
+            value = ((data[dataIdx++] & 0xff) << 8) | (data[dataIdx++] & 0xff);
+            vData[idx] = vMin + value * vStep;
+
+            idx++;
+        }
+
+        this.tData = tData;
+        this.vData = vData;
+    }
+
+    private void preparePeak2Data() {
+        float[] tData = new float[dataSize];
+        float[] vDataMin = new float[dataSize];
+        float[] vDataMax = new float[dataSize];
+
+        byte[] data = this.data;
+        int dataSize = this.dataSize;
+        float tStep = this.tStep;
+        float tOffset = this.tOffset;
+        float vStep = Math.abs(getMaxV() - getMinV()) / (float) 0xff;
+        float vMin = getMinV();
+
+        int idx = 0;
+        int dataIdx = DATA_HEADER_SIZE;
+        while (idx < dataSize) {
+            tData[idx] = (tStep * idx) - tOffset;
+            vDataMin[idx] = vMin + (data[dataIdx++] & 0xff) * vStep;
+            vDataMax[idx] = vMin + (data[dataIdx++] & 0xff) * vStep;
+
+            idx++;
+        }
+
+        this.tData = tData;
+        this.vData = vDataMin;
+        this.vData2 = vDataMax;
     }
 
     public float getMaxV() {

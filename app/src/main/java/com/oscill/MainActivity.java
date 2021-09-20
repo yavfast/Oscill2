@@ -52,10 +52,12 @@ public class MainActivity extends AppCompatActivity {
     TextView normBtn;
     TextView peakBtn;
     TextView avgBtn;
-    TextView hiResBtn;
+    TextView avgHiResBtn;
 
-    TextView acdcBtn;
+    TextView dcBtn;
+    TextView acBtn;
     TextView gndBtn;
+
     TextView highFilterBtn;
     TextView lowFilterBtn;
 
@@ -102,7 +104,6 @@ public class MainActivity extends AppCompatActivity {
         normBtn.setOnClickListener(v ->
             setSWMode(ChanelSWMode.SWMode.NORMAL)
         );
-
         peakBtn = findViewById(R.id.peakBtn);
         peakBtn.setOnClickListener(v ->
             setSWMode(ChanelSWMode.SWMode.PEAK_1)
@@ -111,8 +112,8 @@ public class MainActivity extends AppCompatActivity {
         avgBtn.setOnClickListener(v ->
             setSWMode(ChanelSWMode.SWMode.AVG)
         );
-        hiResBtn = findViewById(R.id.hiResBtn);
-        hiResBtn.setOnClickListener(v ->
+        avgHiResBtn = findViewById(R.id.avgHiResBtn);
+        avgHiResBtn.setOnClickListener(v ->
             setSWMode(ChanelSWMode.SWMode.AVG_HIRES)
         );
 
@@ -121,10 +122,15 @@ public class MainActivity extends AppCompatActivity {
 
         });
 
-        acdcBtn = findViewById(R.id.acdcBtn);
-        acdcBtn.setOnClickListener(v -> {
+        dcBtn = findViewById(R.id.dcBtn);
+        dcBtn.setOnClickListener(v -> {
 
         });
+        acBtn = findViewById(R.id.acBtn);
+        acBtn.setOnClickListener(v -> {
+
+        });
+
         highFilterBtn = findViewById(R.id.highFilterBtn);
         highFilterBtn.setOnClickListener(v -> {
 
@@ -182,6 +188,8 @@ public class MainActivity extends AppCompatActivity {
             Sensitivity newSensitivity = curSensitivity.getNext(step);
 
             oscillConfig.getChannelSensitivity().setSensitivity(newSensitivity);
+            oscillConfig.getOscill().calibration();
+
             updateVoltByDiv();
         });
     }
@@ -192,6 +200,8 @@ public class MainActivity extends AppCompatActivity {
             SamplingTime newSamplingTime = curSamplingTime.getNext(step);
 
             oscillConfig.getSamplingPeriod().setSamplingPeriod(newSamplingTime);
+            oscillConfig.getOscill().calibration();
+
             updateTimeByDiv();
         });
     }
@@ -291,12 +301,18 @@ public class MainActivity extends AppCompatActivity {
         });
     }
 
+    private void updateSWModeButtons() {
+        OscillManager.runConfigTask(oscillConfig -> {
+            updateSWModeButtons(oscillConfig.getChanelSWMode().getSWMode());
+        });
+    }
+
     private void updateSWModeButtons(@Nullable ChanelSWMode.SWMode mode) {
         runOnActivity(() -> {
-            normBtn.setPressed(mode == ChanelSWMode.SWMode.NORMAL);
-            peakBtn.setPressed(mode == ChanelSWMode.SWMode.PEAK_1);
-            avgBtn.setPressed(mode == ChanelSWMode.SWMode.AVG);
-            hiResBtn.setPressed(mode == ChanelSWMode.SWMode.AVG_HIRES);
+            ViewUtils.setTextBold(normBtn, mode == ChanelSWMode.SWMode.NORMAL);
+            ViewUtils.setTextBold(peakBtn, mode == ChanelSWMode.SWMode.PEAK_1);
+            ViewUtils.setTextBold(avgBtn, mode == ChanelSWMode.SWMode.AVG);
+            ViewUtils.setTextBold(avgHiResBtn, mode == ChanelSWMode.SWMode.AVG_HIRES);
         });
     }
 
@@ -361,6 +377,7 @@ public class MainActivity extends AppCompatActivity {
     private void updateSettings() {
         runOnActivity(() -> {
             updateActivityButtons();
+            updateSWModeButtons();
             updateVoltByDiv();
             updateTimeByDiv();
         });

@@ -17,6 +17,7 @@ import android.graphics.PorterDuff;
 import android.graphics.Rect;
 import android.graphics.RectF;
 import android.graphics.Shader;
+import android.graphics.Typeface;
 import android.graphics.drawable.BitmapDrawable;
 import android.graphics.drawable.Drawable;
 import android.graphics.drawable.LayerDrawable;
@@ -345,6 +346,12 @@ public class ViewUtils {
                     });
                 });
             }
+        }
+    }
+
+    public static void setTextBold(@Nullable TextView textView, boolean bold) {
+        if (textView != null) {
+            textView.setTypeface(null, bold ? Typeface.BOLD : Typeface.NORMAL);
         }
     }
 

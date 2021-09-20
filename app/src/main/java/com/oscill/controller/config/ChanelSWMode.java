@@ -59,6 +59,27 @@ public class ChanelSWMode extends BaseOscillMode {
         BitSet getBitSet() {
             return bitSet;
         }
+
+        public int getDataSize() {
+            switch (this) {
+                case AVG_HIRES:
+                case PEAK_2:
+                    return 2;
+
+                default:
+                    return 1;
+            }
+        }
+
+        @NonNull
+        public static SWMode getSWMode(@NonNull BitSet mode) {
+            for (SWMode swMode : SWMode.values()) {
+                if (swMode.getBitSet().equals(mode)) {
+                    return swMode;
+                }
+            }
+            return SWMode.NORMAL;
+        }
     }
 
     public void setSWMode(@NonNull SWMode mode) throws Exception {
@@ -68,11 +89,6 @@ public class ChanelSWMode extends BaseOscillMode {
     @NonNull
     public SWMode getSWMode() {
         BitSet mode = getMode();
-        for (SWMode swMode : SWMode.values()) {
-            if (swMode.getBitSet().equals(mode)) {
-                return swMode;
-            }
-        }
-        return SWMode.NORMAL;
+        return SWMode.getSWMode(mode);
     }
 }

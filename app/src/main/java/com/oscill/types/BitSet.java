@@ -33,6 +33,13 @@ public class BitSet {
     }
 
     @NonNull
+    public BitSet copy(int fromIdx, int size) {
+        byte[] copy = new byte[size];
+        System.arraycopy(bits, fromIdx, copy, 0, size);
+        return new BitSet(copy);
+    }
+
+    @NonNull
     public static BitSet fromBits(@NonNull int... bits) {
         int len = bits.length;
         BitSet res = new BitSet(len);
