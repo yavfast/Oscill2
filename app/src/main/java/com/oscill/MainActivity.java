@@ -29,6 +29,7 @@ import com.oscill.events.OnOscillConnected;
 import com.oscill.events.OnOscillData;
 import com.oscill.events.OnOscillError;
 import com.oscill.types.Dimension;
+import com.oscill.types.Unit;
 import com.oscill.utils.Log;
 import com.oscill.utils.StringUtils;
 import com.oscill.utils.ViewUtils;
@@ -419,6 +420,7 @@ public class MainActivity extends AppCompatActivity {
         yAxis.setAxisLineColor(Color.GRAY);
         yAxis.setTextColor(Color.WHITE);
         yAxis.setLabelCount(8);
+        yAxis.setValueFormatter(new UnitFormatter(new Unit(Dimension.MILLI, Unit.VOLT)));
     }
 
     private void initXAxis(@NonNull XAxis xAxis) {
@@ -430,6 +432,7 @@ public class MainActivity extends AppCompatActivity {
         xAxis.enableGridDashedLine(2f, 2f, 0f);
         xAxis.setDrawGridLinesBehindData(false);
         xAxis.setLabelCount(10);
+        xAxis.setValueFormatter(new UnitFormatter(new Unit(Dimension.MILLI, Unit.SECOND)));
     }
 
     private void prepareData(@NonNull OscillData oscillData) {

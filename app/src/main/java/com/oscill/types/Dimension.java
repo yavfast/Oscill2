@@ -3,6 +3,7 @@ package com.oscill.types;
 import androidx.annotation.NonNull;
 
 public enum Dimension {
+    TERA("T", +12),
     GIGA("G", +9),
     MEGA("M", +6),
     KILO("k", +3),
@@ -35,6 +36,22 @@ public enum Dimension {
         }
         int resMultiplier = multiplier - target.multiplier;
         return (float) (value * Math.pow(10, resMultiplier));
+    }
+
+    @NonNull
+    public static Dimension getDimension(int multiplier) {
+        for (Dimension dimension : values()) {
+            if (multiplier >= dimension.multiplier) {
+                return dimension;
+            }
+        }
+        return PICO;
+    }
+
+    @NonNull
+    public static Dimension getDimensionForValue(float value) {
+        int multiplier = (int)Math.log10(Math.abs(value));
+        return getDimension(multiplier);
     }
 
 }

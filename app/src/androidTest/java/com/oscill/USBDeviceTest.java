@@ -14,6 +14,7 @@ import com.oscill.controller.config.ChanelOffset;
 import com.oscill.controller.config.ChannelSensitivity;
 import com.oscill.controller.config.CpuTickLength;
 import com.oscill.controller.config.SamplingPeriod;
+import com.oscill.controller.config.SamplingTime;
 import com.oscill.types.BitSet;
 import com.oscill.types.Dimension;
 import com.oscill.utils.AppContextWrapper;
@@ -130,7 +131,7 @@ public class USBDeviceTest {
             SamplingPeriod samplingPeriod = config.getSamplingPeriod();
             Log.i(TAG, "realtimeSamplingPeriod range: ", samplingPeriod.getRealRange());
             Log.i(TAG, "realtimeSamplingPeriod range: ", samplingPeriod.getNativeRange());
-            samplingPeriod.setSamplingPeriod(50, Dimension.MILLI);
+            samplingPeriod.setSamplingPeriod(SamplingTime._50_ms);
             Log.i(TAG, "set realtimeSamplingPeriod: ", samplingPeriod.getDivTime(Dimension.MILLI));
 
 
