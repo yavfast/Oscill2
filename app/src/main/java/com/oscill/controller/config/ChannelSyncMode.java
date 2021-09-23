@@ -6,9 +6,9 @@ import com.oscill.controller.BaseOscillMode;
 import com.oscill.controller.Oscill;
 import com.oscill.types.BitSet;
 
-public class ChanelSyncMode extends BaseOscillMode {
+public class ChannelSyncMode extends BaseOscillMode {
 
-    public ChanelSyncMode(@NonNull Oscill oscill) {
+    public ChannelSyncMode(@NonNull Oscill oscill) {
         super(oscill);
     }
 
@@ -42,7 +42,7 @@ public class ChanelSyncMode extends BaseOscillMode {
      */
 
     @NonNull
-    public ChanelSyncMode setHistBack(boolean enabled) throws Exception {
+    public ChannelSyncMode setHistBack(boolean enabled) throws Exception {
         apply(getMode().set(0, enabled).set(1, enabled));
         return this;
     }
@@ -52,7 +52,7 @@ public class ChanelSyncMode extends BaseOscillMode {
     }
 
     @NonNull
-    public ChanelSyncMode setHistFront(boolean enabled) throws Exception {
+    public ChannelSyncMode setHistFront(boolean enabled) throws Exception {
         apply(getMode().set(2, enabled).set(3, enabled));
         return this;
     }
@@ -62,7 +62,7 @@ public class ChanelSyncMode extends BaseOscillMode {
     }
 
     @NonNull
-    public ChanelSyncMode setSyncByBack(boolean enabled) throws Exception {
+    public ChannelSyncMode setSyncByBack(boolean enabled) throws Exception {
         apply(getMode().set(4, enabled));
         return this;
     }
@@ -72,7 +72,7 @@ public class ChanelSyncMode extends BaseOscillMode {
     }
 
     @NonNull
-    public ChanelSyncMode setSyncByFront(boolean enabled) throws Exception {
+    public ChannelSyncMode setSyncByFront(boolean enabled) throws Exception {
         apply(getMode().set(5, enabled));
         return this;
     }
@@ -82,7 +82,7 @@ public class ChanelSyncMode extends BaseOscillMode {
     }
 
     @NonNull
-    public ChanelSyncMode setLFSync(boolean enabled) throws Exception {
+    public ChannelSyncMode setLFSync(boolean enabled) throws Exception {
         apply(getMode().set(6, enabled).set(7, enabled));
         return this;
     }

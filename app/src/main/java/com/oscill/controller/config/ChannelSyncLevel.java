@@ -8,11 +8,11 @@ import com.oscill.types.Dimension;
 import com.oscill.types.Range;
 import com.oscill.types.Unit;
 
-public class ChanelSyncLevel extends OscillProperty<Float> {
+public class ChannelSyncLevel extends OscillProperty<Float> {
 
     private final ChannelSensitivity channelSensitivity;
 
-    public ChanelSyncLevel(@NonNull Oscill oscill, @NonNull ChannelSensitivity channelSensitivity) {
+    public ChannelSyncLevel(@NonNull Oscill oscill, @NonNull ChannelSensitivity channelSensitivity) {
         super(oscill);
 
         this.channelSensitivity = channelSensitivity;

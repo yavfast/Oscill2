@@ -62,14 +62,14 @@
             <androidx.appcompat.widget.AppCompatButton
                 android:id="@+id/runBtn"
                 android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
+                android:layout_height="40dp"
                 android:text="@string/run"
                 />
 
             <androidx.appcompat.widget.AppCompatButton
                 android:id="@+id/singleRunBtn"
                 android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
+                android:layout_height="40dp"
                 android:text="@string/single"
                 />
 
@@ -133,7 +133,7 @@
             <androidx.appcompat.widget.AppCompatTextView
                 android:id="@+id/dcBtn"
                 android:textSize="12sp"
-                android:layout_width="48dp"
+                android:layout_width="40dp"
                 android:layout_height="match_parent"
                 android:gravity="center"
                 android:text="@string/dc"
@@ -142,47 +142,31 @@
             <androidx.appcompat.widget.AppCompatTextView
                 android:id="@+id/acBtn"
                 android:textSize="12sp"
-                android:layout_width="48dp"
+                android:layout_width="40dp"
                 android:layout_height="match_parent"
                 android:gravity="center"
                 android:text="@string/ac"
                 />
 
             <androidx.appcompat.widget.AppCompatTextView
-                android:id="@+id/gndBtn"
+                android:id="@+id/highFilterBtn"
                 android:textSize="12sp"
                 android:layout_width="40dp"
                 android:layout_height="match_parent"
                 android:gravity="center"
-                android:text="@string/gnd"
+                android:text="@string/hi_filter"
+                />
+
+            <androidx.appcompat.widget.AppCompatTextView
+                android:id="@+id/lowFilterBtn"
+                android:textSize="12sp"
+                android:layout_width="40dp"
+                android:layout_height="match_parent"
+                android:gravity="center"
+                android:text="@string/lo_filter"
                 />
 
         </LinearLayout>
-
-    <LinearLayout
-        android:orientation="horizontal"
-        android:layout_width="match_parent"
-        android:layout_height="36dp">
-
-        <androidx.appcompat.widget.AppCompatTextView
-            android:id="@+id/highFilterBtn"
-            android:textSize="12sp"
-            android:layout_width="40dp"
-            android:layout_height="match_parent"
-            android:gravity="center"
-            android:text="@string/hi_filter"
-            />
-
-        <androidx.appcompat.widget.AppCompatTextView
-            android:id="@+id/lowFilterBtn"
-            android:textSize="12sp"
-            android:layout_width="40dp"
-            android:layout_height="match_parent"
-            android:gravity="center"
-            android:text="@string/lo_filter"
-            />
-
-    </LinearLayout>
 
     <androidx.appcompat.widget.AppCompatTextView
             android:layout_width="match_parent"
@@ -196,10 +180,18 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content">
 
+            <androidx.appcompat.widget.AppCompatButton
+                android:id="@+id/triggerAutoBtn"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:tint="@color/primaryColor"
+                android:text="@string/auto"
+                />
+
             <androidx.appcompat.widget.AppCompatImageButton
                 android:id="@+id/triggerStartBtn"
-                android:layout_width="wrap_content"
-                android:layout_height="48dp"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
                 android:src="@drawable/ic_level_up_alt_solid"
                 android:tint="@color/primaryColor"
                 android:scaleType="centerInside"
@@ -207,8 +199,8 @@
 
             <androidx.appcompat.widget.AppCompatImageButton
                 android:id="@+id/triggerEndBtn"
-                android:layout_width="wrap_content"
-                android:layout_height="48dp"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
                 android:src="@drawable/ic_level_down_alt_solid"
                 android:tint="@color/primaryColor"
                 android:scaleType="centerInside"
@@ -216,8 +208,8 @@
 
             <androidx.appcompat.widget.AppCompatImageButton
                 android:id="@+id/triggerFreeBtn"
-                android:layout_width="wrap_content"
-                android:layout_height="48dp"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
                 android:src="@drawable/ic_random_solid"
                 android:tint="@color/primaryColor"
                 android:scaleType="centerInside"
@@ -238,8 +230,8 @@
 
             <androidx.appcompat.widget.AppCompatImageButton
                 android:id="@+id/voltUpBtn"
-                android:layout_width="wrap_content"
-                android:layout_height="48dp"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
                 android:src="@drawable/ic_angle_double_up_solid"
                 android:tint="@color/primaryColor"
                 android:scaleType="centerInside"
@@ -262,8 +254,8 @@
 
             <androidx.appcompat.widget.AppCompatImageButton
                 android:id="@+id/voltDownBtn"
-                android:layout_width="wrap_content"
-                android:layout_height="48dp"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
                 android:src="@drawable/ic_angle_double_down_solid"
                 android:tint="@color/primaryColor"
                 android:scaleType="centerInside"
@@ -286,8 +278,8 @@
 
             <androidx.appcompat.widget.AppCompatImageButton
                 android:id="@+id/timeUpBtn"
-                android:layout_width="wrap_content"
-                android:layout_height="48dp"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
                 android:src="@drawable/ic_angle_double_up_solid"
                 android:tint="@color/primaryColor"
                 android:scaleType="centerInside"
@@ -310,8 +302,8 @@
 
             <androidx.appcompat.widget.AppCompatImageButton
                 android:id="@+id/timeDownBtn"
-                android:layout_width="wrap_content"
-                android:layout_height="48dp"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
                 android:src="@drawable/ic_angle_double_down_solid"
                 android:tint="@color/primaryColor"
                 android:scaleType="centerInside"

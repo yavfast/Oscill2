@@ -20,7 +20,8 @@ import com.github.mikephil.charting.interfaces.datasets.ILineDataSet;
 import com.oscill.controller.Oscill;
 import com.oscill.controller.OscillData;
 import com.oscill.controller.OscillManager;
-import com.oscill.controller.config.ChanelSWMode;
+import com.oscill.controller.config.ChannelHWMode;
+import com.oscill.controller.config.ChannelSWMode;
 import com.oscill.controller.config.ProcessingTypeMode;
 import com.oscill.controller.config.SamplingTime;
 import com.oscill.controller.config.Sensitivity;
@@ -57,11 +58,11 @@ public class MainActivity extends AppCompatActivity {
 
     TextView dcBtn;
     TextView acBtn;
-    TextView gndBtn;
 
     TextView highFilterBtn;
     TextView lowFilterBtn;
 
+    TextView triggerAutoBtn;
     ImageView triggerStartBtn;
     ImageView triggerEndBtn;
     ImageView triggerFreeBtn;
@@ -103,44 +104,43 @@ public class MainActivity extends AppCompatActivity {
 
         normBtn = findViewById(R.id.normBtn);
         normBtn.setOnClickListener(v ->
-            setSWMode(ChanelSWMode.SWMode.NORMAL)
+            setChannelSWMode(ChannelSWMode.SWMode.NORMAL)
         );
         peakBtn = findViewById(R.id.peakBtn);
         peakBtn.setOnClickListener(v ->
-            setSWMode(ChanelSWMode.SWMode.PEAK_1)
+            setChannelSWMode(ChannelSWMode.SWMode.PEAK_1)
         );
         avgBtn = findViewById(R.id.avgBtn);
         avgBtn.setOnClickListener(v ->
-            setSWMode(ChanelSWMode.SWMode.AVG)
+            setChannelSWMode(ChannelSWMode.SWMode.AVG)
         );
         avgHiResBtn = findViewById(R.id.avgHiResBtn);
         avgHiResBtn.setOnClickListener(v ->
-            setSWMode(ChanelSWMode.SWMode.AVG_HIRES)
+            setChannelSWMode(ChannelSWMode.SWMode.AVG_HIRES)
         );
 
-        gndBtn = findViewById(R.id.gndBtn);
-        gndBtn.setOnClickListener(v -> {
-
-        });
-
         dcBtn = findViewById(R.id.dcBtn);
-        dcBtn.setOnClickListener(v -> {
-
-        });
+        dcBtn.setOnClickListener(v ->
+            setChannelHWModeACDC(false)
+        );
         acBtn = findViewById(R.id.acBtn);
-        acBtn.setOnClickListener(v -> {
-
-        });
+        acBtn.setOnClickListener(v ->
+            setChannelHWModeACDC(true)
+        );
 
         highFilterBtn = findViewById(R.id.highFilterBtn);
-        highFilterBtn.setOnClickListener(v -> {
-
-        });
+        highFilterBtn.setOnClickListener(v ->
+            changeChannelHWModeFilters(true, false)
+        );
         lowFilterBtn = findViewById(R.id.lowFilterBtn);
-        lowFilterBtn.setOnClickListener(v -> {
+        lowFilterBtn.setOnClickListener(v ->
+            changeChannelHWModeFilters(false, true)
+        );
+
+        triggerAutoBtn = findViewById(R.id.triggerAutoBtn);
+        triggerAutoBtn.setOnClickListener(v -> {
 
         });
-
         triggerStartBtn = findViewById(R.id.triggerStartBtn);
         triggerStartBtn.setOnClickListener(v -> {
 
@@ -181,6 +181,17 @@ public class MainActivity extends AppCompatActivity {
 
         EventsController.resumeEvents(onOscillConnected, onOscillData, onOscillError);
         connectToDevice();
+    }
+
+    private void updateSettings() {
+        runOnActivity(() -> {
+            updateActivityButtons();
+            updateSWModeButtons();
+            updateACDCButtons();
+            updateChannelFiltersButtons();
+            updateVoltByDiv();
+            updateTimeByDiv();
+        });
     }
 
     private void doChangeVoltByDiv(int step) {
@@ -294,26 +305,74 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    private void setSWMode(@NonNull ChanelSWMode.SWMode swMode) {
+    private void changeChannelHWModeFilters(boolean hiFilter, boolean loFilter) {
+        OscillManager.runConfigTask(oscillConfig -> {
+            ChannelHWMode channelHWMode = oscillConfig.getChannelHWMode();
+            if (hiFilter) {
+                channelHWMode.setFilter3MHz(!channelHWMode.isFilter3MHzEnabled());
+            }
+            if (loFilter) {
+                channelHWMode.setFilter3kHz(!channelHWMode.isFilter3kHzEnabled());
+            }
+
+            updateChannelFiltersButtons();
+        });
+    }
+
+    private void updateChannelFiltersButtons() {
+        OscillManager.runConfigTask(oscillConfig ->
+            updateChannelFiltersButtons(oscillConfig.getChannelHWMode().isFilter3MHzEnabled(), oscillConfig.getChannelHWMode().isFilter3kHzEnabled())
+        );
+    }
+
+    private void updateChannelFiltersButtons(boolean hiFilter, boolean loFilter) {
+        runOnActivity(() -> {
+            ViewUtils.setTextBold(highFilterBtn, hiFilter);
+            ViewUtils.setTextBold(lowFilterBtn, loFilter);
+        });
+    }
+
+    private void setChannelHWModeACDC(boolean acMode) {
+        updateACDCButtons(acMode);
+        OscillManager.runConfigTask(oscillConfig -> {
+            oscillConfig.getChannelHWMode().setACMode(acMode);
+            updateACDCButtons();
+        });
+    }
+
+    private void updateACDCButtons() {
+        OscillManager.runConfigTask(oscillConfig -> {
+            updateACDCButtons(oscillConfig.getChannelHWMode().isACModeEnabled());
+        });
+    }
+
+    private void updateACDCButtons(boolean acMode) {
+        runOnActivity(() -> {
+            ViewUtils.setTextBold(acBtn, acMode);
+            ViewUtils.setTextBold(dcBtn, !acMode);
+        });
+    }
+
+    private void setChannelSWMode(@NonNull ChannelSWMode.SWMode swMode) {
         updateSWModeButtons(swMode);
         OscillManager.runConfigTask(oscillConfig -> {
-            oscillConfig.getChanelSWMode().setSWMode(swMode);
-            updateSWModeButtons(oscillConfig.getChanelSWMode().getSWMode());
+            oscillConfig.getChannelSWMode().setSWMode(swMode);
+            updateSWModeButtons();
         });
     }
 
     private void updateSWModeButtons() {
         OscillManager.runConfigTask(oscillConfig -> {
-            updateSWModeButtons(oscillConfig.getChanelSWMode().getSWMode());
+            updateSWModeButtons(oscillConfig.getChannelSWMode().getSWMode());
         });
     }
 
-    private void updateSWModeButtons(@Nullable ChanelSWMode.SWMode mode) {
+    private void updateSWModeButtons(@Nullable ChannelSWMode.SWMode mode) {
         runOnActivity(() -> {
-            ViewUtils.setTextBold(normBtn, mode == ChanelSWMode.SWMode.NORMAL);
-            ViewUtils.setTextBold(peakBtn, mode == ChanelSWMode.SWMode.PEAK_1);
-            ViewUtils.setTextBold(avgBtn, mode == ChanelSWMode.SWMode.AVG);
-            ViewUtils.setTextBold(avgHiResBtn, mode == ChanelSWMode.SWMode.AVG_HIRES);
+            ViewUtils.setTextBold(normBtn, mode == ChannelSWMode.SWMode.NORMAL);
+            ViewUtils.setTextBold(peakBtn, mode == ChannelSWMode.SWMode.PEAK_1);
+            ViewUtils.setTextBold(avgBtn, mode == ChannelSWMode.SWMode.AVG);
+            ViewUtils.setTextBold(avgHiResBtn, mode == ChannelSWMode.SWMode.AVG_HIRES);
         });
     }
 
@@ -344,22 +403,22 @@ public class MainActivity extends AppCompatActivity {
             oscill.setMinSamplingCount(0); // AR
             oscill.setAvgSamplingCount(0); // AP
 
-            oscillConfig.getChanelHWMode()
-                    .setChanelEnabled(true)
+            oscillConfig.getChannelHWMode()
+                    .setChannelEnabled(true)
                     .setACMode(false)
                     .setFilter3kHz(false)
                     .setFilter3MHz(false);
 
-            oscillConfig.getChanelSWMode().setSWMode(ChanelSWMode.SWMode.NORMAL);
+            oscillConfig.getChannelSWMode().setSWMode(ChannelSWMode.SWMode.NORMAL);
 
             oscillConfig.getChannelSensitivity().setSensitivity(Sensitivity._200_mV);
-            oscillConfig.getChanelOffset().setOffset(0f, Dimension.MILLI);
+            oscillConfig.getChannelOffset().setOffset(0f, Dimension.MILLI);
 
-            oscillConfig.getChanelSyncMode()
+            oscillConfig.getChannelSyncMode()
                     .setSyncByFront(true)
                     .setHistFront(false);
 
-            oscillConfig.getChanelSyncLevel().setNativeValue(20);
+            oscillConfig.getChannelSyncLevel().setNativeValue(20);
             oscillConfig.getSyncTypeMode().setSyncType(SyncTypeMode.SyncType.FREE);
 
             // WARN: set last
@@ -372,15 +431,6 @@ public class MainActivity extends AppCompatActivity {
             OscillManager.start();
 
             updateSettings();
-        });
-    }
-
-    private void updateSettings() {
-        runOnActivity(() -> {
-            updateActivityButtons();
-            updateSWModeButtons();
-            updateVoltByDiv();
-            updateTimeByDiv();
         });
     }
 

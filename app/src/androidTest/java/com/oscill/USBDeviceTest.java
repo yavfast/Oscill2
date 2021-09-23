@@ -10,7 +10,7 @@ import androidx.test.rule.GrantPermissionRule;
 import com.oscill.controller.Oscill;
 import com.oscill.controller.OscillConfig;
 import com.oscill.controller.OscillUsbManager;
-import com.oscill.controller.config.ChanelOffset;
+import com.oscill.controller.config.ChannelOffset;
 import com.oscill.controller.config.ChannelSensitivity;
 import com.oscill.controller.config.CpuTickLength;
 import com.oscill.controller.config.SamplingPeriod;
@@ -117,11 +117,11 @@ public class USBDeviceTest {
             channelSensitivity.setSensitivity(1f, Dimension.NORMAL);
             Log.i(TAG, "set chanelSensitivity: ", channelSensitivity.getRealValue());
 
-            ChanelOffset chanelOffset = config.getChanelOffset();
-            Log.i(TAG, "chanelOffset range: ", chanelOffset.getRealRange());
-            Log.i(TAG, "chanelOffset range: ", chanelOffset.getNativeRange());
-            chanelOffset.setOffset(-1f, Dimension.NORMAL);
-            Log.i(TAG, "set chanelOffset: ", chanelOffset.getRealValue(), "; ", chanelOffset.getNativeValue());
+            ChannelOffset channelOffset = config.getChannelOffset();
+            Log.i(TAG, "chanelOffset range: ", channelOffset.getRealRange());
+            Log.i(TAG, "chanelOffset range: ", channelOffset.getNativeRange());
+            channelOffset.setOffset(-1f, Dimension.NORMAL);
+            Log.i(TAG, "set chanelOffset: ", channelOffset.getRealValue(), "; ", channelOffset.getNativeValue());
 
 //            for (float testValue = 0f; testValue <= 10.5f; testValue += 0.1f) {
 //                chanelSensitivity.setRealValue(testValue);

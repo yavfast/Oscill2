@@ -6,9 +6,9 @@ import com.oscill.controller.BaseOscillMode;
 import com.oscill.controller.Oscill;
 import com.oscill.types.BitSet;
 
-public class ChanelHWMode extends BaseOscillMode {
+public class ChannelHWMode extends BaseOscillMode {
 
-    public ChanelHWMode(@NonNull Oscill oscill) {
+    public ChannelHWMode(@NonNull Oscill oscill) {
         super(oscill);
     }
 
@@ -40,17 +40,17 @@ public class ChanelHWMode extends BaseOscillMode {
      */
 
     @NonNull
-    public ChanelHWMode setChanelEnabled(boolean enabled) throws Exception {
+    public ChannelHWMode setChannelEnabled(boolean enabled) throws Exception {
         apply(getMode().set(0, !enabled));
         return this;
     }
 
-    public boolean isChanelEnabled() {
+    public boolean isChannelEnabled() {
         return getMode().get(0);
     }
 
     @NonNull
-    public ChanelHWMode setACMode(boolean enabled) throws Exception {
+    public ChannelHWMode setACMode(boolean enabled) throws Exception {
         apply(getMode().set(1, enabled));
         return this;
     }
@@ -60,7 +60,7 @@ public class ChanelHWMode extends BaseOscillMode {
     }
 
     @NonNull
-    public ChanelHWMode setFilter3MHz(boolean enabled) throws Exception {
+    public ChannelHWMode setFilter3MHz(boolean enabled) throws Exception {
         apply(getMode().set(2, enabled));
         return this;
     }
@@ -70,7 +70,7 @@ public class ChanelHWMode extends BaseOscillMode {
     }
 
     @NonNull
-    public ChanelHWMode setFilter3kHz(boolean enabled) throws Exception {
+    public ChannelHWMode setFilter3kHz(boolean enabled) throws Exception {
         apply(getMode().set(3, enabled));
         return this;
     }

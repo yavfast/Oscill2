@@ -6,9 +6,9 @@ import com.oscill.controller.BaseOscillMode;
 import com.oscill.controller.Oscill;
 import com.oscill.types.BitSet;
 
-public class ChanelSWMode extends BaseOscillMode {
+public class ChannelSWMode extends BaseOscillMode {
 
-    public ChanelSWMode(@NonNull Oscill oscill) {
+    public ChannelSWMode(@NonNull Oscill oscill) {
         super(oscill);
     }
 

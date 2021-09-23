@@ -13,16 +13,16 @@ public class SamplesCount extends OscillProperty<Integer> {
     private static final int DEF_DIV_COUNT = 10;
     private static final int DEF_SAMPLES_BY_DIV_COUNT = 30;
 
-    private final ChanelSWMode chanelSWMode;
+    private final ChannelSWMode channelSWMode;
 
     private int divCount = DEF_DIV_COUNT;
     private int samplesByDivCount = DEF_SAMPLES_BY_DIV_COUNT;
 
-    public SamplesCount(@NonNull Oscill oscill, @NonNull ChanelSWMode chanelSWMode) {
+    public SamplesCount(@NonNull Oscill oscill, @NonNull ChannelSWMode channelSWMode) {
         super(oscill);
 
-        this.chanelSWMode = chanelSWMode;
-        chanelSWMode.addLinkedSetting(this);
+        this.channelSWMode = channelSWMode;
+        channelSWMode.addLinkedSetting(this);
     }
 
     public int getDivCount() {
@@ -34,8 +34,8 @@ public class SamplesCount extends OscillProperty<Integer> {
     }
 
     @NonNull
-    public ChanelSWMode getChanelSWMode() {
-        return chanelSWMode;
+    public ChannelSWMode getChannelSWMode() {
+        return channelSWMode;
     }
 
     @NonNull
@@ -64,7 +64,7 @@ public class SamplesCount extends OscillProperty<Integer> {
     }
 
     private int getSampleSize() {
-        switch (getChanelSWMode().getSWMode()) {
+        switch (getChannelSWMode().getSWMode()) {
             case AVG_HIRES:
             case PEAK_1:
             case PEAK_2:

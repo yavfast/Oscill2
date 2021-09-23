@@ -19,4 +19,5 @@
     <string name="connected">connected</string>
     <string name="disconnected">disconnected</string>
     <string name="dc">DC</string>
+    <string name="auto">A</string>
 </resources>

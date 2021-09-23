@@ -2,7 +2,7 @@ package com.oscill.controller;
 
 import androidx.annotation.NonNull;
 
-import com.oscill.controller.config.ChanelSWMode;
+import com.oscill.controller.config.ChannelSWMode;
 import com.oscill.controller.config.ChannelSensitivity;
 import com.oscill.types.BitSet;
 import com.oscill.types.Dimension;
@@ -30,7 +30,7 @@ public class OscillData {
     public int dataSize;
     private BitSet dataInfo;
     private BitSet chanelInfo;
-    private ChanelSWMode.SWMode swMode;
+    private ChannelSWMode.SWMode swMode;
 
     public float[] tData;
     public float[] vData;
@@ -84,7 +84,7 @@ public class OscillData {
         ChannelSensitivity channelSensitivity = config.getChannelSensitivity();
         this.vStep = channelSensitivity.getSensitivityStep(Dimension.MILLI);
 
-        this.vOffset = config.getChanelOffset().getRealValue();
+        this.vOffset = config.getChannelOffset().getRealValue();
 
         Range<Float> vRange = channelSensitivity.getSensitivityRange(Dimension.MILLI);
         this.vMax = vRange.getUpper() + vOffset;
@@ -92,7 +92,7 @@ public class OscillData {
 
         dataInfo = BitSet.fromBytes(data[0]);
         chanelInfo = BitSet.fromBytes(data[2]);
-        swMode = ChanelSWMode.SWMode.getSWMode(chanelInfo);
+        swMode = ChannelSWMode.SWMode.getSWMode(chanelInfo);
 
         dataSize = (data.length - DATA_HEADER_SIZE) / swMode.getDataSize();
 

@@ -2,12 +2,12 @@ package com.oscill.controller;
 
 import androidx.annotation.NonNull;
 
-import com.oscill.controller.config.ChanelHWMode;
-import com.oscill.controller.config.ChanelOffset;
-import com.oscill.controller.config.ChanelSWMode;
-import com.oscill.controller.config.ChanelSyncLevel;
-import com.oscill.controller.config.ChanelSyncMode;
+import com.oscill.controller.config.ChannelHWMode;
+import com.oscill.controller.config.ChannelOffset;
+import com.oscill.controller.config.ChannelSWMode;
 import com.oscill.controller.config.ChannelSensitivity;
+import com.oscill.controller.config.ChannelSyncLevel;
+import com.oscill.controller.config.ChannelSyncMode;
 import com.oscill.controller.config.CpuTickLength;
 import com.oscill.controller.config.ProcessingTypeMode;
 import com.oscill.controller.config.SamplesCount;
@@ -22,11 +22,11 @@ import java.io.IOException;
 public class OscillConfig extends BaseOscillSetting {
 
     private final ChannelSensitivity channelSensitivity;
-    private final ChanelOffset chanelOffset;
-    private final ChanelSyncMode chanelSyncMode;
-    private final ChanelHWMode chanelHWMode;
-    private final ChanelSWMode chanelSWMode;
-    private final ChanelSyncLevel chanelSyncLevel;
+    private final ChannelOffset channelOffset;
+    private final ChannelSyncMode channelSyncMode;
+    private final ChannelHWMode channelHWMode;
+    private final ChannelSWMode channelSWMode;
+    private final ChannelSyncLevel channelSyncLevel;
 
     private final CpuTickLength cpuTickLength;
     private final SamplingPeriod samplingPeriod;
@@ -40,17 +40,17 @@ public class OscillConfig extends BaseOscillSetting {
         super(oscill);
 
         this.channelSensitivity = new ChannelSensitivity(oscill);
-        this.chanelOffset = new ChanelOffset(oscill, channelSensitivity);
-        this.chanelSyncMode = new ChanelSyncMode(oscill);
-        this.chanelHWMode = new ChanelHWMode(oscill);
-        this.chanelSWMode = new ChanelSWMode(oscill);
-        this.chanelSyncLevel = new ChanelSyncLevel(oscill, channelSensitivity);
+        this.channelOffset = new ChannelOffset(oscill, channelSensitivity);
+        this.channelSyncMode = new ChannelSyncMode(oscill);
+        this.channelHWMode = new ChannelHWMode(oscill);
+        this.channelSWMode = new ChannelSWMode(oscill);
+        this.channelSyncLevel = new ChannelSyncLevel(oscill, channelSensitivity);
 
         this.syncTypeMode = new SyncTypeMode(oscill);
         this.processingTypeMode = new ProcessingTypeMode(oscill);
 
         this.cpuTickLength = new CpuTickLength(oscill);
-        this.samplesCount = new SamplesCount(oscill, chanelSWMode);
+        this.samplesCount = new SamplesCount(oscill, channelSWMode);
         this.samplingPeriod = new SamplingPeriod(oscill, cpuTickLength, samplesCount);
         this.samplesOffset = new SamplesOffset(oscill, samplingPeriod, samplesCount);
     }
@@ -66,28 +66,28 @@ public class OscillConfig extends BaseOscillSetting {
     }
 
     @NonNull
-    public ChanelOffset getChanelOffset() {
-        return chanelOffset;
+    public ChannelOffset getChannelOffset() {
+        return channelOffset;
     }
 
     @NonNull
-    public ChanelSyncMode getChanelSyncMode() {
-        return chanelSyncMode;
+    public ChannelSyncMode getChannelSyncMode() {
+        return channelSyncMode;
     }
 
     @NonNull
-    public ChanelHWMode getChanelHWMode() {
-        return chanelHWMode;
+    public ChannelHWMode getChannelHWMode() {
+        return channelHWMode;
     }
 
     @NonNull
-    public ChanelSWMode getChanelSWMode() {
-        return chanelSWMode;
+    public ChannelSWMode getChannelSWMode() {
+        return channelSWMode;
     }
 
     @NonNull
-    public ChanelSyncLevel getChanelSyncLevel() {
-        return chanelSyncLevel;
+    public ChannelSyncLevel getChannelSyncLevel() {
+        return channelSyncLevel;
     }
 
     @NonNull
