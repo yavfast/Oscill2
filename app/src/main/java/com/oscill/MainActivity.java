@@ -370,7 +370,7 @@ public class MainActivity extends AppCompatActivity {
     private void updateSWModeButtons(@Nullable ChannelSWMode.SWMode mode) {
         runOnActivity(() -> {
             ViewUtils.setTextBold(normBtn, mode == ChannelSWMode.SWMode.NORMAL);
-            ViewUtils.setTextBold(peakBtn, mode == ChannelSWMode.SWMode.PEAK_1);
+            ViewUtils.setTextBold(peakBtn, mode == ChannelSWMode.SWMode.PEAK_1 || mode == ChannelSWMode.SWMode.PEAK_2);
             ViewUtils.setTextBold(avgBtn, mode == ChannelSWMode.SWMode.AVG);
             ViewUtils.setTextBold(avgHiResBtn, mode == ChannelSWMode.SWMode.AVG_HIRES);
         });
@@ -418,12 +418,12 @@ public class MainActivity extends AppCompatActivity {
                     .setSyncByFront(true)
                     .setHistFront(false);
 
-            oscillConfig.getChannelSyncLevel().setNativeValue(20);
-            oscillConfig.getSyncTypeMode().setSyncType(SyncTypeMode.SyncType.FREE);
+            oscillConfig.getChannelSyncLevel().setNativeValue(8);
+            oscillConfig.getSyncTypeMode().setSyncType(SyncTypeMode.SyncType.AUTO);
 
             // WARN: set last
-            oscillConfig.getSamplesCount().setSamplesCount(10, 64);
-            oscillConfig.getSamplingPeriod().setSamplingPeriod(SamplingTime._1_ms);
+            oscillConfig.getSamplesCount().setSamplesCount(10, 48);
+            oscillConfig.getSamplingPeriod().setSamplingPeriod(SamplingTime._5_ms);
             oscillConfig.getSamplesOffset().setOffset(0f, Dimension.MILLI);
 
             oscill.calibration();
@@ -486,9 +486,10 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void prepareData(@NonNull OscillData oscillData) {
-        float[] tData = oscillData.tData;
-        float[] vData = oscillData.vData;
-        int dataSize = oscillData.dataSize;
+        float[] tData = oscillData.getTimeData();
+        float[] vData = oscillData.getVoltData();
+        float[] vData2 = oscillData.getVoltData2();
+        int dataSize = oscillData.getDataSize();
 
         ArrayList<Entry> values = new ArrayList<>(dataSize);
         for (int idx = 0; idx < dataSize; idx++) {

@@ -60,10 +60,20 @@ public class ChannelSWMode extends BaseOscillMode {
             return bitSet;
         }
 
-        public int getDataSize() {
+        public int getSampleSize() {
             switch (this) {
                 case AVG_HIRES:
                 case PEAK_2:
+                    return 2;
+
+                default:
+                    return 1;
+            }
+        }
+
+        public int getSampleDataSize() {
+            switch (this) {
+                case AVG_HIRES:
                     return 2;
 
                 default:

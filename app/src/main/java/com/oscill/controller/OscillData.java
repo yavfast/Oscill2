@@ -1,12 +1,14 @@
 package com.oscill.controller;
 
 import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 
 import com.oscill.controller.config.ChannelSWMode;
 import com.oscill.controller.config.ChannelSensitivity;
 import com.oscill.types.BitSet;
 import com.oscill.types.Dimension;
 import com.oscill.types.Range;
+import com.oscill.utils.DataUtils;
 import com.oscill.utils.Log;
 
 public class OscillData {
@@ -15,8 +17,7 @@ public class OscillData {
 
     private static final int DATA_HEADER_SIZE = 6;
 
-    private final OscillConfig config;
-    public final byte[] data;
+    private final byte[] data;
 
     private float tStep;
     private float tOffset;
@@ -24,22 +25,20 @@ public class OscillData {
     private float vStep;
     private float vMin;
     private float vMax;
-
     private float vOffset;
 
-    public int dataSize;
     private BitSet dataInfo;
     private BitSet chanelInfo;
     private ChannelSWMode.SWMode swMode;
 
-    public float[] tData;
-    public float[] vData;
-    public float[] vData2;
+    private int[] iData;
+    private float[] tData;
+    private float[] vData;
+    private float[] vData2;
 
     public OscillData(@NonNull OscillConfig config, @NonNull byte[] data) {
-        this.config = config;
         this.data = data;
-        prepareDataInfo();
+        prepareDataInfo(config);
     }
 
     /**
@@ -77,7 +76,7 @@ public class OscillData {
      * 011   – пиковый режим: два байта (мин и макс) на одну выборку
      * 100   – выборка АЦП соотв. выборке вых.массива (один байт на выборку)
      */
-    private void prepareDataInfo() {
+    private void prepareDataInfo(@NonNull OscillConfig config) {
         this.tStep = config.getSamplingPeriod().getSampleTime(Dimension.MILLI);
         this.tOffset = config.getSamplesOffset().getOffset(Dimension.MILLI);
 
@@ -89,113 +88,158 @@ public class OscillData {
         Range<Float> vRange = channelSensitivity.getSensitivityRange(Dimension.MILLI);
         this.vMax = vRange.getUpper() + vOffset;
         this.vMin = vRange.getLower() + vOffset;
-
-        dataInfo = BitSet.fromBytes(data[0]);
-        chanelInfo = BitSet.fromBytes(data[2]);
-        swMode = ChannelSWMode.SWMode.getSWMode(chanelInfo);
-
-        dataSize = (data.length - DATA_HEADER_SIZE) / swMode.getDataSize();
-
-        // TODO:
-//        int headerDataSize = Oscill.bytesToInt(new byte[]{data[4], data[5]});
-//        if (headerDataSize != dataSize) {
-//            Log.w(TAG, "Wrong data size: ", dataSize, "; expected: ", headerDataSize);
-//        }
     }
 
-    public void prepareData() {
-        switch (swMode) {
-            case NORMAL:
-            case AVG:
-            case PEAK_1:
-                prepareSimpleData();
-                break;
-
-            case AVG_HIRES:
-                prepareAvgHiResData();
-                break;
-
-            case PEAK_2:
-                preparePeak2Data();
-                break;
+    @NonNull
+    public BitSet getDataInfo() {
+        if (dataInfo == null) {
+            dataInfo = BitSet.fromBytes(data[0]);
         }
+        return dataInfo;
     }
 
-    private void prepareSimpleData() {
-        float[] tData = new float[dataSize];
-        float[] vData = new float[dataSize];
+    @NonNull
+    public BitSet getChanelInfo() {
+        if (chanelInfo == null) {
+            chanelInfo = BitSet.fromBytes(data[2]);
+        }
+        return chanelInfo;
+    }
 
-        byte[] data = this.data;
-        int dataSize = this.dataSize;
-        float tStep = this.tStep;
-        float tOffset = this.tOffset;
+    @NonNull
+    public ChannelSWMode.SWMode getSwMode() {
+        if (swMode == null) {
+            swMode = ChannelSWMode.SWMode.getSWMode(getChanelInfo());
+        }
+        return swMode;
+    }
+
+    public int getDataSize() {
+        return (data.length - DATA_HEADER_SIZE) / getSwMode().getSampleSize();
+    }
+
+    @NonNull
+    public int[] getIntData() {
+        if (iData == null) {
+            switch (getSwMode().getSampleDataSize()) {
+                case 1:
+                    iData = DataUtils.getIntData1Byte(data, DATA_HEADER_SIZE);
+                    break;
+                case 2:
+                    iData = DataUtils.getIntData2Byte(data, DATA_HEADER_SIZE);
+                    break;
+                default:
+                    throw new IllegalArgumentException("Sample size");
+            }
+        }
+        return iData;
+    }
+
+    @NonNull
+    public float[] getTimeData() {
+        if (tData == null) {
+            int dataSize = getDataSize();
+            float[] tData = new float[dataSize];
+            float tStep = this.tStep;
+            float tOffset = this.tOffset;
+            for (int idx = 0; idx < dataSize; idx++) {
+                tData[idx] = (tStep * idx) - tOffset;
+            }
+            this.tData = tData;
+        }
+        return tData;
+    }
+
+    void prepareData() {
+        getTimeData();
+        getVoltData();
+    }
+
+    @NonNull
+    public float[] getVoltData() {
+        if (vData == null) {
+            switch (getSwMode()) {
+                case NORMAL:
+                case AVG:
+                case PEAK_1:
+                    vData = prepareSimpleData();
+                    break;
+
+                case AVG_HIRES:
+                    vData = prepareAvgHiResData();
+                    break;
+
+                case PEAK_2:
+                    vData = preparePeak2Data();
+                    break;
+            }
+        }
+        return vData;
+    }
+
+    @Nullable
+    public float[] getVoltData2() {
+        return vData2;
+    }
+
+
+    @NonNull
+    private float[] prepareSimpleData() {
+        int[] data = getIntData();
         float vStep = Math.abs(getMaxV() - getMinV()) / (float) 0xff;
         float vMin = getMinV();
 
-        int idx = 0;
-        int dataIdx = DATA_HEADER_SIZE;
-        while (idx < dataSize) {
-            tData[idx] = (tStep * idx) - tOffset;
-            vData[idx] = vMin + (data[dataIdx++] & 0xff) * vStep;
+        int dataSize = getDataSize();
+        float[] vData = new float[dataSize];
 
+        int idx = 0;
+        while (idx < dataSize) {
+            vData[idx] = vMin + (data[idx] * vStep);
             idx++;
         }
 
-        this.tData = tData;
-        this.vData = vData;
+        return vData;
     }
 
-    private void prepareAvgHiResData() {
-        float[] tData = new float[dataSize];
-        float[] vData = new float[dataSize];
-
-        byte[] data = this.data;
-        int dataSize = this.dataSize;
-        float tStep = this.tStep;
-        float tOffset = this.tOffset;
+    @NonNull
+    private float[] prepareAvgHiResData() {
+        int[] data = getIntData();
         float vStep = Math.abs(getMaxV() - getMinV()) / (float) 0xffff;
         float vMin = getMinV();
 
-        int value;
-        int idx = 0;
-        int dataIdx = DATA_HEADER_SIZE;
-        while (idx < dataSize) {
-            tData[idx] = (tStep * idx) - tOffset;
-            value = ((data[dataIdx++] & 0xff) << 8) | (data[dataIdx++] & 0xff);
-            vData[idx] = vMin + value * vStep;
+        int dataSize = getDataSize();
+        float[] vData = new float[dataSize];
 
+        int idx = 0;
+        while (idx < dataSize) {
+            vData[idx] = vMin + (data[idx] * vStep);
             idx++;
         }
 
-        this.tData = tData;
-        this.vData = vData;
+        return vData;
     }
 
-    private void preparePeak2Data() {
-        float[] tData = new float[dataSize];
+    @NonNull
+    private float[] preparePeak2Data() {
+        int dataSize = getDataSize();
         float[] vDataMin = new float[dataSize];
         float[] vDataMax = new float[dataSize];
 
-        byte[] data = this.data;
-        int dataSize = this.dataSize;
-        float tStep = this.tStep;
-        float tOffset = this.tOffset;
+        int[] data = getIntData();
         float vStep = Math.abs(getMaxV() - getMinV()) / (float) 0xff;
         float vMin = getMinV();
 
         int idx = 0;
-        int dataIdx = DATA_HEADER_SIZE;
+        int dataIdx = 0;
         while (idx < dataSize) {
-            tData[idx] = (tStep * idx) - tOffset;
-            vDataMin[idx] = vMin + (data[dataIdx++] & 0xff) * vStep;
-            vDataMax[idx] = vMin + (data[dataIdx++] & 0xff) * vStep;
+            vDataMin[idx] = vMin + (data[dataIdx++] * vStep);
+            vDataMax[idx] = vMin + (data[dataIdx++] * vStep);
 
             idx++;
         }
 
-        this.tData = tData;
-        this.vData = vDataMin;
         this.vData2 = vDataMax;
+        return vDataMin;
     }
 
     public float getMaxV() {
