@@ -26,6 +26,7 @@ public class OscillData {
     private float vMin;
     private float vMax;
     private float vOffset;
+    private float vTrigger;
 
     private BitSet dataInfo;
     private BitSet chanelInfo;
@@ -84,6 +85,7 @@ public class OscillData {
         this.vStep = channelSensitivity.getSensitivityStep(Dimension.MILLI);
 
         this.vOffset = config.getChannelOffset().getRealValue();
+        this.vTrigger = config.getChannelSyncLevel().getRealValue();
 
         Range<Float> vRange = channelSensitivity.getSensitivityRange(Dimension.MILLI);
         this.vMax = vRange.getUpper() + vOffset;
@@ -250,4 +252,7 @@ public class OscillData {
         return vMin;
     }
 
+    public float getTriggerV() {
+        return vTrigger;
+    }
 }

@@ -38,6 +38,7 @@ import com.oscill.utils.executor.EventsController;
 import com.oscill.utils.executor.Executor;
 
 import java.util.ArrayList;
+import java.util.List;
 
 public class MainActivity extends AppCompatActivity {
 
@@ -520,7 +521,7 @@ public class MainActivity extends AppCompatActivity {
                     .setSyncByBack(false)
                     .setHistBack(false);
 
-            oscillConfig.getChannelSyncLevel().setNativeValue(127);
+            oscillConfig.getChannelSyncLevel().setNativeValue(128);
             oscillConfig.getSyncTypeMode().setSyncType(SyncTypeMode.SyncType.AUTO);
 
             // WARN: set last
@@ -607,6 +608,23 @@ public class MainActivity extends AppCompatActivity {
 
         yAxis.setAxisMaximum(maxV);
         yAxis.setAxisMinimum(minV);
+
+        yAxis.setZeroLineWidth(2f);
+    }
+
+    private void updateTriggerMarker(@NonNull LineData data, @NonNull OscillData oscillData) {
+        float triggerV = oscillData.getTriggerV();
+        float[] timeData = oscillData.getTimeData();
+
+        List<Entry> triggerData = new ArrayList<>(8);
+        if (timeData.length > 10) {
+            triggerData.add(new Entry(timeData[0], triggerV));
+            triggerData.add(new Entry(timeData[10], triggerV));
+        }
+
+        LineDataSet triggerDataSet = (LineDataSet) data.getDataSetByIndex(1);
+        triggerDataSet.setValues(triggerData);
+        triggerDataSet.notifyDataSetChanged();
     }
 
     private void setData(@NonNull OscillData oscillData, @NonNull ArrayList<Entry> values) {
@@ -620,28 +638,57 @@ public class MainActivity extends AppCompatActivity {
             dataSet = (LineDataSet) data.getDataSetByIndex(0);
             dataSet.setValues(values);
             dataSet.notifyDataSetChanged();
+
+            updateTriggerMarker(data, oscillData);
+
             data.notifyDataChanged();
             chart.notifyDataSetChanged();
             chart.invalidate();
 
         } else {
-            dataSet = new LineDataSet(values, null);
+            ArrayList<ILineDataSet> dataSets = new ArrayList<>(8);
 
-            dataSet.setDrawIcons(false);
-            dataSet.setDrawCircles(false);
-            dataSet.setDrawCircleHole(false);
-            dataSet.setDrawValues(false);
-            dataSet.setDrawFilled(false);
+            dataSet = initDataLine();
+            dataSet.setValues(values);
+            dataSets.add(dataSet); // 0
 
-            dataSet.setColor(Color.CYAN);
-            dataSet.setLineWidth(2f);
-
-            ArrayList<ILineDataSet> dataSets = new ArrayList<>();
-            dataSets.add(dataSet);
+            LineDataSet triggerMarker = initTriggerMarker();
+            dataSets.add(triggerMarker); // 1
 
             data = new LineData(dataSets);
             chart.setData(data);
         }
+    }
+
+    @NonNull
+    private LineDataSet initDataLine() {
+        LineDataSet dataSet = new LineDataSet(null, null);
+
+        dataSet.setDrawIcons(false);
+        dataSet.setDrawCircles(false);
+        dataSet.setDrawCircleHole(false);
+        dataSet.setDrawValues(false);
+        dataSet.setDrawFilled(false);
+
+        dataSet.setColor(Color.CYAN);
+        dataSet.setLineWidth(2f);
+
+        return dataSet;
+    }
+
+    @NonNull
+    private LineDataSet initTriggerMarker() {
+        LineDataSet dataSet = new LineDataSet(null, null);
+        dataSet.setDrawIcons(false);
+        dataSet.setDrawCircles(false);
+        dataSet.setDrawCircleHole(false);
+        dataSet.setDrawValues(false);
+        dataSet.setDrawFilled(false);
+
+        dataSet.setColor(Color.GREEN);
+        dataSet.setLineWidth(3f);
+
+        return dataSet;
     }
 
 }

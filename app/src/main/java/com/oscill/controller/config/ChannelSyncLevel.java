@@ -46,13 +46,17 @@ public class ChannelSyncLevel extends OscillProperty<Float> {
     protected Integer realToNative(@NonNull Float realValue) {
         Range<Float> sensitivityRange = channelSensitivity.getSensitivityRange(Dimension.MILLI);
         float resolution = channelSensitivity.getResolution();
-        return Math.round(realValue / (sensitivityRange.getUpper() / resolution));
+        float vMin = sensitivityRange.getLower();
+        float vMax = sensitivityRange.getUpper();
+        return Math.round(realValue / ((vMax - vMin) / resolution));
     }
 
     @Override
     protected Float nativeToReal(@NonNull Integer nativeValue) {
         Range<Float> sensitivityRange = channelSensitivity.getSensitivityRange(Dimension.MILLI);
         float resolution = channelSensitivity.getResolution();
-        return (sensitivityRange.getUpper() / resolution) * nativeValue;
+        float vMin = sensitivityRange.getLower();
+        float vMax = sensitivityRange.getUpper();
+        return vMin + (((vMax - vMin) / resolution) * nativeValue);
     }
 }
