@@ -3,7 +3,6 @@ package com.oscill;
 import android.graphics.Color;
 import android.os.Bundle;
 import android.widget.Button;
-import android.widget.ImageView;
 import android.widget.TextView;
 
 import androidx.annotation.NonNull;
@@ -63,16 +62,22 @@ public class MainActivity extends AppCompatActivity {
     TextView lowFilterBtn;
 
     TextView triggerAutoBtn;
-    ImageView triggerStartBtn;
-    ImageView triggerEndBtn;
-    ImageView triggerFreeBtn;
+    TextView triggerTimeoutBtn;
+    TextView triggerWaitBtn;
+    TextView triggerFreeBtn;
+    TextView triggerFrontBtn;
+    TextView triggerBackBtn;
+    TextView triggerUpBtn;
+    TextView triggerDownBtn;
 
-    ImageView voltUpBtn;
-    ImageView voltDownBtn;
+    TextView voltAutoBtn;
+    TextView voltUpBtn;
+    TextView voltDownBtn;
     TextView voltDivText;
 
-    ImageView timeUpBtn;
-    ImageView timeDownBtn;
+    TextView timeAutoBtn;
+    TextView timeUpBtn;
+    TextView timeDownBtn;
     TextView timeDivText;
 
     private final EventHolder<?> onOscillConnected = EventsController.onReceiveEvent(this, OnOscillConnected.class, event ->
@@ -138,21 +143,42 @@ public class MainActivity extends AppCompatActivity {
         );
 
         triggerAutoBtn = findViewById(R.id.triggerAutoBtn);
-        triggerAutoBtn.setOnClickListener(v -> {
-
-        });
-        triggerStartBtn = findViewById(R.id.triggerStartBtn);
-        triggerStartBtn.setOnClickListener(v -> {
-
-        });
-        triggerEndBtn = findViewById(R.id.triggerEndBtn);
-        triggerEndBtn.setOnClickListener(v -> {
-
-        });
+        triggerAutoBtn.setOnClickListener(v ->
+            doSetTriggerType(SyncTypeMode.SyncType.AUTO)
+        );
+        triggerTimeoutBtn = findViewById(R.id.triggerTimeoutBtn);
+        triggerTimeoutBtn.setOnClickListener(v ->
+                doSetTriggerType(SyncTypeMode.SyncType.WAIT_TIMEOUT)
+        );
+        triggerWaitBtn = findViewById(R.id.triggerWaitBtn);
+        triggerWaitBtn.setOnClickListener(v ->
+                doSetTriggerType(SyncTypeMode.SyncType.WAIT)
+        );
         triggerFreeBtn = findViewById(R.id.triggerFreeBtn);
-        triggerFreeBtn.setOnClickListener(v -> {
+        triggerFreeBtn.setOnClickListener(v ->
+                doSetTriggerType(SyncTypeMode.SyncType.FREE)
+        );
+        triggerFrontBtn = findViewById(R.id.triggerFrontBtn);
+        triggerFrontBtn.setOnClickListener(v ->
+            doChangeTriggerFront()
+        );
+        triggerBackBtn = findViewById(R.id.triggerBackBtn);
+        triggerBackBtn.setOnClickListener(v ->
+            doChangeTriggerBack()
+        );
+        triggerUpBtn = findViewById(R.id.triggerUpBtn);
+        triggerUpBtn.setOnClickListener(v ->
+            doChangeTriggerLevel(+8)
+        );
+        triggerDownBtn = findViewById(R.id.triggerDownBtn);
+        triggerDownBtn.setOnClickListener(v ->
+            doChangeTriggerLevel(-8)
+        );
 
-        });
+        voltAutoBtn = findViewById(R.id.voltAutoBtn);
+        voltAutoBtn.setOnClickListener(v ->
+            doAutoVoltByDiv()
+        );
 
         voltUpBtn = findViewById(R.id.voltUpBtn);
         voltUpBtn.setOnClickListener(v ->
@@ -164,14 +190,18 @@ public class MainActivity extends AppCompatActivity {
         );
         voltDivText = findViewById(R.id.voltDivText);
 
+        timeAutoBtn = findViewById(R.id.timeAutoBtn);
+        timeAutoBtn.setOnClickListener(v ->
+            doAutoTimeByDiv()
+        );
         timeUpBtn = findViewById(R.id.timeUpBtn);
-        timeUpBtn.setOnClickListener(v -> {
-            doChangeTimeByDiv(+1);
-        });
+        timeUpBtn.setOnClickListener(v ->
+            doChangeTimeByDiv(+1)
+        );
         timeDownBtn = findViewById(R.id.timeDownBtn);
-        timeDownBtn.setOnClickListener(v -> {
-            doChangeTimeByDiv(-1);
-        });
+        timeDownBtn.setOnClickListener(v ->
+            doChangeTimeByDiv(-1)
+        );
         timeDivText = findViewById(R.id.timeDivText);
 
         initChart();
@@ -189,9 +219,51 @@ public class MainActivity extends AppCompatActivity {
             updateSWModeButtons();
             updateACDCButtons();
             updateChannelFiltersButtons();
+            updateTrigger();
             updateVoltByDiv();
             updateTimeByDiv();
         });
+    }
+
+    private void doSetTriggerType(@NonNull SyncTypeMode.SyncType syncType) {
+        OscillManager.runConfigTask(oscillConfig -> {
+            oscillConfig.getSyncTypeMode().setSyncType(syncType);
+
+            updateTrigger();
+        });
+    }
+
+    private void doChangeTriggerFront() {
+        OscillManager.runConfigTask(oscillConfig -> {
+            boolean hasSyncByFront = oscillConfig.getChannelSyncMode().hasSyncByFront();
+            oscillConfig.getChannelSyncMode()
+                    .setSyncByFront(!hasSyncByFront)
+                    .setHistFront(!hasSyncByFront);
+
+            updateTrigger();
+        });
+    }
+
+    private void doChangeTriggerBack() {
+        OscillManager.runConfigTask(oscillConfig -> {
+            boolean hasSyncByBack = oscillConfig.getChannelSyncMode().hasSyncByBack();
+            oscillConfig.getChannelSyncMode()
+                    .setSyncByBack(!hasSyncByBack)
+                    .setHistBack(!hasSyncByBack);
+
+            updateTrigger();
+        });
+    }
+
+    private void doChangeTriggerLevel(int delta) {
+        OscillManager.runConfigTask(oscillConfig -> {
+            int syncLevel = oscillConfig.getChannelSyncLevel().getNativeValue();
+            oscillConfig.getChannelSyncLevel().setNativeValue(syncLevel + delta);
+        });
+    }
+
+    private void doAutoVoltByDiv() {
+
     }
 
     private void doChangeVoltByDiv(int step) {
@@ -204,6 +276,10 @@ public class MainActivity extends AppCompatActivity {
 
             updateVoltByDiv();
         });
+    }
+
+    private void doAutoTimeByDiv() {
+
     }
 
     private void doChangeTimeByDiv(int step) {
@@ -230,6 +306,30 @@ public class MainActivity extends AppCompatActivity {
                 timeDivText.setText(
                         StringUtils.concat(String.valueOf(samplingTime.getValue()), " ", samplingTime.getDimension().getPrefix(), "s"))
         );
+    }
+
+    private void updateTrigger() {
+        OscillManager.runConfigTask(oscillConfig -> {
+            SyncTypeMode.SyncType syncType = oscillConfig.getSyncTypeMode().getSyncType();
+            boolean syncFront = oscillConfig.getChannelSyncMode().hasSyncByFront();
+            boolean syncBack = oscillConfig.getChannelSyncMode().hasSyncByBack();
+            Integer syncLevel = oscillConfig.getChannelSyncLevel().getNativeValue();
+
+            updateTrigger(syncType, syncFront, syncBack, syncLevel);
+        });
+    }
+
+    private void updateTrigger(@NonNull SyncTypeMode.SyncType syncType, boolean syncFront, boolean syncBack, @NonNull Integer syncLevel) {
+        runOnActivity(() -> {
+            ViewUtils.setTextBold(triggerAutoBtn, syncType == SyncTypeMode.SyncType.AUTO);
+            ViewUtils.setTextBold(triggerTimeoutBtn, syncType == SyncTypeMode.SyncType.WAIT_TIMEOUT);
+            ViewUtils.setTextBold(triggerWaitBtn, syncType == SyncTypeMode.SyncType.WAIT);
+            ViewUtils.setTextBold(triggerFreeBtn, syncType == SyncTypeMode.SyncType.FREE);
+
+            ViewUtils.setTextBold(triggerFrontBtn, syncFront);
+            ViewUtils.setTextBold(triggerBackBtn, syncBack);
+
+        });
     }
 
     private void updateVoltByDiv() {
@@ -416,9 +516,11 @@ public class MainActivity extends AppCompatActivity {
 
             oscillConfig.getChannelSyncMode()
                     .setSyncByFront(true)
-                    .setHistFront(false);
+                    .setHistFront(true)
+                    .setSyncByBack(false)
+                    .setHistBack(false);
 
-            oscillConfig.getChannelSyncLevel().setNativeValue(8);
+            oscillConfig.getChannelSyncLevel().setNativeValue(127);
             oscillConfig.getSyncTypeMode().setSyncType(SyncTypeMode.SyncType.AUTO);
 
             // WARN: set last

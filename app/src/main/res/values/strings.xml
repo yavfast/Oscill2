@@ -20,4 +20,11 @@
     <string name="disconnected">disconnected</string>
     <string name="dc">DC</string>
     <string name="auto">A</string>
+    <string name="timeout">T</string>
+    <string name="wait">W</string>
+    <string name="free">F</string>
+    <string name="trigger_front">_/</string>
+    <string name="trigger_back">\\_</string>
+    <string name="up">+</string>
+    <string name="down">-</string>
 </resources>
