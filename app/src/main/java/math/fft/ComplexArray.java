@@ -16,7 +16,7 @@ public final class ComplexArray {
     private final float[] re;
     private final float[] im;
 
-    private float[] amp;
+    private ComplexArray mag_phase;
 
     public ComplexArray(int size) {
         this.size = size;
@@ -42,23 +42,27 @@ public final class ComplexArray {
         return new ComplexArray(re.clone(), im.clone());
     }
 
-    @NonNull
-    public float[] getMagnitude() {
-        if (amp == null) {
-            float[] res = new float[size];
-            for (int idx = 0; idx < size; idx++) {
-                res[idx] = _amp(re[idx], im[idx]);
-            }
-            amp = res;
-        }
-
-        return amp;
-    }
-
     private static final double E1 = 1.0 / Math.E;
 
-    private static float _amp(float re, float im) {
-        return (float) Math.pow(re * re + im * im, E1);
+    @NonNull
+    public ComplexArray getMagnitudePhase() {
+        if (mag_phase == null) {
+            int resSize = size / 2;
+            ComplexArray res = new ComplexArray(resSize);
+            float[] mag = res.re();
+            float[] phase = res.im();
+
+            float _re, _im;
+            for (int idx = 0; idx < resSize; idx++) {
+                _re = re[idx];
+                _im = im[idx];
+                mag[idx] = (float) Math.pow(_re * _re + _im * _im, E1);
+                phase[idx] = (float) Math.atan2(_im, _re);
+            }
+            mag_phase = res;
+        }
+
+        return mag_phase;
     }
 
     @NonNull

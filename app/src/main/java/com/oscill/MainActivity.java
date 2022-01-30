@@ -609,16 +609,22 @@ public class MainActivity extends AppCompatActivity {
 //        float[] vData2 = oscillData.getVoltData2();
 
             ComplexArray fft = oscillData.getFFT();
-            float[] fftData = fft.getMagnitude();
+            ComplexArray fftData = fft.getMagnitudePhase();
             float minV = oscillData.getMinV();
 
             int dataSize = oscillData.getDataSize();
 
             ArrayList<Entry> values = new ArrayList<>(dataSize);
-            ArrayList<Entry> valuesFFT = new ArrayList<>(dataSize);
             for (int idx = 0; idx < dataSize; idx++) {
                 values.add(new Entry(tData[idx], vData[idx]));
-                valuesFFT.add(new Entry(tData[idx], minV + fftData[idx]));
+            }
+
+            int fftDataSize = fftData.length();
+            float[] fftDataMagn = fftData.re();
+
+            ArrayList<Entry> valuesFFT = new ArrayList<>(fftDataSize);
+            for (int idx = 0; idx < fftDataSize; idx++) {
+                valuesFFT.add(new Entry(tData[idx] * 2f, minV + fftDataMagn[idx]));
             }
 
             Executor.runInUIThreadAsync(() -> setData(oscillData, values, valuesFFT));
