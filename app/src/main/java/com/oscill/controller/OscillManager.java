@@ -2,13 +2,13 @@ package com.oscill.controller;
 
 import androidx.annotation.NonNull;
 
+import com.oscill.events.OnOscillConfigChanged;
 import com.oscill.events.OnOscillConnected;
 import com.oscill.events.OnOscillData;
 import com.oscill.events.OnOscillError;
 import com.oscill.types.SuspendValue;
 import com.oscill.utils.executor.EventsController;
 import com.oscill.utils.executor.Executor;
-import com.oscill.utils.executor.ObjRunnable;
 import com.oscill.utils.executor.UnsafeObjRunnable;
 
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -56,6 +56,7 @@ public class OscillManager {
             if (isConnected()) {
                 try {
                     task.run(getOscillConfig());
+                    EventsController.sendEvent(new OnOscillConfigChanged());
                 } catch (Throwable e) {
                     EventsController.sendEvent(new OnOscillError(e));
                 }
@@ -104,7 +105,7 @@ public class OscillManager {
     }
 
     private static void prepareData(@NonNull OscillData oscillData) {
-        Executor.runInBackgroundAsync(() -> {
+        Executor.runInSyncQueue2(() -> {
             oscillData.prepareData();
             EventsController.sendEvent(new OnOscillData(oscillData));
         });

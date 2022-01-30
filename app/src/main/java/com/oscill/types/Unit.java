@@ -2,6 +2,8 @@ package com.oscill.types;
 
 import androidx.annotation.NonNull;
 
+import com.oscill.utils.ValueCache;
+
 import java.text.DecimalFormat;
 
 public class Unit {
@@ -27,7 +29,7 @@ public class Unit {
     @NonNull
     public String format(float value, int precision) {
         if (value == 0f) {
-            return decimalFormat.format(0f) + dimension.getPrefix() + name;
+            return decimalFormatCache.get(0f) + dimension.getPrefix() + name;
         }
 
         Dimension dimension = Dimension.getDimensionForValue(value);
@@ -40,10 +42,12 @@ public class Unit {
         }
 
         Dimension resDim = Dimension.getDimension(this.dimension.getMultiplier() + dimension.getMultiplier());
-        return decimalFormat.format(resValue) + resDim.getPrefix() + name;
+        return decimalFormatCache.get(resValue) + resDim.getPrefix() + name;
     }
 
     private final static DecimalFormat decimalFormat = new DecimalFormat("#.####");
+
+    private final ValueCache<Float, String> decimalFormatCache = new ValueCache<>(decimalFormat::format);
 
     @NonNull
     public String toString() {

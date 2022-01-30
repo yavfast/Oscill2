@@ -11,6 +11,9 @@ import com.oscill.types.Range;
 import com.oscill.utils.DataUtils;
 import com.oscill.utils.Log;
 
+import math.fft.ComplexArray;
+import math.fft.Fourier;
+
 public class OscillData {
 
     private static final String TAG = Log.getTag(OscillData.class);
@@ -36,6 +39,7 @@ public class OscillData {
     private float[] tData;
     private float[] vData;
     private float[] vData2;
+    private ComplexArray fft;
 
     public OscillData(@NonNull OscillConfig config, @NonNull byte[] data) {
         this.data = data;
@@ -155,6 +159,21 @@ public class OscillData {
     void prepareData() {
         getTimeData();
         getVoltData();
+        getFFT();
+    }
+
+    private static final Fourier fourier = new Fourier();
+
+    @NonNull
+    public ComplexArray getFFT() {
+        if (fft == null) {
+            float[] data = getVoltData();
+            synchronized (fourier) {
+                fft = fourier.forwardDFT(new ComplexArray(data));
+//                fft = new ComplexArray(data).naiveForwardDFT();
+            }
+        }
+        return fft;
     }
 
     @NonNull

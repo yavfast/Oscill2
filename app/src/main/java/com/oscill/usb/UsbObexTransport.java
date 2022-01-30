@@ -277,7 +277,7 @@ public class UsbObexTransport implements ObexTransport {
 
         @Override
         public void reset() {
-            dumpBuf();
+//            dumpBuf();
             pos = 0;
             count = 0;
         }

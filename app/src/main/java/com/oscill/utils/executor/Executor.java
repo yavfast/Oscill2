@@ -7,11 +7,11 @@ import android.os.SystemClock;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
+import com.oscill.types.SuspendValue;
 import com.oscill.utils.ClassUtils;
 import com.oscill.utils.ExceptionWrapper;
 import com.oscill.utils.Log;
 import com.oscill.utils.ObjectUtils;
-import com.oscill.types.SuspendValue;
 import com.oscill.utils.executor.runnable.IRunnableOnView;
 import com.oscill.utils.executor.runnable.RunnableOnView;
 
@@ -43,13 +43,13 @@ public class Executor {
         return res;
     });
 
-    private static final SuspendValue<ScheduledThreadPoolExecutor> sBackgroundExecutor = new SuspendValue<>(() -> {
-        // http://www.bigsoft.co.uk/blog/index.php/2009/11/27/rulepush_grouped_texts-of-a-threadpoolexecutor-pool-size
-        final int CPU_COUNT = Runtime.getRuntime().availableProcessors();
-        final int CORE_POOL_SIZE = Math.max(4, Math.min(CPU_COUNT, 4));
-        final int MAXIMUM_POOL_SIZE = CPU_COUNT * 4 + 1;
-        final int KEEP_ALIVE = 60; // timeout for pool threads
+    private static final SuspendValue<ScheduledThreadPoolExecutor> sSyncQueue2Executor = new SuspendValue<>(() -> {
+        ScheduledThreadPoolExecutor res = new ScheduledThreadPoolExecutor(1, r -> new Thread(r, "SyncQueue2Thread"));
+        res.setMaximumPoolSize(1);
+        return res;
+    });
 
+    private static final SuspendValue<ScheduledThreadPoolExecutor> sBackgroundExecutor = new SuspendValue<>(() -> {
         ThreadFactory threadFactory = new ThreadFactory() {
             private final AtomicInteger mCount = new AtomicInteger(1);
 
@@ -58,9 +58,9 @@ public class Executor {
             }
         };
 
-        ScheduledThreadPoolExecutor res = new ScheduledThreadPoolExecutor(CORE_POOL_SIZE, threadFactory);
-        res.setMaximumPoolSize(MAXIMUM_POOL_SIZE);
-        res.setKeepAliveTime(KEEP_ALIVE, TimeUnit.SECONDS);
+        ScheduledThreadPoolExecutor res = new ScheduledThreadPoolExecutor(4, threadFactory);
+        res.setMaximumPoolSize(4);
+        res.setKeepAliveTime(60, TimeUnit.SECONDS);
         res.allowCoreThreadTimeOut(true);
 
         fixAsyncTaskExecutor(res);
@@ -91,6 +91,11 @@ public class Executor {
     @NonNull
     public static ScheduledThreadPoolExecutor getSyncQueueExecutor() {
         return sSyncQueueExecutor.get();
+    }
+
+    @NonNull
+    public static ScheduledThreadPoolExecutor getSyncQueue2Executor() {
+        return sSyncQueue2Executor.get();
     }
 
     @NonNull
@@ -144,8 +149,8 @@ public class Executor {
         getSyncQueueExecutor().schedule(new ExceptionWrapper(runnable), 0L, TimeUnit.MILLISECONDS);
     }
 
-    public static void runInSyncQueue(@NonNull Runnable runnable, long delay) {
-        getSyncQueueExecutor().schedule(new ExceptionWrapper(runnable), delay, TimeUnit.MILLISECONDS);
+    public static void runInSyncQueue2(@NonNull Runnable runnable) {
+        getSyncQueue2Executor().schedule(new ExceptionWrapper(runnable), 0L, TimeUnit.MILLISECONDS);
     }
 
     public static IAsyncTask runInBackground(@NonNull Runnable runnable) {
