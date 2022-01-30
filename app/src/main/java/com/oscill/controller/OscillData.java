@@ -18,7 +18,7 @@ public class OscillData {
 
     private static final String TAG = Log.getTag(OscillData.class);
 
-    private static final int DATA_HEADER_SIZE = 6;
+    private static final int DATA_HEADER_SIZE = 4;
 
     private final byte[] data;
 
@@ -50,7 +50,7 @@ public class OscillData {
      *  2 байта - атрибуты оцифровки (описание развертки и синхронизации)
      * Затем для каждого из каналов:
      *   2 байта - атрибуты канала (формат массива выборок этого канала);
-     *   2 байта - размер массива выборок канала (в байтах);
+     *   2 байта - размер массива выборок канала (в байтах);  TODO: Уже нет этого размера
      *   XX байт - массив выборок канала.
      *
      * Первый байт атрибутов оцифровки
