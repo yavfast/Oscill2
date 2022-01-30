@@ -539,7 +539,7 @@ public class MainActivity extends AppCompatActivity {
             oscillConfig.getSyncTypeMode().setSyncType(SyncTypeMode.SyncType.AUTO);
 
             // WARN: set last
-            oscillConfig.getSamplesCount().setSamplesCount(8, 64);
+            oscillConfig.getSamplesCount().setSamplesCount(8, 128);
             oscillConfig.getSamplingPeriod().setSamplingPeriod(SamplingTime._5_ms);
             oscillConfig.getSamplesOffset().setOffset(0f, Dimension.MILLI);
 
@@ -598,7 +598,7 @@ public class MainActivity extends AppCompatActivity {
         xAxis.setAvoidFirstLastClipping(false);
         xAxis.enableGridDashedLine(2f, 2f, 0f);
         xAxis.setDrawGridLinesBehindData(false);
-        xAxis.setLabelCount(10);
+        xAxis.setLabelCount(8); // TODO: time div count
         xAxis.setValueFormatter(new UnitFormatter(new Unit(Dimension.MILLI, Unit.SECOND)));
     }
 
