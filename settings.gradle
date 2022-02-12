@@ -1,2 +1,5 @@
 rootProject.name='Oscill'
 include ':app'
+
+include ':mpchart'
+project(":mpchart").projectDir = file("external/MPAndroidChart/MPChartLib")

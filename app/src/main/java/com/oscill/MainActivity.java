@@ -29,6 +29,7 @@ import com.oscill.events.OnOscillConfigChanged;
 import com.oscill.events.OnOscillConnected;
 import com.oscill.events.OnOscillData;
 import com.oscill.events.OnOscillError;
+import com.oscill.types.ArrayListEx;
 import com.oscill.types.Dimension;
 import com.oscill.types.Unit;
 import com.oscill.utils.Log;
@@ -503,7 +504,7 @@ public class MainActivity extends AppCompatActivity {
         OscillManager.runConfigTask(oscillConfig -> {
             Oscill oscill = oscillConfig.getOscill();
 
-            oscillConfig.getCpuTickLength().setCPUFreq(60, Dimension.MEGA);
+            oscillConfig.getCpuTickLength().setCPUFreq(70, Dimension.MEGA);
 
             oscillConfig.getProcessingTypeMode()
                     .setProcessingType(ProcessingTypeMode.ProcessingType.REALTIME)
@@ -539,7 +540,9 @@ public class MainActivity extends AppCompatActivity {
             oscillConfig.getSyncTypeMode().setSyncType(SyncTypeMode.SyncType.AUTO);
 
             // WARN: set last
-            oscillConfig.getSamplesCount().setSamplesCount(8, 128);
+            int maxSamplesCount = oscillConfig.getSamplesCount().getRealRange().getUpper();
+            int samplesByDivCount = maxSamplesCount / 10;
+            oscillConfig.getSamplesCount().setSamplesCount(10, samplesByDivCount);
             oscillConfig.getSamplingPeriod().setSamplingPeriod(SamplingTime._5_ms);
             oscillConfig.getSamplesOffset().setOffset(0f, Dimension.MILLI);
 
@@ -598,9 +601,12 @@ public class MainActivity extends AppCompatActivity {
         xAxis.setAvoidFirstLastClipping(false);
         xAxis.enableGridDashedLine(2f, 2f, 0f);
         xAxis.setDrawGridLinesBehindData(false);
-        xAxis.setLabelCount(8); // TODO: time div count
+        xAxis.setLabelCount(10); // TODO: time div count
         xAxis.setValueFormatter(new UnitFormatter(new Unit(Dimension.MILLI, Unit.SECOND)));
     }
+
+    private ArrayListEx<Entry> values = new ArrayListEx<>(0);
+    private ArrayListEx<Entry> valuesFFT = new ArrayListEx<>(0);
 
     private void prepareData(@NonNull OscillData oscillData) {
         Executor.runInSyncQueue2(() -> {
@@ -614,20 +620,42 @@ public class MainActivity extends AppCompatActivity {
 
             int dataSize = oscillData.getDataSize();
 
-            ArrayList<Entry> values = new ArrayList<>(dataSize);
-            for (int idx = 0; idx < dataSize; idx++) {
-                values.add(new Entry(tData[idx], vData[idx]));
+            ArrayListEx<Entry> values = this.values;
+            if (values.size() != dataSize) {
+                values = new ArrayListEx<>(dataSize);
+                for (int idx = 0; idx < dataSize; idx++) {
+                    values.add(new Entry(tData[idx], vData[idx]));
+                }
+                this.values = values;
+            } else {
+                Entry entry;
+                for (int idx = 0; idx < dataSize; idx++) {
+                    entry = values.get(idx);
+                    entry.setX(tData[idx]);
+                    entry.setY(vData[idx]);
+                }
             }
 
             int fftDataSize = fftData.length();
             float[] fftDataMagn = fftData.re();
 
-            ArrayList<Entry> valuesFFT = new ArrayList<>(fftDataSize);
-            for (int idx = 0; idx < fftDataSize; idx++) {
-                valuesFFT.add(new Entry(tData[idx] * 2f, minV + fftDataMagn[idx]));
+            ArrayListEx<Entry> valuesFFT = this.valuesFFT;
+            if (valuesFFT.size() != fftDataSize) {
+                valuesFFT = new ArrayListEx<>(fftDataSize);
+                for (int idx = 0; idx < fftDataSize; idx++) {
+                    valuesFFT.add(new Entry(tData[idx] * 2f, minV + fftDataMagn[idx]));
+                }
+                this.valuesFFT = valuesFFT;
+            } else {
+                Entry entry;
+                for (int idx = 0; idx < fftDataSize; idx++) {
+                    entry = valuesFFT.get(idx);
+                    entry.setX(tData[idx] * 2f);
+                    entry.setY(minV + fftDataMagn[idx]);
+                }
             }
 
-            Executor.runInUIThreadAsync(() -> setData(oscillData, values, valuesFFT));
+            Executor.runInUIThreadAsync(() -> setData(oscillData, this.values, this.valuesFFT));
         });
     }
 
@@ -652,11 +680,11 @@ public class MainActivity extends AppCompatActivity {
         }
 
         LineDataSet triggerDataSet = (LineDataSet) data.getDataSetByIndex(1);
-        triggerDataSet.setValues(triggerData);
+        triggerDataSet.setEntries(triggerData);
         triggerDataSet.notifyDataSetChanged();
     }
 
-    private void setData(@NonNull OscillData oscillData, @NonNull ArrayList<Entry> valuesV, @NonNull ArrayList<Entry> valuesFFT) {
+    private void setData(@NonNull OscillData oscillData, @NonNull List<Entry> valuesV, @NonNull List<Entry> valuesFFT) {
         updateYAxis(chart.getAxisLeft(), oscillData);
         updateYAxis(chart.getAxisRight(), oscillData);
 
@@ -666,14 +694,12 @@ public class MainActivity extends AppCompatActivity {
 
         if (data != null && data.getDataSetCount() > 0) {
             dataSet = (LineDataSet) data.getDataSetByIndex(0);
-            dataSet.setValues(valuesV);
-            dataSet.notifyDataSetChanged();
+            dataSet.setEntries(valuesV);
 
             updateTriggerMarker(data, oscillData);
 
             fftDataSet = (LineDataSet) data.getDataSetByIndex(2);
-            fftDataSet.setValues(valuesFFT);
-            fftDataSet.notifyDataSetChanged();
+            fftDataSet.setEntries(valuesFFT);
 
             data.notifyDataChanged();
 
@@ -686,14 +712,14 @@ public class MainActivity extends AppCompatActivity {
             ArrayList<ILineDataSet> dataSets = new ArrayList<>(8);
 
             dataSet = initDataLine();
-            dataSet.setValues(valuesV);
+            dataSet.setEntries(valuesV);
             dataSets.add(dataSet); // 0
 
             LineDataSet triggerMarker = initTriggerMarker();
             dataSets.add(triggerMarker); // 1
 
             fftDataSet = initFFTLine();
-            fftDataSet.setValues(valuesFFT);
+            fftDataSet.setEntries(valuesFFT);
             dataSets.add(fftDataSet); // 2
 
             data = new LineData(dataSets);
@@ -703,15 +729,15 @@ public class MainActivity extends AppCompatActivity {
 
     static class LineDataSetEx extends LineDataSet {
 
-        public LineDataSetEx(List<Entry> yVals, String label) {
+        LineDataSetEx(List<Entry> yVals, String label) {
             super(yVals, label);
         }
 
         @Override
         public void calcMinMax() {
-            if (mValues != null && !mValues.isEmpty()) {
-                Entry first = mValues.get(0);
-                Entry last = mValues.get(mValues.size() - 1);
+            if (mEntries != null && !mEntries.isEmpty()) {
+                Entry first = mEntries.get(0);
+                Entry last = mEntries.get(mEntries.size() - 1);
                 mXMin = first.getX();
                 mXMax = last.getX();
             }
@@ -728,8 +754,8 @@ public class MainActivity extends AppCompatActivity {
         dataSet.setDrawValues(false);
         dataSet.setDrawFilled(false);
 
-        dataSet.setColor(Color.CYAN);
-        dataSet.setLineWidth(2f);
+        dataSet.setColor(Color.argb(0xFF, 0x00, 0xFF, 0xFF));
+        dataSet.setLineWidth(0.8f);
 
         return dataSet;
     }

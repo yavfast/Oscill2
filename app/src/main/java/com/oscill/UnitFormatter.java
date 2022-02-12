@@ -3,10 +3,10 @@ package com.oscill;
 import androidx.annotation.NonNull;
 
 import com.github.mikephil.charting.components.AxisBase;
-import com.github.mikephil.charting.formatter.ValueFormatter;
+import com.github.mikephil.charting.formatter.IAxisValueFormatter;
 import com.oscill.types.Unit;
 
-class UnitFormatter extends ValueFormatter {
+class UnitFormatter implements IAxisValueFormatter {
 
     protected final Unit unit;
 
@@ -15,7 +15,7 @@ class UnitFormatter extends ValueFormatter {
     }
 
     @Override
-    public String getAxisLabel(float value, AxisBase axis) {
+    public String getFormattedValue(float value, AxisBase axis) {
         return unit.format(value, 1);
     }
 }

@@ -10,8 +10,8 @@ import com.oscill.types.Unit;
 
 public class SamplesCount extends OscillProperty<Integer> {
 
-    private static final int DEF_DIV_COUNT = 10;
-    private static final int DEF_SAMPLES_BY_DIV_COUNT = 30;
+    private static final int DEF_DIV_COUNT = 8;
+    private static final int DEF_SAMPLES_BY_DIV_COUNT = 32;
 
     private final ChannelSWMode channelSWMode;
 
