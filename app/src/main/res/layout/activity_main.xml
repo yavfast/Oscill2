@@ -285,7 +285,6 @@
                 android:layout_width="0dp"
                 android:layout_height="48dp"
                 android:gravity="center"
-                android:textSize="12sp"
                 tools:text="1V"
                 app:layout_constraintStart_toEndOf="@+id/voltUpBtn"
                 app:layout_constraintEnd_toStartOf="@+id/voltDownBtn"
@@ -295,55 +294,6 @@
 
             <androidx.appcompat.widget.AppCompatButton
                 android:id="@+id/voltDownBtn"
-                android:layout_width="40dp"
-                android:layout_height="40dp"
-                android:text="@string/down"
-                app:layout_constraintEnd_toEndOf="parent"
-                app:layout_constraintTop_toTopOf="parent"
-                app:layout_constraintBottom_toBottomOf="parent"
-                />
-        </androidx.constraintlayout.widget.ConstraintLayout>
-
-        <androidx.constraintlayout.widget.ConstraintLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content">
-
-            <androidx.appcompat.widget.AppCompatButton
-                android:id="@+id/voltZeroOffsetBtn"
-                android:layout_width="40dp"
-                android:layout_height="40dp"
-                android:tint="@color/primaryColor"
-                android:text="@string/reset"
-                app:layout_constraintStart_toStartOf="parent"
-                app:layout_constraintTop_toTopOf="parent"
-                app:layout_constraintBottom_toBottomOf="parent"
-                />
-
-            <androidx.appcompat.widget.AppCompatTextView
-                android:id="@+id/voltOffsetText"
-                android:layout_width="0dp"
-                android:layout_height="48dp"
-                android:gravity="center"
-                android:textSize="14sp"
-                android:text="@string/offset"
-                app:layout_constraintStart_toEndOf="@+id/voltZeroOffsetBtn"
-                app:layout_constraintEnd_toStartOf="@+id/voltOffsetUpBtn"
-                app:layout_constraintTop_toTopOf="parent"
-                app:layout_constraintBottom_toBottomOf="parent"
-                />
-
-            <androidx.appcompat.widget.AppCompatButton
-                android:id="@+id/voltOffsetUpBtn"
-                android:layout_width="40dp"
-                android:layout_height="40dp"
-                android:text="@string/up"
-                app:layout_constraintEnd_toStartOf="@+id/voltOffsetDownBtn"
-                app:layout_constraintTop_toTopOf="parent"
-                app:layout_constraintBottom_toBottomOf="parent"
-                />
-
-            <androidx.appcompat.widget.AppCompatButton
-                android:id="@+id/voltOffsetDownBtn"
                 android:layout_width="40dp"
                 android:layout_height="40dp"
                 android:text="@string/down"
@@ -390,7 +340,6 @@
                 android:layout_width="0dp"
                 android:layout_height="48dp"
                 android:gravity="center"
-                android:textSize="12sp"
                 tools:text="1ms"
                 app:layout_constraintStart_toEndOf="@+id/timeUpBtn"
                 app:layout_constraintEnd_toStartOf="@+id/timeDownBtn"
@@ -400,55 +349,6 @@
 
             <androidx.appcompat.widget.AppCompatButton
                 android:id="@+id/timeDownBtn"
-                android:layout_width="40dp"
-                android:layout_height="40dp"
-                android:text="@string/down"
-                app:layout_constraintEnd_toEndOf="parent"
-                app:layout_constraintTop_toTopOf="parent"
-                app:layout_constraintBottom_toBottomOf="parent"
-                />
-        </androidx.constraintlayout.widget.ConstraintLayout>
-
-        <androidx.constraintlayout.widget.ConstraintLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content">
-
-            <androidx.appcompat.widget.AppCompatButton
-                android:id="@+id/timeZeroOffsetBtn"
-                android:layout_width="40dp"
-                android:layout_height="40dp"
-                android:tint="@color/primaryColor"
-                android:text="@string/reset"
-                app:layout_constraintStart_toStartOf="parent"
-                app:layout_constraintTop_toTopOf="parent"
-                app:layout_constraintBottom_toBottomOf="parent"
-                />
-
-            <androidx.appcompat.widget.AppCompatTextView
-                android:id="@+id/timeOffsetText"
-                android:layout_width="0dp"
-                android:layout_height="48dp"
-                android:gravity="center"
-                android:textSize="14sp"
-                android:text="@string/offset"
-                app:layout_constraintStart_toEndOf="@+id/timeZeroOffsetBtn"
-                app:layout_constraintEnd_toStartOf="@+id/timeOffsetUpBtn"
-                app:layout_constraintTop_toTopOf="parent"
-                app:layout_constraintBottom_toBottomOf="parent"
-                />
-
-            <androidx.appcompat.widget.AppCompatButton
-                android:id="@+id/timeOffsetUpBtn"
-                android:layout_width="40dp"
-                android:layout_height="40dp"
-                android:text="@string/up"
-                app:layout_constraintEnd_toStartOf="@+id/timeOffsetDownBtn"
-                app:layout_constraintTop_toTopOf="parent"
-                app:layout_constraintBottom_toBottomOf="parent"
-                />
-
-            <androidx.appcompat.widget.AppCompatButton
-                android:id="@+id/timeOffsetDownBtn"
                 android:layout_width="40dp"
                 android:layout_height="40dp"
                 android:text="@string/down"
