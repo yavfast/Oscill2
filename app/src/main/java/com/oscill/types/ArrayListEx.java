@@ -55,7 +55,7 @@ public class ArrayListEx<E> extends AbstractList<E> {
 
         @Override
         public E get(int index) {
-            return (E) elements[index + offset];
+            return index < size ? (E) elements[index + offset] : null;
         }
 
     }

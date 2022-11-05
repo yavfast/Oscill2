@@ -61,7 +61,7 @@ public class OscillUsbManager {
                             oscill.reset();
 
                             int responseCode = oscill.connect();
-                            Log.i(TAG, "Connect result: " + Integer.toHexString(responseCode));
+                            Log.i(TAG, "Connect result: ", Integer.toHexString(responseCode));
 
                             if (responseCode == ResponseCodes.OBEX_HTTP_OK) {
                                 Log.i(TAG, "Connected");

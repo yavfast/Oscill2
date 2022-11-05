@@ -2,11 +2,14 @@ package com.oscill.controller;
 
 import androidx.annotation.NonNull;
 
+import com.oscill.controller.config.ProcessingTypeMode;
+import com.oscill.controller.settings.OscillSettings;
 import com.oscill.events.OnOscillConfigChanged;
 import com.oscill.events.OnOscillConnected;
 import com.oscill.events.OnOscillData;
 import com.oscill.events.OnOscillError;
 import com.oscill.types.SuspendValue;
+import com.oscill.utils.ConvertUtils;
 import com.oscill.utils.executor.EventsController;
 import com.oscill.utils.executor.Executor;
 import com.oscill.utils.executor.UnsafeObjRunnable;
@@ -48,6 +51,49 @@ public class OscillManager {
                         }).doIfError(e -> EventsController.sendEvent(new OnOscillError(e)))
                 );
             }
+        });
+    }
+
+    public static void loadLastSettings() {
+        Executor.runInSyncQueue(() -> {
+            OscillSettings settings = OscillPrefs.loadLastSettings();
+            if (settings != null) {
+                applySettings(settings);
+            }
+        });
+    }
+
+    public static void applySettings(@NonNull OscillSettings settings) {
+        runConfigTask(oscillConfig -> {
+            oscillConfig.getCpuTickLength().setRealValueStr(settings.cpuTickLength);
+
+            Executor.doIfExists(settings.processingTypeMode, processingTypeMode -> {
+                Executor.doSafe(() -> {
+                    ProcessingTypeMode.ProcessingType processingType = ConvertUtils.getEnumByName(processingTypeMode.processingType,
+                            ProcessingTypeMode.ProcessingType.class, ProcessingTypeMode.ProcessingType.REALTIME);
+                    oscillConfig.getProcessingTypeMode().setProcessingType(processingType);
+                });
+
+                Executor.doSafe(() -> {
+                    ProcessingTypeMode.DataOutputType dataOutputType = ConvertUtils.getEnumByName(processingTypeMode.dataOutputType,
+                            ProcessingTypeMode.DataOutputType.class, ProcessingTypeMode.DataOutputType.POST_PROCESSING);
+                    oscillConfig.getProcessingTypeMode().setDataOutputType(dataOutputType);
+                });
+
+                Executor.doSafe(() -> {
+                    ProcessingTypeMode.BufferType bufferType = ConvertUtils.getEnumByName(processingTypeMode.bufferType,
+                            ProcessingTypeMode.BufferType.class, ProcessingTypeMode.BufferType.SYNC);
+                    oscillConfig.getProcessingTypeMode().setBufferType(bufferType);
+                });
+            });
+
+
+        });
+    }
+
+    public static void saveSettings() {
+        runConfigTask(oscillConfig -> {
+
         });
     }
 

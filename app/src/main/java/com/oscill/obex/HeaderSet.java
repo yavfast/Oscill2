@@ -33,14 +33,9 @@
 
 package com.oscill.obex;
 
-import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.util.Calendar;
-import java.security.SecureRandom;
-import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
@@ -51,7 +46,7 @@ import java.util.Map;
  */
 public final class HeaderSet {
 
-    private Map<Integer,byte[]> headerMap = new LinkedHashMap<>();
+    private final Map<Integer,byte[]> headerMap = new LinkedHashMap<>();
     public int responseCode = -1;
 
     /**

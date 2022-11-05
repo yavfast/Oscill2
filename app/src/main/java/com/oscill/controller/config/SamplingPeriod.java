@@ -10,7 +10,7 @@ import com.oscill.types.Unit;
 
 import static com.oscill.types.Dimension.PICO;
 
-public class SamplingPeriod extends OscillProperty<Long> {
+public class SamplingPeriod extends OscillProperty<Float> {
 
     private final CpuTickLength cpuTickLength;
     private final SamplesCount samplesCount;
@@ -65,13 +65,13 @@ public class SamplingPeriod extends OscillProperty<Long> {
     }
 
     @Override
-    protected Integer realToNative(@NonNull Long realValue) {
-        return Math.round(((float)realValue * 256f / (float)getCpuTickLength().getRealValue()));
+    protected Integer realToNative(@NonNull Float realValue) {
+        return Math.round((realValue * 256f / getCpuTickLength().getRealValue()));
     }
 
     @Override
-    protected Long nativeToReal(@NonNull Integer nativeValue) {
-        return Math.round((double) ((float)nativeValue / 256f * (float)getCpuTickLength().getRealValue()));
+    protected Float nativeToReal(@NonNull Integer nativeValue) {
+        return (float)nativeValue / 256f * (float)getCpuTickLength().getRealValue();
     }
 
     public void setSamplingPeriod(@NonNull SamplingTime samplingTime) throws Exception {
@@ -82,7 +82,7 @@ public class SamplingPeriod extends OscillProperty<Long> {
     }
 
     protected void setSamplingPeriod(float divTime, @NonNull Dimension timeDim) throws Exception {
-        long samplingTime = Math.round(timeDim.toDimension(divTime , PICO) / getSamplesCount().getSamplesByDivCount());
+        float samplingTime = timeDim.toDimension(divTime , PICO).floatValue() / getSamplesCount().getSamplesByDivCount();
         setRealValue(samplingTime);
     }
 

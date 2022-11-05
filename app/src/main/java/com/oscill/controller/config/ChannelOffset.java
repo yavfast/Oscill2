@@ -55,6 +55,6 @@ public class ChannelOffset extends OscillProperty<Float> {
     }
 
     public void setOffset(float value, @NonNull Dimension dimension) throws Exception {
-        setRealValue(dimension.toDimension(value, Dimension.MILLI));
+        setRealValue(dimension.toDimension(value, Dimension.MILLI).floatValue());
     }
 }

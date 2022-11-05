@@ -159,7 +159,7 @@ public class OscillData {
     void prepareData() {
         getTimeData();
         getVoltData();
-        getFFT();
+//        getFFT();
     }
 
     private static final Fourier fourier = new Fourier();

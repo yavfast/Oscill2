@@ -27,6 +27,11 @@ public class Unit {
     }
 
     @NonNull
+    public String getName() {
+        return name;
+    }
+
+    @NonNull
     public String format(float value, int precision) {
         if (value == 0f) {
             return decimalFormatCache.get(0f) + dimension.getPrefix() + name;

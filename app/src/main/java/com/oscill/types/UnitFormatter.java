@@ -1,12 +1,11 @@
-package com.oscill;
+package com.oscill.types;
 
 import androidx.annotation.NonNull;
 
 import com.github.mikephil.charting.components.AxisBase;
 import com.github.mikephil.charting.formatter.IAxisValueFormatter;
-import com.oscill.types.Unit;
 
-class UnitFormatter implements IAxisValueFormatter {
+public class UnitFormatter implements IAxisValueFormatter {
 
     protected final Unit unit;
 

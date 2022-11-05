@@ -71,11 +71,11 @@ public class SamplesOffset extends OscillProperty<Long> {
     }
 
     public void setOffset(float time, @NonNull Dimension dimension) throws Exception {
-        long realValue = (long)dimension.toDimension(time, PICO);
+        long realValue = dimension.toDimension(time, PICO).longValue();
         setRealValue(realValue);
     }
 
     public float getOffset(@NonNull Dimension dimension) {
-        return PICO.toDimension(getRealValue(), dimension);
+        return PICO.toDimension(getRealValue(), dimension).floatValue();
     }
 }

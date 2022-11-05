@@ -76,12 +76,12 @@ public class ChannelSensitivity extends OscillProperty<Float> {
     }
 
     public float getSensitivityStep(@NonNull Dimension timeDim) {
-        return MILLI.toDimension(getRealValue(), timeDim) / STEPS_BY_DIV;
+        return MILLI.toDimension(getRealValue(), timeDim).floatValue() / STEPS_BY_DIV;
     }
 
     @NonNull
     public Range<Float> getSensitivityRange(@NonNull Dimension timeDim) {
-        float vMax = MILLI.toDimension(getRealValue(), timeDim) * DIV_COUNT / 2f;
+        float vMax = MILLI.toDimension(getRealValue(), timeDim).floatValue() * DIV_COUNT / 2f;
         return new Range<>(-vMax, vMax);
     }
 

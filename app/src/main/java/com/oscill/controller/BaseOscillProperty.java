@@ -3,13 +3,16 @@ package com.oscill.controller;
 import androidx.annotation.CallSuper;
 import androidx.annotation.NonNull;
 
+import com.oscill.types.Dimension;
 import com.oscill.types.Range;
 import com.oscill.types.SuspendValue;
 import com.oscill.types.Unit;
+import com.oscill.utils.ConvertUtils;
 import com.oscill.utils.Log;
 import com.oscill.utils.ObjectUtils;
+import com.oscill.utils.StringUtils;
 
-public abstract class BaseOscillProperty<T,V> extends BaseOscillSetting {
+public abstract class BaseOscillProperty<T,V extends Number> extends BaseOscillSetting {
 
     protected BaseOscillProperty(@NonNull Oscill oscill) {
         super(oscill);
@@ -48,6 +51,44 @@ public abstract class BaseOscillProperty<T,V> extends BaseOscillSetting {
     @NonNull
     private V requestRealValue() throws Exception {
         return nativeToReal(getNativeValue());
+    }
+
+    @NonNull
+    public String getRealValueStr() {
+        return getRealValue() + " " + getRealValueUnit().toString();
+    }
+
+    public void setRealValueStr(@NonNull String valueStr) throws Exception {
+        if (StringUtils.isEmpty(valueStr)) {
+            return;
+        }
+
+        String[] parts = valueStr.split(" ");
+        if (parts.length == 2) {
+            V realValue = strToRealValue(parts[0]);
+            Dimension dimension = strToUnitDimension(parts[1]);
+            Dimension realDimension = getRealValueUnit().getDimension();
+            setRealValue(dimension.toDimension(realValue, realDimension));
+            return;
+        }
+
+        Log.w(TAG, "Bad value string: ", valueStr);
+    }
+
+    @NonNull
+    private V strToRealValue(@NonNull String valueStr) {
+        return ConvertUtils.convertStrTo(valueStr, getRealValue().getClass());
+    };
+
+    @NonNull
+    private Dimension strToUnitDimension(@NonNull String str) {
+        Unit unit = getRealValueUnit();
+        String unitName = unit.getName();
+        if (str.endsWith(unitName)) {
+            String dimStr = str.substring(0, str.length() - unitName.length());
+            return Dimension.getDimension(dimStr);
+        }
+        throw new IllegalArgumentException("Bad unit string: " + str);
     }
 
     protected abstract T realToNative(@NonNull V realValue);

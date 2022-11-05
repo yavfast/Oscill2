@@ -27,4 +27,6 @@
     <string name="trigger_back">\\_</string>
     <string name="up">+</string>
     <string name="down">-</string>
+    <string name="reset">0</string>
+    <string name="offset">Offset</string>
 </resources>

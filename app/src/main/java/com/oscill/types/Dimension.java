@@ -2,6 +2,8 @@ package com.oscill.types;
 
 import androidx.annotation.NonNull;
 
+import com.oscill.utils.ConvertUtils;
+
 public enum Dimension {
     TERA("T", +12),
     GIGA("G", +9),
@@ -30,18 +32,40 @@ public enum Dimension {
         return multiplier;
     }
 
-    public float toDimension(float value, @NonNull Dimension target) {
+    @NonNull
+    public <V extends Number> V toDimension(@NonNull Number value, @NonNull Dimension target) {
+        return toDimension(value, target, (Class<? extends V>) value.getClass());
+    }
+
+    @NonNull
+    public <V extends Number> V toDimension(@NonNull Number value, @NonNull Dimension target, @NonNull Class<V> targetClass) {
         if (this == target) {
-            return value;
+            if (value.getClass() == targetClass) {
+                return (V)value;
+            }
+            return ConvertUtils.convertDoubleTo(value.doubleValue(), targetClass);
         }
+
         int resMultiplier = multiplier - target.multiplier;
-        return (float) (value * Math.pow(10, resMultiplier));
+        double res = value.doubleValue() * Math.pow(10, resMultiplier);
+
+        return ConvertUtils.convertDoubleTo(res, targetClass);
     }
 
     @NonNull
     public static Dimension getDimension(int multiplier) {
         for (Dimension dimension : values()) {
             if (multiplier >= dimension.multiplier) {
+                return dimension;
+            }
+        }
+        return PICO;
+    }
+
+    @NonNull
+    public static Dimension getDimension(@NonNull String dimensionStr) {
+        for (Dimension dimension : values()) {
+            if (dimensionStr.equals(dimension.prefix)) {
                 return dimension;
             }
         }

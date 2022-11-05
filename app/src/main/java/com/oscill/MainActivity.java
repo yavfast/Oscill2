@@ -20,8 +20,10 @@ import com.oscill.controller.Oscill;
 import com.oscill.controller.OscillData;
 import com.oscill.controller.OscillManager;
 import com.oscill.controller.config.ChannelHWMode;
+import com.oscill.controller.config.ChannelOffset;
 import com.oscill.controller.config.ChannelSWMode;
 import com.oscill.controller.config.ProcessingTypeMode;
+import com.oscill.controller.config.SamplesOffset;
 import com.oscill.controller.config.SamplingTime;
 import com.oscill.controller.config.Sensitivity;
 import com.oscill.controller.config.SyncTypeMode;
@@ -31,7 +33,9 @@ import com.oscill.events.OnOscillData;
 import com.oscill.events.OnOscillError;
 import com.oscill.types.ArrayListEx;
 import com.oscill.types.Dimension;
+import com.oscill.types.Range;
 import com.oscill.types.Unit;
+import com.oscill.types.UnitFormatter;
 import com.oscill.utils.Log;
 import com.oscill.utils.StringUtils;
 import com.oscill.utils.ViewUtils;
@@ -42,8 +46,6 @@ import com.oscill.utils.executor.Executor;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
-
-import math.fft.ComplexArray;
 
 public class MainActivity extends AppCompatActivity {
 
@@ -80,11 +82,17 @@ public class MainActivity extends AppCompatActivity {
     TextView voltUpBtn;
     TextView voltDownBtn;
     TextView voltDivText;
+    TextView voltZeroOffsetBtn;
+    TextView voltOffsetUpBtn;
+    TextView voltOffsetDownBtn;
 
     TextView timeAutoBtn;
     TextView timeUpBtn;
     TextView timeDownBtn;
     TextView timeDivText;
+    TextView timeZeroOffsetBtn;
+    TextView timeOffsetUpBtn;
+    TextView timeOffsetDownBtn;
 
     private final EventHolder<?> onOscillConnected = EventsController.onReceiveEvent(this, OnOscillConnected.class, event ->
             onOscillConnected()
@@ -202,6 +210,19 @@ public class MainActivity extends AppCompatActivity {
         );
         voltDivText = findViewById(R.id.voltDivText);
 
+        voltZeroOffsetBtn = findViewById(R.id.voltZeroOffsetBtn);
+        voltZeroOffsetBtn.setOnClickListener(v ->
+                doChangeVoltOffset(0)
+        );
+        voltOffsetUpBtn = findViewById(R.id.voltOffsetUpBtn);
+        voltOffsetUpBtn.setOnClickListener(v ->
+                doChangeVoltOffset(+1)
+        );
+        voltOffsetDownBtn = findViewById(R.id.voltOffsetDownBtn);
+        voltOffsetDownBtn.setOnClickListener(v ->
+                doChangeVoltOffset(-1)
+        );
+
         timeAutoBtn = findViewById(R.id.timeAutoBtn);
         timeAutoBtn.setOnClickListener(v ->
             doAutoTimeByDiv()
@@ -216,10 +237,20 @@ public class MainActivity extends AppCompatActivity {
         );
         timeDivText = findViewById(R.id.timeDivText);
 
-        initChart();
-        chart.setOnClickListener(v ->
-                OscillManager.requestNextData()
+        timeZeroOffsetBtn = findViewById(R.id.timeZeroOffsetBtn);
+        timeZeroOffsetBtn.setOnClickListener(v ->
+                doChangeTimeOffset(0)
         );
+        timeOffsetUpBtn = findViewById(R.id.timeOffsetUpBtn);
+        timeOffsetUpBtn.setOnClickListener(v ->
+                doChangeTimeOffset(+1)
+        );
+        timeOffsetDownBtn = findViewById(R.id.timeOffsetDownBtn);
+        timeOffsetDownBtn.setOnClickListener(v ->
+                doChangeTimeOffset(-1)
+        );
+
+        initChart();
 
         EventsController.resumeEvents(onOscillConnected, onOscillConfigChanged, onOscillData, onOscillError);
         connectToDevice();
@@ -288,7 +319,20 @@ public class MainActivity extends AppCompatActivity {
             Sensitivity newSensitivity = curSensitivity.getNext(step);
 
             oscillConfig.getChannelSensitivity().setSensitivity(newSensitivity);
-            oscillConfig.getOscill().calibration();
+
+            updateVoltByDiv();
+        });
+    }
+
+    private void doChangeVoltOffset(int step) {
+        OscillManager.runConfigTask(oscillConfig -> {
+            ChannelOffset channelOffset = oscillConfig.getChannelOffset();
+            if (step == 0) {
+                Range<Integer> range = channelOffset.getNativeRange();
+                channelOffset.setNativeValue((range.getLower() + range.getUpper()) / 2);
+            } else {
+                channelOffset.setNativeValue(channelOffset.getNativeValue() + step * 32);
+            }
 
             updateVoltByDiv();
         });
@@ -304,7 +348,6 @@ public class MainActivity extends AppCompatActivity {
             SamplingTime newSamplingTime = curSamplingTime.getNext(step);
 
             oscillConfig.getSamplingPeriod().setSamplingPeriod(newSamplingTime);
-            oscillConfig.getOscill().calibration();
 
             updateTimeByDiv();
         });
@@ -322,6 +365,17 @@ public class MainActivity extends AppCompatActivity {
                 timeDivText.setText(
                         StringUtils.concat(String.valueOf(samplingTime.getValue()), " ", samplingTime.getDimension().getPrefix(), "s"))
         );
+    }
+
+    private void doChangeTimeOffset(int step) {
+        OscillManager.runConfigTask(oscillConfig -> {
+            SamplesOffset samplesOffset = oscillConfig.getSamplesOffset();
+            if (step == 0) {
+                samplesOffset.setNativeValue(0);
+            } else {
+                samplesOffset.setNativeValue(samplesOffset.getNativeValue() + step * oscillConfig.getSamplesCount().getSamplesByDivCount());
+            }
+        });
     }
 
     private void updateTrigger() {
@@ -541,7 +595,7 @@ public class MainActivity extends AppCompatActivity {
 
             // WARN: set last
             int maxSamplesCount = oscillConfig.getSamplesCount().getRealRange().getUpper();
-            int samplesByDivCount = maxSamplesCount / 10;
+            int samplesByDivCount = Math.min(maxSamplesCount / 10, 64);
             oscillConfig.getSamplesCount().setSamplesCount(10, samplesByDivCount);
             oscillConfig.getSamplingPeriod().setSamplingPeriod(SamplingTime._5_ms);
             oscillConfig.getSamplesOffset().setOffset(0f, Dimension.MILLI);
@@ -573,8 +627,10 @@ public class MainActivity extends AppCompatActivity {
         chart.setDrawGridBackground(false);
         chart.setTouchEnabled(true);
         chart.setDragEnabled(true);
-        chart.setScaleEnabled(true);
-        chart.setPinchZoom(true);
+        chart.setScaleEnabled(false);
+        chart.setPinchZoom(false);
+        chart.setHighlightPerDragEnabled(false);
+        chart.setHighlightPerTapEnabled(false);
 
         initXAxis(chart.getXAxis());
 
@@ -614,8 +670,10 @@ public class MainActivity extends AppCompatActivity {
             float[] vData = oscillData.getVoltData();
 //        float[] vData2 = oscillData.getVoltData2();
 
+/*
             ComplexArray fft = oscillData.getFFT();
             ComplexArray fftData = fft.getMagnitudePhase();
+*/
             float minV = oscillData.getMinV();
 
             int dataSize = oscillData.getDataSize();
@@ -636,6 +694,7 @@ public class MainActivity extends AppCompatActivity {
                 }
             }
 
+/*
             int fftDataSize = fftData.length();
             float[] fftDataMagn = fftData.re();
 
@@ -654,6 +713,7 @@ public class MainActivity extends AppCompatActivity {
                     entry.setY(minV + fftDataMagn[idx]);
                 }
             }
+*/
 
             Executor.runInUIThreadAsync(() -> setData(oscillData, this.values, this.valuesFFT));
         });
@@ -676,7 +736,7 @@ public class MainActivity extends AppCompatActivity {
         List<Entry> triggerData = new ArrayList<>(8);
         if (timeData.length > 10) {
             triggerData.add(new Entry(timeData[0], triggerV));
-            triggerData.add(new Entry(timeData[10], triggerV));
+            triggerData.add(new Entry(timeData[timeData.length - 1], triggerV));
         }
 
         LineDataSet triggerDataSet = (LineDataSet) data.getDataSetByIndex(1);
@@ -698,8 +758,8 @@ public class MainActivity extends AppCompatActivity {
 
             updateTriggerMarker(data, oscillData);
 
-            fftDataSet = (LineDataSet) data.getDataSetByIndex(2);
-            fftDataSet.setEntries(valuesFFT);
+//            fftDataSet = (LineDataSet) data.getDataSetByIndex(2);
+//            fftDataSet.setEntries(valuesFFT);
 
             data.notifyDataChanged();
 
@@ -718,9 +778,9 @@ public class MainActivity extends AppCompatActivity {
             LineDataSet triggerMarker = initTriggerMarker();
             dataSets.add(triggerMarker); // 1
 
-            fftDataSet = initFFTLine();
-            fftDataSet.setEntries(valuesFFT);
-            dataSets.add(fftDataSet); // 2
+//            fftDataSet = initFFTLine();
+//            fftDataSet.setEntries(valuesFFT);
+//            dataSets.add(fftDataSet); // 2
 
             data = new LineData(dataSets);
             chart.setData(data);
@@ -770,7 +830,7 @@ public class MainActivity extends AppCompatActivity {
         dataSet.setDrawFilled(false);
 
         dataSet.setColor(Color.GREEN);
-        dataSet.setLineWidth(3f);
+        dataSet.setLineWidth(1f);
 
         return dataSet;
     }
