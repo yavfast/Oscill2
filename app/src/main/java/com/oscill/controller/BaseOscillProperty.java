@@ -146,6 +146,9 @@ public abstract class BaseOscillProperty<T,V extends Number> extends BaseOscillS
         boolean hasValue = this.nativeValue.hasValue();
         if (!hasValue || !ObjectUtils.equals(this.nativeValue.get(), value)) {
             T nativeValue = applyNativeValue(value);
+            if (!ObjectUtils.equals(nativeValue, value)) {
+                Log.e(TAG, "setNativeValue fail: ", value, " -> ", nativeValue);
+            }
             this.nativeValue.set(nativeValue);
             onNativeValueChanged(nativeValue);
         }

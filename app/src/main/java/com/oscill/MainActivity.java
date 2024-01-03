@@ -546,6 +546,10 @@ public class MainActivity extends AppCompatActivity {
         });
     }
 
+    private void resetDevice() {
+        OscillManager.reset();
+    }
+
     private void connectToDevice() {
         if (OscillManager.isConnected()) {
             OscillManager.requestNextData();
@@ -600,7 +604,7 @@ public class MainActivity extends AppCompatActivity {
             oscillConfig.getSamplingPeriod().setSamplingPeriod(SamplingTime._5_ms);
             oscillConfig.getSamplesOffset().setOffset(0f, Dimension.MILLI);
 
-            oscill.calibration();
+//            oscill.calibration();
 
             OscillManager.start();
 
@@ -611,6 +615,8 @@ public class MainActivity extends AppCompatActivity {
     private void onOscillError(@NonNull Throwable e) {
         Log.e(TAG, e);
         ViewUtils.showToast(e.getMessage());
+
+        resetDevice();
         updateActivityButtons();
     }
 

@@ -39,6 +39,8 @@ import android.os.SystemClock;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
+import com.oscill.utils.Log;
+
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -302,6 +304,9 @@ public final class ClientSession implements ObexSession {
         InputStream input = getInput();
         try {
             headerSet.responseCode = read(input);
+            if (headerSet.responseCode < 0) {
+                return;
+            }
 
             /* len_hi | len_lo */
             byte[] header = read(input, 2);
@@ -383,7 +388,8 @@ public final class ClientSession implements ObexSession {
     public void sendRequest(int opCode, @Nullable byte[] head, @NonNull HeaderSet header, int responseTimeout) throws IOException {
         sendRequest(opCode, head);
 
-        if (responseTimeout > 0L) {
+        if (responseTimeout > 0) {
+            Log.i(TAG, "responseTimeout: ", responseTimeout);
             SystemClock.sleep(responseTimeout);
         }
 

@@ -118,11 +118,16 @@ public class BaseOscillController {
 
     @NonNull
     public byte[] setRegistry(@NonNull String registry, int propertyType, @NonNull byte[] data) throws IOException {
+        return setRegistry(registry, propertyType, data, 0);
+    }
+
+    @NonNull
+    public byte[] setRegistry(@NonNull String registry, int propertyType, @NonNull byte[] data, int beforeResponseDelay) throws IOException {
         HeaderSet headerSet = new HeaderSet();
         headerSet.setHeader(Header.OSCILL_REGISTRY, registry.getBytes());
         headerSet.setHeader(propertyType, data);
 
-        return execute(ClientOperation.OperationType.GET, headerSet, propertyType, 0);
+        return execute(ClientOperation.OperationType.GET, headerSet, propertyType, beforeResponseDelay);
     }
 
     @NonNull

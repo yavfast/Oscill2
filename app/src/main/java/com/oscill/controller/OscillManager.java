@@ -54,6 +54,15 @@ public class OscillManager {
         });
     }
 
+    public static void reset() {
+        pause();
+
+        Executor.runInSyncQueue(() -> {
+            oscillConfig.reset(OscillConfig::release);
+            init();
+        });
+    }
+
     public static void loadLastSettings() {
         Executor.runInSyncQueue(() -> {
             OscillSettings settings = OscillPrefs.loadLastSettings();

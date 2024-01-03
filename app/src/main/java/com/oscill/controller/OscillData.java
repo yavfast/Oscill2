@@ -89,7 +89,7 @@ public class OscillData {
         this.vStep = channelSensitivity.getSensitivityStep(Dimension.MILLI);
 
         this.vOffset = config.getChannelOffset().getRealValue();
-        this.vTrigger = config.getChannelSyncLevel().getRealValue();
+        this.vTrigger = config.getChannelSyncLevel().getRealValue() + this.vOffset;
 
         Range<Float> vRange = channelSensitivity.getSensitivityRange(Dimension.MILLI);
         this.vMax = vRange.getUpper() + vOffset;

@@ -40,4 +40,11 @@ public abstract class BaseOscillSetting {
 
     protected abstract void onReset();
 
+    public void release() {
+        try {
+            oscill.disconnect();
+        } catch (Throwable e) {
+            Log.e(TAG, e);
+        }
+    }
 }

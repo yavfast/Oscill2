@@ -608,10 +608,17 @@ public class ViewUtils {
         return (getSystemUiVisibility(activity) != 0);
     }
 
+    private static String lastToastMessage = null;
+
     public static void showToast(@Nullable String message, int duration) {
         if (StringUtils.isNotEmpty(message)) {
             Log.i("Toast", message);
-            Executor.runInUIThread(() -> Toast.makeText(AppContextWrapper.getAppContext(), message, duration).show());
+            Executor.runInUIThread(() -> {
+                if (!StringUtils.equals(lastToastMessage, message)) {
+                    lastToastMessage = message;
+                    Toast.makeText(AppContextWrapper.getAppContext(), message, duration).show();
+                }
+            });
         }
     }
 
