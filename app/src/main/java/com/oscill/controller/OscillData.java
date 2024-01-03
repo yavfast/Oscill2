@@ -41,6 +41,10 @@ public class OscillData {
     private float[] vData2;
     private ComplexArray fft;
 
+    private float vDataMin;
+    private float vDataMax;
+    private float vDataAvg;
+
     public OscillData(@NonNull OscillConfig config, @NonNull byte[] data) {
         this.data = data;
         prepareDataInfo(config);
@@ -159,6 +163,9 @@ public class OscillData {
     void prepareData() {
         getTimeData();
         getVoltData();
+
+        prepareAdvVoltData();
+
 //        getFFT();
     }
 
@@ -203,6 +210,31 @@ public class OscillData {
         return vData2;
     }
 
+    private void prepareAdvVoltData() {
+        if (vData == null || vData.length == 0) {
+            return;
+        }
+
+        float vDataMin = Float.MAX_VALUE;
+        float vDataMax = Float.MIN_VALUE;
+        float vDataSum = 0f;
+
+        for (int i = 0, vDataLength = this.vData.length; i < vDataLength; i++) {
+            float vValue = vData[i];
+
+            vDataSum += vValue;
+
+            if (vValue > vDataMax) {
+                vDataMax = vValue;
+            } else if (vValue < vDataMin) {
+                vDataMin = vValue;
+            }
+        }
+
+        this.vDataMax = vDataMax;
+        this.vDataMin = vDataMin;
+        this.vDataAvg = vDataSum / vData.length;
+    }
 
     @NonNull
     private float[] prepareSimpleData() {
@@ -273,5 +305,17 @@ public class OscillData {
 
     public float getTriggerV() {
         return vTrigger;
+    }
+
+    public float getVDataMin() {
+        return vDataMin;
+    }
+
+    public float getVDataMax() {
+        return vDataMax;
+    }
+
+    public float getVDataAvg() {
+        return vDataAvg;
     }
 }

@@ -11,12 +11,73 @@
         android:id="@+id/chart"
         android:paddingTop="4dp"
         android:layout_width="0dp"
-        android:layout_height="match_parent"
+        android:layout_height="0dp"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toStartOf="@id/settingsLayout"
+        app:layout_constraintBottom_toTopOf="@id/info"
+        app:layout_constraintTop_toTopOf="parent"
+        />
+
+    <LinearLayout
+        android:id="@+id/info"
+        android:layout_width="0dp"
+        android:layout_height="24dp"
+        android:paddingStart="8dp"
+        android:paddingEnd="8dp"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toStartOf="@id/settingsLayout"
         app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintTop_toTopOf="parent"
-        />
+        app:layout_constraintTop_toBottomOf="@id/chart"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        >
+
+        <androidx.appcompat.widget.AppCompatTextView
+            android:layout_width="44dp"
+            android:layout_height="wrap_content"
+            android:textStyle="bold"
+            android:text="Vmin="
+            />
+
+        <androidx.appcompat.widget.AppCompatTextView
+            android:id="@+id/vMinText"
+            android:layout_width="62dp"
+            android:layout_height="wrap_content"
+            android:maxLines="1"
+            tools:text="2.45 V"
+            />
+
+        <androidx.appcompat.widget.AppCompatTextView
+            android:layout_width="44dp"
+            android:layout_height="wrap_content"
+            android:textStyle="bold"
+            android:text="Vmax="
+            />
+
+        <androidx.appcompat.widget.AppCompatTextView
+            android:id="@+id/vMaxText"
+            android:layout_width="62dp"
+            android:layout_height="wrap_content"
+            android:maxLines="1"
+            tools:text="2.45 V"
+            />
+
+        <androidx.appcompat.widget.AppCompatTextView
+            android:layout_width="44dp"
+            android:layout_height="wrap_content"
+            android:textStyle="bold"
+            android:text="Vavg="
+            />
+
+        <androidx.appcompat.widget.AppCompatTextView
+            android:id="@+id/vAvgText"
+            android:layout_width="62dp"
+            android:layout_height="wrap_content"
+            android:maxLines="1"
+            tools:text="2.45 V"
+            />
+
+    </LinearLayout>
 
     <LinearLayout
         android:id="@+id/settingsLayout"

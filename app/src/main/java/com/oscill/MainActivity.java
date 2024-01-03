@@ -94,6 +94,10 @@ public class MainActivity extends AppCompatActivity {
     TextView timeOffsetUpBtn;
     TextView timeOffsetDownBtn;
 
+    TextView vMinText;
+    TextView vMaxText;
+    TextView vAvgText;
+
     private final EventHolder<?> onOscillConnected = EventsController.onReceiveEvent(this, OnOscillConnected.class, event ->
             onOscillConnected()
     );
@@ -249,6 +253,10 @@ public class MainActivity extends AppCompatActivity {
         timeOffsetDownBtn.setOnClickListener(v ->
                 doChangeTimeOffset(-1)
         );
+
+        vMinText = findViewById(R.id.vMinText);
+        vMaxText = findViewById(R.id.vMaxText);
+        vAvgText = findViewById(R.id.vAvgText);
 
         initChart();
 
@@ -751,6 +759,8 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void setData(@NonNull OscillData oscillData, @NonNull List<Entry> valuesV, @NonNull List<Entry> valuesFFT) {
+        updateDataInfo(oscillData);
+
         updateYAxis(chart.getAxisLeft(), oscillData);
         updateYAxis(chart.getAxisRight(), oscillData);
 
@@ -791,6 +801,14 @@ public class MainActivity extends AppCompatActivity {
             data = new LineData(dataSets);
             chart.setData(data);
         }
+    }
+
+    final Unit voltUnit = new Unit(Dimension.MILLI, Unit.VOLT);
+
+    private void updateDataInfo(@NonNull OscillData oscillData) {
+        ViewUtils.setText(vMinText, voltUnit.format(oscillData.getVDataMin(), 0));
+        ViewUtils.setText(vMaxText, voltUnit.format(oscillData.getVDataMax(), 0));
+        ViewUtils.setText(vAvgText, voltUnit.format(oscillData.getVDataAvg(), 0));
     }
 
     static class LineDataSetEx extends LineDataSet {
