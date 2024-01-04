@@ -570,7 +570,7 @@ public class MainActivity extends AppCompatActivity {
         OscillManager.runConfigTask(oscillConfig -> {
             Oscill oscill = oscillConfig.getOscill();
 
-            oscillConfig.getCpuTickLength().setCPUFreq(70, Dimension.MEGA);
+            oscillConfig.getCpuTickLength().setCPUFreq(40, Dimension.MEGA);
 
             oscillConfig.getProcessingTypeMode()
                     .setProcessingType(ProcessingTypeMode.ProcessingType.REALTIME)
@@ -612,7 +612,7 @@ public class MainActivity extends AppCompatActivity {
             oscillConfig.getSamplingPeriod().setSamplingPeriod(SamplingTime._5_ms);
             oscillConfig.getSamplesOffset().setOffset(0f, Dimension.MILLI);
 
-//            oscill.calibration();
+            oscill.calibration();
 
             OscillManager.start();
 

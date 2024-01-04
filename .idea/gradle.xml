@@ -4,17 +4,16 @@
   <component name="GradleSettings">
     <option name="linkedExternalProjectsSettings">
       <GradleProjectSettings>
-        <option name="testRunner" value="PLATFORM" />
-        <option name="distributionType" value="DEFAULT_WRAPPED" />
         <option name="externalProjectPath" value="$PROJECT_DIR$" />
+        <option name="gradleJvm" value="#GRADLE_LOCAL_JAVA_HOME" />
         <option name="modules">
           <set>
-            <option value="$PROJECT_DIR$" />
-            <option value="$PROJECT_DIR$/app" />
-            <option value="$PROJECT_DIR$/external/MPAndroidChart/MPChartLib" />
+            <option value="/run/media/yavfast/DATA/Projects/Oscill2" />
+            <option value="/run/media/yavfast/DATA/Projects/Oscill2/app" />
+            <option value="/run/media/yavfast/DATA/Projects/Oscill2/external/MPAndroidChart/MPChartLib" />
           </set>
         </option>
-        <option name="resolveModulePerSourceSet" value="false" />
+        <option name="resolveExternalAnnotations" value="false" />
       </GradleProjectSettings>
     </option>
   </component>

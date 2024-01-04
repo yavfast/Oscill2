@@ -90,7 +90,7 @@ public class OscillData {
         this.tOffset = config.getSamplesOffset().getOffset(Dimension.MILLI);
 
         ChannelSensitivity channelSensitivity = config.getChannelSensitivity();
-        this.vStep = channelSensitivity.getSensitivityStep(Dimension.MILLI);
+//        this.vStep = channelSensitivity.getSensitivityStep(Dimension.MILLI);
 
         this.vOffset = config.getChannelOffset().getRealValue();
         this.vTrigger = config.getChannelSyncLevel().getRealValue() + this.vOffset;
@@ -98,6 +98,10 @@ public class OscillData {
         Range<Float> vRange = channelSensitivity.getSensitivityRange(Dimension.MILLI);
         this.vMax = vRange.getUpper() + vOffset;
         this.vMin = vRange.getLower() + vOffset;
+
+        float vRealRange = this.vMax - this.vMin;
+        int vRes = (getSwMode() == ChannelSWMode.SWMode.AVG_HIRES) ? 0xffff : 0xff;
+        this.vStep = vRealRange / vRes;
     }
 
     @NonNull
@@ -211,35 +215,40 @@ public class OscillData {
     }
 
     private void prepareAdvVoltData() {
-        if (vData == null || vData.length == 0) {
+        int[] iData = this.iData;
+        if (iData == null || iData.length == 0) {
             return;
         }
 
-        float vDataMin = Float.MAX_VALUE;
-        float vDataMax = Float.MIN_VALUE;
-        float vDataSum = 0f;
+        int iDataMin = Integer.MAX_VALUE;
+        int iDataMax = Integer.MIN_VALUE;
+        int iDataSum = 0;
 
-        for (int i = 0, vDataLength = this.vData.length; i < vDataLength; i++) {
-            float vValue = vData[i];
+        for (int i = 0, iDataLength = iData.length; i < iDataLength; i++) {
+            int iValue = iData[i];
 
-            vDataSum += vValue;
+            iDataSum += iValue;
 
-            if (vValue > vDataMax) {
-                vDataMax = vValue;
-            } else if (vValue < vDataMin) {
-                vDataMin = vValue;
+            if (iValue > iDataMax) {
+                iDataMax = iValue;
+            } else if (iValue < iDataMin) {
+                iDataMin = iValue;
             }
         }
 
-        this.vDataMax = vDataMax;
-        this.vDataMin = vDataMin;
-        this.vDataAvg = vDataSum / vData.length;
+        this.vDataMax = toVData(iDataMax);
+        this.vDataMin = toVData(iDataMin);
+        this.vDataAvg = toVData(iDataSum / iData.length);
+    }
+
+    private float toVData(int iData) {
+        return vMin + iData * vStep;
     }
 
     @NonNull
     private float[] prepareSimpleData() {
         int[] data = getIntData();
-        float vStep = Math.abs(getMaxV() - getMinV()) / (float) 0xff;
+        float vStep = getVStep();
         float vMin = getMinV();
 
         int dataSize = getDataSize();
@@ -257,7 +266,7 @@ public class OscillData {
     @NonNull
     private float[] prepareAvgHiResData() {
         int[] data = getIntData();
-        float vStep = Math.abs(getMaxV() - getMinV()) / (float) 0xffff;
+        float vStep = getVStep();
         float vMin = getMinV();
 
         int dataSize = getDataSize();
@@ -279,7 +288,7 @@ public class OscillData {
         float[] vDataMax = new float[dataSize];
 
         int[] data = getIntData();
-        float vStep = Math.abs(getMaxV() - getMinV()) / (float) 0xff;
+        float vStep = getVStep();
         float vMin = getMinV();
 
         int idx = 0;
@@ -301,6 +310,10 @@ public class OscillData {
 
     public float getMinV() {
         return vMin;
+    }
+
+    public float getVStep() {
+        return vStep;
     }
 
     public float getTriggerV() {
