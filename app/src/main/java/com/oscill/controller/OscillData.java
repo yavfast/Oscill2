@@ -8,8 +8,11 @@ import com.oscill.controller.config.ChannelSensitivity;
 import com.oscill.types.BitSet;
 import com.oscill.types.Dimension;
 import com.oscill.types.Range;
+import com.oscill.utils.ArrayUtils;
 import com.oscill.utils.DataUtils;
 import com.oscill.utils.Log;
+
+import java.util.ArrayList;
 
 import math.fft.ComplexArray;
 import math.fft.Fourier;
@@ -48,6 +51,8 @@ public class OscillData {
     private float vDataMin;
     private float vDataMax;
     private float vDataAvg;
+
+    private float tDataFreq;
 
     public OscillData(@NonNull OscillConfig config, @NonNull byte[] data) {
         this.data = data;
@@ -173,6 +178,7 @@ public class OscillData {
         getVoltData();
 
         prepareAdvVoltData();
+        calcFreq();
 
 //        getFFT();
     }
@@ -251,6 +257,68 @@ public class OscillData {
 
     private float toVData(int iData) {
         return vMin + iData * vStep;
+    }
+
+    private void calcFreq() {
+        this.tDataFreq = 0f;
+
+        int[] iData = this.iData;
+        if (iData == null || iData.length == 0) {
+            return;
+        }
+
+        int iDataAvg = this.iDataAvg;
+        ArrayList<Integer> posSegments = new ArrayList<>(32);
+        ArrayList<Integer> negSegments = new ArrayList<>(32);
+
+        boolean currSegmentSign = true;
+        int currSegmentLen = 0;
+
+        for (int i = 0, iDataLength = iData.length; i < iDataLength; i++) {
+            int iValue = iData[i];
+
+            boolean sign = iValue - iDataAvg > 0;
+            if (currSegmentSign == sign) {
+                currSegmentLen++;
+            } else {
+                if (currSegmentLen > 0) {
+                    ArrayList<Integer> currSegments = currSegmentSign ? posSegments : negSegments;
+                    currSegments.add(currSegmentLen);
+                }
+
+                currSegmentSign = sign;
+                currSegmentLen = 0;
+            }
+        }
+
+        if (ArrayUtils.isNotEmpty(posSegments) && ArrayUtils.isNotEmpty(negSegments)) {
+            int segmentsCount = posSegments.size() + negSegments.size();
+            int avgSegment = iData.length / segmentsCount;
+
+            posSegments = ArrayUtils.filteredArray(posSegments, item -> item >= avgSegment);
+            negSegments = ArrayUtils.filteredArray(negSegments, item -> item >= avgSegment);
+            if (segmentsCount < 3) {
+                return;
+            }
+
+            int avgPosSegment = calcAvg(posSegments, avgSegment);
+            int avgNegSegment = calcAvg(negSegments, avgSegment);
+            float tPeriod = (avgPosSegment + avgNegSegment) * this.tStep;
+            this.tDataFreq = 1000f / tPeriod;
+        }
+    }
+
+    private static int calcAvg(@NonNull ArrayList<Integer> arrayList, int defValue) {
+        int arrayListSize = arrayList.size();
+        if (arrayListSize == 0) {
+            return defValue;
+        }
+
+        int sum = 0;
+        for (int i = 0; i < arrayListSize; i++) {
+            sum += arrayList.get(i);
+        }
+        return sum / arrayListSize;
     }
 
     @NonNull
@@ -338,5 +406,9 @@ public class OscillData {
 
     public float getVDataAvg() {
         return vDataAvg;
+    }
+
+    public float getDataFreq() {
+        return tDataFreq;
     }
 }

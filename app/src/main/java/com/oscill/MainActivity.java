@@ -97,6 +97,7 @@ public class MainActivity extends AppCompatActivity {
     TextView vMinText;
     TextView vMaxText;
     TextView vAvgText;
+    TextView freqText;
 
     private final EventHolder<?> onOscillConnected = EventsController.onReceiveEvent(this, OnOscillConnected.class, event ->
             onOscillConnected()
@@ -257,6 +258,7 @@ public class MainActivity extends AppCompatActivity {
         vMinText = findViewById(R.id.vMinText);
         vMaxText = findViewById(R.id.vMaxText);
         vAvgText = findViewById(R.id.vAvgText);
+        freqText = findViewById(R.id.freqText);
 
         initChart();
 
@@ -806,11 +808,13 @@ public class MainActivity extends AppCompatActivity {
     }
 
     final Unit voltUnit = new Unit(Dimension.MILLI, Unit.VOLT);
+    final Unit freqUnit = new Unit(Dimension.NORMAL, Unit.HERZ);
 
     private void updateDataInfo(@NonNull OscillData oscillData) {
         ViewUtils.setText(vMinText, voltUnit.format(oscillData.getVDataMin(), 0));
         ViewUtils.setText(vMaxText, voltUnit.format(oscillData.getVDataMax(), 0));
         ViewUtils.setText(vAvgText, voltUnit.format(oscillData.getVDataAvg(), 0));
+        ViewUtils.setText(freqText, freqUnit.format(oscillData.getDataFreq(), 0));
     }
 
     static class LineDataSetEx extends LineDataSet {
