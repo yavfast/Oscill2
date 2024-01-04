@@ -41,6 +41,10 @@ public class OscillData {
     private float[] vData2;
     private ComplexArray fft;
 
+    private int iDataMin;
+    private int iDataMax;
+    private int iDataAvg;
+
     private float vDataMin;
     private float vDataMax;
     private float vDataAvg;
@@ -236,9 +240,13 @@ public class OscillData {
             }
         }
 
+        this.iDataMin = iDataMin;
+        this.iDataMax = iDataMax;
+        this.iDataAvg = iDataSum / iData.length;
+
         this.vDataMax = toVData(iDataMax);
         this.vDataMin = toVData(iDataMin);
-        this.vDataAvg = toVData(iDataSum / iData.length);
+        this.vDataAvg = toVData(this.iDataAvg);
     }
 
     private float toVData(int iData) {

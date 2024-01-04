@@ -555,7 +555,9 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void resetDevice() {
-        OscillManager.reset();
+        if (OscillManager.isConnected()) {
+            OscillManager.reset();
+        }
     }
 
     private void connectToDevice() {
