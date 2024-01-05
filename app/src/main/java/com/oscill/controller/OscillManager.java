@@ -12,8 +12,10 @@ import com.oscill.types.SuspendValue;
 import com.oscill.utils.ConvertUtils;
 import com.oscill.utils.executor.EventsController;
 import com.oscill.utils.executor.Executor;
+import com.oscill.utils.executor.OnResult;
 import com.oscill.utils.executor.UnsafeObjRunnable;
 
+import java.io.IOException;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 public class OscillManager {
@@ -115,6 +117,16 @@ public class OscillManager {
                 } catch (Throwable e) {
                     EventsController.sendEvent(new OnOscillError(e));
                 }
+            }
+        });
+    }
+
+    public static void requestNextData(@NonNull OnResult<OscillData> onResult) {
+        Executor.runInSyncQueue(() -> {
+            if (isConnected()) {
+                getOscillConfig().requestData(onResult);
+            } else {
+                onResult.error(new IOException("No connection"));
             }
         });
     }

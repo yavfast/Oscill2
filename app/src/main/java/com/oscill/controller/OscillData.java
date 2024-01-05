@@ -53,6 +53,7 @@ public class OscillData {
     private float vDataAvg;
 
     private float tDataFreq;
+    private int tDataSegmentsCount;
 
     public OscillData(@NonNull OscillConfig config, @NonNull byte[] data) {
         this.data = data;
@@ -173,7 +174,7 @@ public class OscillData {
         return tData;
     }
 
-    void prepareData() {
+    public void prepareData() {
         getTimeData();
         getVoltData();
 
@@ -292,26 +293,28 @@ public class OscillData {
         }
 
         if (ArrayUtils.isNotEmpty(posSegments) && ArrayUtils.isNotEmpty(negSegments)) {
-            int segmentsCount = posSegments.size() + negSegments.size();
-            int avgSegment = iData.length / segmentsCount;
+            int avgSegment = (calcAvg(posSegments) + calcAvg(negSegments)) / 2;
 
+            // Remove short segments
             posSegments = ArrayUtils.filteredArray(posSegments, item -> item >= avgSegment);
             negSegments = ArrayUtils.filteredArray(negSegments, item -> item >= avgSegment);
+
+            int segmentsCount = posSegments.size() + negSegments.size();
+            this.tDataSegmentsCount = segmentsCount;
+
             if (segmentsCount < 3) {
                 return;
             }
 
-            int avgPosSegment = calcAvg(posSegments, avgSegment);
-            int avgNegSegment = calcAvg(negSegments, avgSegment);
-            float tPeriod = (avgPosSegment + avgNegSegment) * this.tStep;
+            float tPeriod = (calcAvg(posSegments) + calcAvg(negSegments)) * this.tStep;
             this.tDataFreq = 1000f / tPeriod;
         }
     }
 
-    private static int calcAvg(@NonNull ArrayList<Integer> arrayList, int defValue) {
+    private static int calcAvg(@NonNull ArrayList<Integer> arrayList) {
         int arrayListSize = arrayList.size();
         if (arrayListSize == 0) {
-            return defValue;
+            return 0;
         }
 
         int sum = 0;
@@ -410,5 +413,9 @@ public class OscillData {
 
     public float getDataFreq() {
         return tDataFreq;
+    }
+
+    public int getDataSegmentsCount() {
+        return tDataSegmentsCount;
     }
 }

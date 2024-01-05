@@ -42,6 +42,7 @@ import com.oscill.utils.ViewUtils;
 import com.oscill.utils.executor.EventHolder;
 import com.oscill.utils.executor.EventsController;
 import com.oscill.utils.executor.Executor;
+import com.oscill.utils.executor.OnResult;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -320,7 +321,22 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void doAutoVoltByDiv() {
+        OscillManager.requestNextData(OnResult.doIfPresent(oscillData -> {
+            oscillData.prepareData();
 
+            float fullVRange = oscillData.getMaxV() - oscillData.getMinV();
+            float dataVRange = oscillData.getVDataMax() - oscillData.getVDataMin();
+
+            float fillFactor = dataVRange / fullVRange;
+            if (fillFactor > 0.8f) {
+                doChangeVoltByDiv(+1);
+                doAutoVoltByDiv();
+
+            } else if (fillFactor < 0.2f) {
+                doChangeVoltByDiv(-1);
+                doAutoVoltByDiv();
+            }
+        }));
     }
 
     private void doChangeVoltByDiv(int step) {
@@ -349,7 +365,19 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void doAutoTimeByDiv() {
+        OscillManager.requestNextData(OnResult.doIfPresent(oscillData -> {
+            oscillData.prepareData();
 
+            int segmentsCount = oscillData.getDataSegmentsCount();
+            if (segmentsCount < 4) {
+                doChangeTimeByDiv(+1);
+                doAutoTimeByDiv();
+
+            } else if (segmentsCount > 8) {
+                doChangeTimeByDiv(-1);
+                doAutoTimeByDiv();
+            }
+        }));
     }
 
     private void doChangeTimeByDiv(int step) {
