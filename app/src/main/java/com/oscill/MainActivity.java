@@ -23,6 +23,7 @@ import com.oscill.controller.config.ChannelHWMode;
 import com.oscill.controller.config.ChannelOffset;
 import com.oscill.controller.config.ChannelSWMode;
 import com.oscill.controller.config.ProcessingTypeMode;
+import com.oscill.controller.config.SamplesCount;
 import com.oscill.controller.config.SamplesOffset;
 import com.oscill.controller.config.SamplingTime;
 import com.oscill.controller.config.Sensitivity;
@@ -268,7 +269,9 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void onOscillConfigChanged() {
-        updateChart.set(true);
+        if (updateChart.compareAndSet(false, true)) {
+            doSingleStart();
+        }
     }
 
     private void updateSettings() {
@@ -408,10 +411,11 @@ public class MainActivity extends AppCompatActivity {
     private void doChangeTimeOffset(int step) {
         OscillManager.runConfigTask(oscillConfig -> {
             SamplesOffset samplesOffset = oscillConfig.getSamplesOffset();
+            SamplesCount samplesCount = oscillConfig.getSamplesCount();
             if (step == 0) {
-                samplesOffset.setNativeValue(0);
+                samplesOffset.setNativeValue(samplesCount.getSamplesByDivCount() * (samplesCount.getDivCount() / 2));
             } else {
-                samplesOffset.setNativeValue(samplesOffset.getNativeValue() + step * oscillConfig.getSamplesCount().getSamplesByDivCount());
+                samplesOffset.setNativeValue(samplesOffset.getNativeValue() + step * samplesCount.getSamplesByDivCount());
             }
         });
     }
@@ -638,11 +642,14 @@ public class MainActivity extends AppCompatActivity {
             oscillConfig.getSyncTypeMode().setSyncType(SyncTypeMode.SyncType.AUTO);
 
             // WARN: set last
+            int timeDivCount = 10;
             int maxSamplesCount = oscillConfig.getSamplesCount().getRealRange().getUpper();
-            int samplesByDivCount = Math.min(maxSamplesCount / 10, 100);
-            oscillConfig.getSamplesCount().setSamplesCount(10, samplesByDivCount);
-            oscillConfig.getSamplingPeriod().setSamplingPeriod(SamplingTime._5_ms);
-            oscillConfig.getSamplesOffset().setOffset(0f, Dimension.MILLI);
+            int samplesByDivCount = Math.min(maxSamplesCount / timeDivCount, 100);
+            oscillConfig.getSamplesCount().setSamplesCount(timeDivCount, samplesByDivCount);
+
+            SamplingTime defSamplingTime = SamplingTime._5_ms;
+            oscillConfig.getSamplingPeriod().setSamplingPeriod(defSamplingTime);
+            oscillConfig.getSamplesOffset().setNativeValue(samplesByDivCount * (timeDivCount / 2));
 
             oscill.calibration();
 
