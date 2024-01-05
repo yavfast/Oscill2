@@ -304,8 +304,8 @@ public class UsbObexTransport implements ObexTransport {
             UsbSerialPort usbPort = getUsbPort();
             if (usbPort != null) {
                 byte[] out = toByteArray();
-                Log.i(TAG, "Write: ", ConvertUtils.bytesToHexStr(out, out.length));
                 usbPort.write(out, 100);
+                Log.i(TAG, "Write: ", ConvertUtils.bytesToHexStr(out, out.length));
             }
             reset();
         }

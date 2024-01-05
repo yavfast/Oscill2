@@ -325,7 +325,7 @@ public class MainActivity extends AppCompatActivity {
             oscillData.prepareData();
 
             float fullVRange = oscillData.getMaxV() - oscillData.getMinV();
-            float dataVRange = oscillData.getVDataMax() - oscillData.getVDataMin();
+            float dataVRange = Math.max(Math.abs(oscillData.getVDataMax()), Math.abs(oscillData.getVDataMin())) * 2f;
 
             float fillFactor = dataVRange / fullVRange;
             if (fillFactor > 0.8f) {
