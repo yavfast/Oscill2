@@ -597,7 +597,7 @@ public class MainActivity extends AppCompatActivity {
 
             oscillConfig.getChannelSWMode().setSWMode(ChannelSWMode.SWMode.NORMAL);
 
-            oscillConfig.getChannelSensitivity().setSensitivity(Sensitivity._200_mV);
+            oscillConfig.getChannelSensitivity().setSensitivity(Sensitivity._1_V);
             oscillConfig.getChannelOffset().setOffset(0f, Dimension.MILLI);
 
             oscillConfig.getChannelSyncMode()
@@ -611,7 +611,7 @@ public class MainActivity extends AppCompatActivity {
 
             // WARN: set last
             int maxSamplesCount = oscillConfig.getSamplesCount().getRealRange().getUpper();
-            int samplesByDivCount = Math.min(maxSamplesCount / 10, 64);
+            int samplesByDivCount = Math.min(maxSamplesCount / 10, 100);
             oscillConfig.getSamplesCount().setSamplesCount(10, samplesByDivCount);
             oscillConfig.getSamplingPeriod().setSamplingPeriod(SamplingTime._5_ms);
             oscillConfig.getSamplesOffset().setOffset(0f, Dimension.MILLI);
@@ -811,9 +811,9 @@ public class MainActivity extends AppCompatActivity {
     final Unit freqUnit = new Unit(Dimension.NORMAL, Unit.HERZ);
 
     private void updateDataInfo(@NonNull OscillData oscillData) {
-        ViewUtils.setText(vMinText, voltUnit.format(oscillData.getVDataMin(), 0));
-        ViewUtils.setText(vMaxText, voltUnit.format(oscillData.getVDataMax(), 0));
-        ViewUtils.setText(vAvgText, voltUnit.format(oscillData.getVDataAvg(), 0));
+        ViewUtils.setText(vMinText, voltUnit.format(oscillData.getVDataMin(), 2));
+        ViewUtils.setText(vMaxText, voltUnit.format(oscillData.getVDataMax(), 2));
+        ViewUtils.setText(vAvgText, voltUnit.format(oscillData.getVDataAvg(), 2));
         ViewUtils.setText(freqText, freqUnit.format(oscillData.getDataFreq(), 0));
     }
 

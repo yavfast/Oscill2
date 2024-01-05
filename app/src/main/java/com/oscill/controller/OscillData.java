@@ -110,7 +110,7 @@ public class OscillData {
 
         float vRealRange = this.vMax - this.vMin;
         int vRes = (getSwMode() == ChannelSWMode.SWMode.AVG_HIRES) ? 0xffff : 0xff;
-        this.vStep = vRealRange / vRes;
+        this.vStep = vRealRange / (vRes + 1);
     }
 
     @NonNull

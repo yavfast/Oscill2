@@ -41,7 +41,7 @@
 
         <androidx.appcompat.widget.AppCompatTextView
             android:id="@+id/vMinText"
-            android:layout_width="62dp"
+            android:layout_width="72dp"
             android:layout_height="wrap_content"
             android:maxLines="1"
             tools:text="2.45 V"
@@ -56,7 +56,7 @@
 
         <androidx.appcompat.widget.AppCompatTextView
             android:id="@+id/vMaxText"
-            android:layout_width="62dp"
+            android:layout_width="72dp"
             android:layout_height="wrap_content"
             android:maxLines="1"
             tools:text="2.45 V"
@@ -71,7 +71,7 @@
 
         <androidx.appcompat.widget.AppCompatTextView
             android:id="@+id/vAvgText"
-            android:layout_width="62dp"
+            android:layout_width="72dp"
             android:layout_height="wrap_content"
             android:maxLines="1"
             tools:text="2.45 V"
@@ -86,7 +86,7 @@
 
         <androidx.appcompat.widget.AppCompatTextView
             android:id="@+id/freqText"
-            android:layout_width="62dp"
+            android:layout_width="72dp"
             android:layout_height="wrap_content"
             android:maxLines="1"
             tools:text="2.45 V"
