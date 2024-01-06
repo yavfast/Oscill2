@@ -433,13 +433,13 @@ public class MainActivity extends AppCompatActivity {
 
     private void updateTrigger(@NonNull SyncTypeMode.SyncType syncType, boolean syncFront, boolean syncBack, @NonNull Integer syncLevel) {
         runOnActivity(() -> {
-            ViewUtils.setTextBold(triggerAutoBtn, syncType == SyncTypeMode.SyncType.AUTO);
-            ViewUtils.setTextBold(triggerTimeoutBtn, syncType == SyncTypeMode.SyncType.WAIT_TIMEOUT);
-            ViewUtils.setTextBold(triggerWaitBtn, syncType == SyncTypeMode.SyncType.WAIT);
-            ViewUtils.setTextBold(triggerFreeBtn, syncType == SyncTypeMode.SyncType.FREE);
+            setHighlight(triggerAutoBtn, syncType == SyncTypeMode.SyncType.AUTO);
+            setHighlight(triggerTimeoutBtn, syncType == SyncTypeMode.SyncType.WAIT_TIMEOUT);
+            setHighlight(triggerWaitBtn, syncType == SyncTypeMode.SyncType.WAIT);
+            setHighlight(triggerFreeBtn, syncType == SyncTypeMode.SyncType.FREE);
 
-            ViewUtils.setTextBold(triggerFrontBtn, syncFront);
-            ViewUtils.setTextBold(triggerBackBtn, syncBack);
+            setHighlight(triggerFrontBtn, syncFront);
+            setHighlight(triggerBackBtn, syncBack);
 
         });
     }
@@ -539,9 +539,13 @@ public class MainActivity extends AppCompatActivity {
 
     private void updateChannelFiltersButtons(boolean hiFilter, boolean loFilter) {
         runOnActivity(() -> {
-            ViewUtils.setTextBold(highFilterBtn, hiFilter);
-            ViewUtils.setTextBold(lowFilterBtn, loFilter);
+            setHighlight(highFilterBtn, hiFilter);
+            setHighlight(lowFilterBtn, loFilter);
         });
+    }
+
+    private void setHighlight(@Nullable TextView textView, boolean highlight) {
+        ViewUtils.setTextBold(textView, highlight);
     }
 
     private void setChannelHWModeACDC(boolean acMode) {
@@ -560,8 +564,8 @@ public class MainActivity extends AppCompatActivity {
 
     private void updateACDCButtons(boolean acMode) {
         runOnActivity(() -> {
-            ViewUtils.setTextBold(acBtn, acMode);
-            ViewUtils.setTextBold(dcBtn, !acMode);
+            setHighlight(acBtn, acMode);
+            setHighlight(dcBtn, !acMode);
         });
     }
 
@@ -581,10 +585,10 @@ public class MainActivity extends AppCompatActivity {
 
     private void updateSWModeButtons(@Nullable ChannelSWMode.SWMode mode) {
         runOnActivity(() -> {
-            ViewUtils.setTextBold(normBtn, mode == ChannelSWMode.SWMode.NORMAL);
-            ViewUtils.setTextBold(peakBtn, mode == ChannelSWMode.SWMode.PEAK_1 || mode == ChannelSWMode.SWMode.PEAK_2);
-            ViewUtils.setTextBold(avgBtn, mode == ChannelSWMode.SWMode.AVG);
-            ViewUtils.setTextBold(avgHiResBtn, mode == ChannelSWMode.SWMode.AVG_HIRES);
+            setHighlight(normBtn, mode == ChannelSWMode.SWMode.NORMAL);
+            setHighlight(peakBtn, mode == ChannelSWMode.SWMode.PEAK_1 || mode == ChannelSWMode.SWMode.PEAK_2);
+            setHighlight(avgBtn, mode == ChannelSWMode.SWMode.AVG);
+            setHighlight(avgHiResBtn, mode == ChannelSWMode.SWMode.AVG_HIRES);
         });
     }
 
@@ -880,7 +884,7 @@ public class MainActivity extends AppCompatActivity {
         dataSet.setDrawFilled(false);
 
         dataSet.setColor(Color.argb(0xFF, 0x00, 0xFF, 0xFF));
-        dataSet.setLineWidth(0.8f);
+        dataSet.setLineWidth(2f);
 
         return dataSet;
     }
