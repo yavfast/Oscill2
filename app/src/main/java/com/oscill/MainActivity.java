@@ -546,6 +546,7 @@ public class MainActivity extends AppCompatActivity {
 
     private void setHighlight(@Nullable TextView textView, boolean highlight) {
         ViewUtils.setTextBold(textView, highlight);
+        ViewUtils.setTextColor(textView, highlight ? R.color.primaryTextColor : R.color.primaryLightColor);
     }
 
     private void setChannelHWModeACDC(boolean acMode) {

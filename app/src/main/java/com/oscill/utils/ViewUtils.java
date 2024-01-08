@@ -355,6 +355,12 @@ public class ViewUtils {
         }
     }
 
+    public static void setTextColor(@Nullable TextView textView, @ColorRes int colorResId) {
+        if (textView != null) {
+            textView.setTextColor(ViewUtils.getColor(colorResId));
+        }
+    }
+
     public static void setText(@Nullable TextView textView, @StringRes int resId) {
         if (ResourceUtils.isValidResId(resId)) {
             setText(textView, ResourceUtils.getString(resId));
