@@ -395,6 +395,10 @@ public class OscillData {
         return vStep;
     }
 
+    public float getTOffset() {
+        return tOffset;
+    }
+
     public float getTriggerV() {
         return vTrigger;
     }

@@ -792,13 +792,35 @@ public class MainActivity extends AppCompatActivity {
 
         List<Entry> triggerData = new ArrayList<>(8);
         if (timeData.length > 10) {
-            triggerData.add(new Entry(timeData[0], triggerV));
-            triggerData.add(new Entry(timeData[timeData.length - 1], triggerV));
+            Entry rightTriggerEntry = new Entry(timeData[0], triggerV);
+            rightTriggerEntry.setIcon(ViewUtils.getDrawable(R.drawable.trigger_left));
+            Entry leftTriggerEntry = new Entry(timeData[timeData.length - 1], triggerV);
+//            leftTriggerEntry.setIcon(ViewUtils.getDrawable(R.drawable.trigger_left));
+            triggerData.add(rightTriggerEntry);
+            triggerData.add(leftTriggerEntry);
         }
 
         LineDataSet triggerDataSet = (LineDataSet) data.getDataSetByIndex(1);
         triggerDataSet.setEntries(triggerData);
         triggerDataSet.notifyDataSetChanged();
+    }
+
+    private void updateZeroMarker(@NonNull LineData data, @NonNull OscillData oscillData) {
+        float[] timeData = oscillData.getTimeData();
+
+        List<Entry> zeroData = new ArrayList<>(8);
+        if (timeData.length > 10) {
+            Entry topEntry = new Entry(0f, oscillData.getMaxV());
+            topEntry.setIcon(ViewUtils.getDrawable(R.drawable.zero_marker));
+            Entry bottomEntry = new Entry(0f, oscillData.getMinV());
+//            bottomEntry.setIcon(ViewUtils.getDrawable(R.drawable.trigger_left));
+            zeroData.add(topEntry);
+            zeroData.add(bottomEntry);
+        }
+
+        LineDataSet zeroDataSet = (LineDataSet) data.getDataSetByIndex(2);
+        zeroDataSet.setEntries(zeroData);
+        zeroDataSet.notifyDataSetChanged();
     }
 
     private void setData(@NonNull OscillData oscillData, @NonNull List<Entry> valuesV, @NonNull List<Entry> valuesFFT) {
@@ -816,6 +838,7 @@ public class MainActivity extends AppCompatActivity {
             dataSet.setEntries(valuesV);
 
             updateTriggerMarker(data, oscillData);
+            updateZeroMarker(data, oscillData);
 
 //            fftDataSet = (LineDataSet) data.getDataSetByIndex(2);
 //            fftDataSet.setEntries(valuesFFT);
@@ -837,12 +860,16 @@ public class MainActivity extends AppCompatActivity {
             LineDataSet triggerMarker = initTriggerMarker();
             dataSets.add(triggerMarker); // 1
 
+            LineDataSet zeroMarker = initZeroMarker();
+            dataSets.add(zeroMarker); // 2
+
 //            fftDataSet = initFFTLine();
 //            fftDataSet.setEntries(valuesFFT);
-//            dataSets.add(fftDataSet); // 2
+//            dataSets.add(fftDataSet); // 3
 
             data = new LineData(dataSets);
             chart.setData(data);
+            chart.setMaxVisibleValueCount(10000);
         }
     }
 
@@ -884,7 +911,7 @@ public class MainActivity extends AppCompatActivity {
         dataSet.setDrawFilled(false);
 
         dataSet.setColor(Color.argb(0xFF, 0x00, 0xFF, 0xFF));
-        dataSet.setLineWidth(2f);
+        dataSet.setLineWidth(1.5f);
 
         return dataSet;
     }
@@ -892,14 +919,30 @@ public class MainActivity extends AppCompatActivity {
     @NonNull
     private LineDataSet initTriggerMarker() {
         LineDataSet dataSet = new LineDataSetEx(null, null);
-        dataSet.setDrawIcons(false);
+        dataSet.setDrawIcons(true);
         dataSet.setDrawCircles(false);
         dataSet.setDrawCircleHole(false);
         dataSet.setDrawValues(false);
         dataSet.setDrawFilled(false);
 
         dataSet.setColor(Color.GREEN);
-        dataSet.setLineWidth(1f);
+        dataSet.setLineWidth(0.5f);
+//        dataSet.setIconsOffset(MPPointF.getInstance(-4f, 0f));
+
+        return dataSet;
+    }
+
+    @NonNull
+    private LineDataSet initZeroMarker() {
+        LineDataSet dataSet = new LineDataSetEx(null, null);
+        dataSet.setDrawIcons(true);
+        dataSet.setDrawCircles(false);
+        dataSet.setDrawCircleHole(false);
+        dataSet.setDrawValues(false);
+        dataSet.setDrawFilled(false);
+
+        dataSet.setColor(Color.YELLOW);
+        dataSet.setLineWidth(0.5f);
 
         return dataSet;
     }
