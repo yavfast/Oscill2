@@ -877,9 +877,9 @@ public class MainActivity extends AppCompatActivity {
     final Unit freqUnit = new Unit(Dimension.NORMAL, Unit.HERZ);
 
     private void updateDataInfo(@NonNull OscillData oscillData) {
-        ViewUtils.setText(vMinText, voltUnit.format(oscillData.getVDataMin(), 2));
-        ViewUtils.setText(vMaxText, voltUnit.format(oscillData.getVDataMax(), 2));
-        ViewUtils.setText(vAvgText, voltUnit.format(oscillData.getVDataAvg(), 2));
+        ViewUtils.setText(vMinText, voltUnit.formatFixed(oscillData.getVDataMin(), 2));
+        ViewUtils.setText(vMaxText, voltUnit.formatFixed(oscillData.getVDataMax(), 2));
+        ViewUtils.setText(vAvgText, voltUnit.formatFixed(oscillData.getVDataAvg(), 2));
         ViewUtils.setText(freqText, freqUnit.format(oscillData.getDataFreq(), 0));
     }
 
