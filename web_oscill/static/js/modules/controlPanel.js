@@ -12,6 +12,7 @@ export class ControlPanel {
     this.triggerLevel = 128;
     this.vPosition = 0;
     this.tPosition = 0;
+    this.onTriggerLevelChange = null; // Callback for trigger level changes
   }
 
   init() {
@@ -113,6 +114,10 @@ export class ControlPanel {
   changeTriggerLevel(level) {
     this.triggerLevel = level;
     this.onConfigChange({ trigger_level: level });
+    // Notify scope view of trigger level change
+    if (this.onTriggerLevelChange) {
+      this.onTriggerLevelChange(level);
+    }
   }
 
   toggleRunStop() {
@@ -175,6 +180,18 @@ export class ControlPanel {
   updateRunStopButton() {
     // This method can be called to sync button state with app.isRunning if needed
     // For now, button starts with play icon and "Run" text by default
+  }
+
+  setAcquisitionState(state) {
+    if (state === 'run') {
+      this.runStop.innerHTML = '<i class="fas fa-pause"></i> Stop';
+    } else if (state === 'stop') {
+      this.runStop.innerHTML = '<i class="fas fa-play"></i> Run';
+    }
+  }
+
+  setTriggerLevelChangeCallback(callback) {
+    this.onTriggerLevelChange = callback;
   }
 
   formatVoltage(mv) {

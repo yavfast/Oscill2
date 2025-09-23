@@ -13,13 +13,24 @@ class App {
     this.measurementPanel = new MeasurementPanel();
     this.isRunning = false;
     this.pollInterval = null;
+    this.statusInterval = null;
     this.currentCfgId = null; // Track current config ID
-    this.lastStatusCheck = null; // Track last status check time
+    this.isDeviceConnected = false; // Track device connection status
   }
 
   async init() {
     this.scopeView.init();
     this.controlPanel.init();
+
+    // Connect scope view trigger level changes to control panel
+    this.scopeView.setTriggerLevelChangeCallback((level) => {
+      this.onConfigChange({ trigger_level: level });
+    });
+
+    // Connect control panel trigger level changes to scope view
+    this.controlPanel.setTriggerLevelChangeCallback((level) => {
+      this.scopeView.setTriggerLevel(level);
+    });
 
     // Try to get initial status
     try {
@@ -29,25 +40,13 @@ class App {
       console.log('Initial status check failed:', e);
     }
 
-    // Start polling
-    this.startPolling();
+    // Start status polling only (frame polling will start when device connects)
+    this.startStatusPolling();
   }
 
   startPolling() {
     if (this.pollInterval) clearInterval(this.pollInterval);
     this.pollInterval = setInterval(async () => {
-      // Always check status periodically (every 2 seconds)
-      const now = Date.now();
-      if (!this.lastStatusCheck || now - this.lastStatusCheck > 2000) {
-        try {
-          const status = await this.api.getStatus();
-          this.updateStatus(status);
-          this.lastStatusCheck = now;
-        } catch (e) {
-          console.log('Status check failed:', e);
-        }
-      }
-
       if (!this.isRunning) return;
 
       try {
@@ -64,6 +63,10 @@ class App {
             this.currentCfgId = data.config.cfg_id;
             this.controlPanel.updateControls(data.config);
             this.statusBar.updateStatus(null, data.config);
+            // Update scope view trigger level
+            if (data.config.trigger_level !== undefined) {
+              this.scopeView.setTriggerLevel(data.config.trigger_level);
+            }
           }
         }
       } catch (e) {
@@ -72,14 +75,57 @@ class App {
     }, 100); // 10 Hz
   }
 
+  stopPolling() {
+    if (this.pollInterval) {
+      clearInterval(this.pollInterval);
+      this.pollInterval = null;
+    }
+  }
+
+  startStatusPolling() {
+    if (this.statusInterval) clearInterval(this.statusInterval);
+    this.statusInterval = setInterval(async () => {
+      try {
+        const status = await this.api.getStatus();
+        this.updateStatus(status);
+      } catch (e) {
+        console.log('Status check failed:', e);
+      }
+    }, 5000); // Check status every 5 seconds
+  }
+
   updateStatus(status) {
+    const wasConnected = this.isDeviceConnected;
+    this.isDeviceConnected = (status && status.status === 'ok') || (status && status.status === 'error') || !!status?.config;
+
+    console.log('Status update:', { status: status?.status, hasConfig: !!status?.config, wasConnected, isNowConnected: this.isDeviceConnected });
+
     this.statusBar.updateStatus(status, status?.config);
+
+    // Start/stop frame polling based on connection status
+    if (this.isDeviceConnected && !wasConnected) {
+      // Device just became connected - start frame polling and acquisition
+      console.log('Device connected - starting frame polling and acquisition');
+      this.isRunning = true; // Автоматично запускаємо збір даних
+      this.startPolling();
+      this.controlPanel.setAcquisitionState('run'); // Синхронізуємо кнопку
+    } else if (!this.isDeviceConnected && wasConnected) {
+      // Device just disconnected - stop frame polling and acquisition
+      console.log('Device disconnected - stopping frame polling and acquisition');
+      this.stopPolling();
+      this.onDeviceDisconnected();
+    }
+
     if (status?.config) {
       // Update current config ID
       if (status.config.cfg_id !== undefined) {
         this.currentCfgId = status.config.cfg_id;
       }
       this.controlPanel.updateControls(status.config);
+      // Update scope view trigger level
+      if (status.config.trigger_level !== undefined) {
+        this.scopeView.setTriggerLevel(status.config.trigger_level);
+      }
     }
   }
 
@@ -106,6 +152,12 @@ class App {
     } else if (action === 'single') {
       // For single, we might need to implement single acquisition
     }
+  }
+
+  onDeviceDisconnected() {
+    // Stop acquisition when device disconnects
+    this.isRunning = false;
+    this.controlPanel.setAcquisitionState('stop');
   }
 }
 

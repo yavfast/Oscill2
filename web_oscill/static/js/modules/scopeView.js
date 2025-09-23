@@ -3,9 +3,12 @@ export class ScopeView {
     this.containerId = containerId;
     this.plot = null;
     this.triggerLevel = 128;
+    this.tempTriggerLevel = 128; // Temporary trigger level during dragging
     this.vOffset = 0;
     this.tOffset = 0;
     this.currentCfgId = null; // Track current config ID
+    this.onTriggerLevelChange = null; // Callback for trigger level changes
+    this.isDraggingTrigger = false;
   }
 
   init() {
@@ -86,6 +89,12 @@ export class ScopeView {
 
     Plotly.newPlot(this.containerId, data, layout, config);
     this.plot = document.getElementById(this.containerId);
+    
+    // Add mouse event listeners for trigger level dragging
+    this.plot.addEventListener('mousedown', this.handleMouseDown.bind(this));
+    this.plot.addEventListener('mousemove', this.handleMouseMove.bind(this));
+    this.plot.addEventListener('mouseup', this.handleMouseUp.bind(this));
+    this.plot.addEventListener('mouseleave', this.handleMouseUp.bind(this));
   }
 
   update(frames, config) {
@@ -117,6 +126,7 @@ export class ScopeView {
     const totalDivsY = 8;
     const totalTime = tDiv * totalDivsX;
     const totalVoltage = vDiv * totalDivsY;
+    const currentTriggerLevel = this.isDraggingTrigger ? this.tempTriggerLevel : this.triggerLevel;
 
     for (let i = 0; i < samples.length; i++) {
       const time = (i / samples.length) * totalTime - totalTime / 2 + this.tOffset;
@@ -175,9 +185,14 @@ export class ScopeView {
         type: 'line',
         x0: -totalTime / 2 + this.tOffset,
         x1: totalTime / 2 + this.tOffset,
-        y0: this.triggerLevelToVoltage(this.triggerLevel, totalVoltage),
-        y1: this.triggerLevelToVoltage(this.triggerLevel, totalVoltage),
-        line: { color: '#ff0000', width: 2, dash: 'dash' }
+        y0: this.triggerLevelToVoltage(currentTriggerLevel, totalVoltage),
+        y1: this.triggerLevelToVoltage(currentTriggerLevel, totalVoltage),
+        line: { color: '#ff0000', width: 1, dash: 'dash' }
+      }, {
+        type: 'path',
+        path: `M ${totalTime / 2 + this.tOffset} ${this.triggerLevelToVoltage(currentTriggerLevel, totalVoltage)} L ${totalTime / 2 + this.tOffset + totalTime * 0.03} ${this.triggerLevelToVoltage(currentTriggerLevel, totalVoltage) - totalVoltage * 0.015} L ${totalTime / 2 + this.tOffset + totalTime * 0.03} ${this.triggerLevelToVoltage(currentTriggerLevel, totalVoltage) + totalVoltage * 0.015} Z`,
+        fillcolor: '#00ff00',
+        line: { color: '#00ff00', width: 1 }
       }]
     };
 
@@ -194,6 +209,64 @@ export class ScopeView {
 
   setTOffset(offset) {
     this.tOffset = offset;
+  }
+
+  handleMouseDown(event) {
+    const rect = this.plot.getBoundingClientRect();
+    const x = event.clientX - rect.left;
+    const y = event.clientY - rect.top;
+    
+    // Check if click is near the trigger triangle (right side)
+    const plotWidth = rect.width;
+    const plotHeight = rect.height;
+    
+    // Convert pixel coordinates to plot coordinates
+    const xFraction = x / plotWidth;
+    const yFraction = 1 - (y / plotHeight); // Flip Y axis
+    
+    // Check if we're in the right area where the triangle should be (right 10% of plot)
+    if (xFraction > 0.9) { // Right 10% of the plot
+      this.isDraggingTrigger = true;
+      this.tempTriggerLevel = this.triggerLevel; // Store current level
+      event.preventDefault();
+    }
+  }
+
+  handleMouseMove(event) {
+    if (!this.isDraggingTrigger) return;
+    
+    const rect = this.plot.getBoundingClientRect();
+    const y = event.clientY - rect.top;
+    const plotHeight = rect.height;
+    const yFraction = 1 - (y / plotHeight); // Flip Y axis
+    
+    // Update temporary trigger level for visual feedback, but don't send to API yet
+    this.tempTriggerLevel = Math.max(0, Math.min(255, Math.round(yFraction * 255)));
+    this.updateTriggerDisplay(); // Update visual display without sending to API
+    event.preventDefault();
+  }
+
+  handleMouseUp(event) {
+    if (this.isDraggingTrigger) {
+      // Apply the trigger level change only when mouse is released
+      this.triggerLevel = this.tempTriggerLevel;
+      if (this.onTriggerLevelChange) {
+        this.onTriggerLevelChange(this.triggerLevel);
+      }
+      this.isDraggingTrigger = false;
+    }
+  }
+
+  updateTriggerLevelFromMouse(yFraction) {
+    // This method is no longer used - trigger changes are applied on mouse release
+  }
+
+  updateTriggerDisplay() {
+    // This method is no longer used - visual updates happen in the main update method
+  }
+
+  setTriggerLevelChangeCallback(callback) {
+    this.onTriggerLevelChange = callback;
   }
 
   triggerLevelToVoltage(level, totalVoltage) {
