@@ -13,4 +13,6 @@
 .externalNativeBuild
 .cxx
 /docs/protocol/.*
-/.idea/
+.idea
+temp
+*/__pycache__

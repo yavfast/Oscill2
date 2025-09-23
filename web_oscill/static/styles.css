@@ -1,0 +1,14 @@
+* { box-sizing: border-box; }
+body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, 'Helvetica Neue', Arial, sans-serif; margin: 0; color: #1f2937; background: #f8fafc; }
+header { background: #0f172a; color: white; padding: 12px 16px; }
+header h1 { margin: 0; font-size: 18px; }
+section.controls { background: #e2e8f0; padding: 12px 16px; border-bottom: 1px solid #cbd5e1; }
+section.controls .row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+section.controls input { padding: 6px 8px; }
+section.controls select { padding: 6px 8px; }
+button { padding: 6px 10px; border-radius: 4px; border: 1px solid #cbd5e1; background: white; cursor: pointer; }
+button:disabled { opacity: 0.6; cursor: not-allowed; }
+#status { margin-left: 12px; color: #334155; }
+section.plot { padding: 16px; }
+canvas { width: 100%; border: 1px solid #cbd5e1; background: white; }
+section.device-info { padding: 8px 16px; color: #334155; }

@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Oscill2 — Minimal Web Oscilloscope</title>
+  <link rel="stylesheet" href="/static/styles.css" />
+</head>
+<body>
+  <header>
+    <h1>Oscill2 — Web Prototype</h1>
+  </header>
+
+  <section class="controls">
+    <div class="row">
+      <label for="port">Serial port:</label>
+      <input id="port" type="text" placeholder="auto" />
+      <label for="baud">Baud:</label>
+      <input id="baud" type="number" value="115200" />
+      <button id="btnConnect">Connect</button>
+      <button id="btnDisconnect" disabled>Disconnect</button>
+    </div>
+    <div class="row">
+      <label>V/div:</label>
+      <select id="vDiv">
+        <option value="20">20 mV</option>
+        <option value="50">50 mV</option>
+        <option value="100">0.1 V</option>
+        <option value="200">0.2 V</option>
+        <option value="500">0.5 V</option>
+        <option value="1000">1 V</option>
+        <option value="2000">2 V</option>
+        <option value="5000">5 V</option>
+        <option value="10000">10 V</option>
+      </select>
+      <label>t/div:</label>
+      <select id="tDiv">
+        <option value="1e-7">100 ns</option>
+        <option value="2e-7">200 ns</option>
+        <option value="5e-7">500 ns</option>
+        <option value="1e-6">1 µs</option>
+        <option value="2e-6">2 µs</option>
+        <option value="5e-6">5 µs</option>
+        <option value="1e-5">10 µs</option>
+        <option value="2e-5">20 µs</option>
+        <option value="5e-5">50 µs</option>
+        <option value="1e-4">100 µs</option>
+        <option value="2e-4">200 µs</option>
+        <option value="5e-4">500 µs</option>
+        <option value="1e-3">1 ms</option>
+        <option value="2e-3">2 ms</option>
+        <option value="5e-3">5 ms</option>
+        <option value="1e-2">10 ms</option>
+        <option value="2e-2">20 ms</option>
+        <option value="5e-2">50 ms</option>
+        <option value="1e-1">100 ms</option>
+        <option value="2e-1">200 ms</option>
+        <option value="5e-1">500 ms</option>
+      </select>
+      <label>Trig level:</label>
+      <input id="trigLevel" type="number" min="0" max="255" value="128" />
+      <label>Offset (V):</label>
+      <input id="offsetV" type="number" step="0.01" value="0" />
+      <button id="btnApply" disabled>Apply</button>
+      <button id="btnAcquire" disabled>Acquire</button>
+  <button id="btnVerify" disabled>Verify 20mV · 1ms</button>
+      <span id="status"></span>
+    </div>
+  </section>
+
+  <section class="device-info" id="deviceInfo"></section>
+
+  <section class="plot">
+    <canvas id="scope" width="1000" height="300"></canvas>
+  </section>
+
+  <footer>
+    <small>Minimal prototype. See docs/web_app.md for scope.</small>
+  </footer>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
