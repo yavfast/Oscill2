@@ -1,14 +1,208 @@
-* { box-sizing: border-box; }
-body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, 'Helvetica Neue', Arial, sans-serif; margin: 0; color: #1f2937; background: #f8fafc; }
-header { background: #0f172a; color: white; padding: 12px 16px; }
-header h1 { margin: 0; font-size: 18px; }
-section.controls { background: #e2e8f0; padding: 12px 16px; border-bottom: 1px solid #cbd5e1; }
-section.controls .row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
-section.controls input { padding: 6px 8px; }
-section.controls select { padding: 6px 8px; }
-button { padding: 6px 10px; border-radius: 4px; border: 1px solid #cbd5e1; background: white; cursor: pointer; }
-button:disabled { opacity: 0.6; cursor: not-allowed; }
-#status { margin-left: 12px; color: #334155; }
-section.plot { padding: 16px; }
-canvas { width: 100%; border: 1px solid #cbd5e1; background: white; }
-section.device-info { padding: 8px 16px; color: #334155; }
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  background-color: #1e1e1e;
+  color: #ffffff;
+  height: 100vh;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  grid-template-areas:
+    "status"
+    "main"
+    "measurements";
+}
+
+#status-bar {
+  grid-area: status;
+  background-color: #2d2d2d;
+  padding: 8px 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 14px;
+}
+
+#status-bar > div {
+  display: flex;
+  align-items: center;
+}
+
+#core-params {
+  display: flex;
+  gap: 16px;
+}
+
+#core-params span {
+  background-color: #3a3a3a;
+  padding: 4px 8px;
+  border-radius: 3px;
+  color: #ffffff;
+  font-weight: 500;
+}
+
+#status-info {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+}
+
+#connection-status::before {
+  content: "🔴";
+  margin-right: 8px;
+}
+
+#connection-status.connected::before {
+  content: "🟢";
+}
+
+#acquisition-status {
+  background-color: #3a3a3a;
+  padding: 4px 8px;
+  border-radius: 3px;
+  color: #ffffff;
+  font-weight: 500;
+  min-width: 60px;
+  text-align: center;
+}
+
+#main-area {
+  grid-area: main;
+  display: grid;
+  grid-template-columns: 1fr 300px;
+  grid-template-areas: "scope controls";
+}
+
+#scope-view {
+  grid-area: scope;
+  background-color: #1e1e1e;
+  padding: 8px;
+  height: 100%;
+  min-height: 400px;
+}
+
+#control-panel {
+  grid-area: controls;
+  background-color: #2d2d2d;
+  padding: 16px;
+  overflow-y: auto;
+}
+
+.control-group {
+  margin-bottom: 24px;
+}
+
+.control-group h3 {
+  margin-bottom: 12px;
+  color: #cccccc;
+  font-size: 16px;
+}
+
+.acquisition-controls {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 32px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid #444444;
+}
+
+.acquisition-btn {
+  background-color: #3c3c3c;
+  border: 1px solid #555555;
+  color: #ffffff;
+  padding: 12px 20px;
+  cursor: pointer;
+  border-radius: 6px;
+  font-size: 16px;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.acquisition-btn:hover {
+  background-color: #4c4c4c;
+  transform: translateY(-1px);
+}
+
+.acquisition-btn:active {
+  transform: translateY(0);
+}
+
+.acquisition-btn i {
+  font-size: 18px;
+}
+
+.control {
+  display: flex;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.control label {
+  width: 80px;
+  font-size: 12px;
+  color: #aaaaaa;
+}
+
+.control button {
+  background-color: #3c3c3c;
+  border: 1px solid #555555;
+  color: #ffffff;
+  padding: 4px 8px;
+  margin: 0 2px;
+  cursor: pointer;
+  border-radius: 3px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+}
+
+.control button.active {
+  background-color: #007acc;
+  border-color: #007acc;
+}
+
+.control button:hover {
+  background-color: #4c4c4c;
+}
+
+.control input[type="range"] {
+  flex: 1;
+  margin-left: 8px;
+}
+
+#measurement-panel {
+  grid-area: measurements;
+  background-color: #2d2d2d;
+  padding: 8px 16px;
+  display: flex;
+  justify-content: space-around;
+  align-items: center;
+  min-height: 60px;
+}
+
+.measurement {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  font-size: 12px;
+}
+
+.measurement label {
+  color: #aaaaaa;
+  margin-bottom: 4px;
+}
+
+.measurement span {
+  color: #ffffff;
+  font-weight: bold;
+}

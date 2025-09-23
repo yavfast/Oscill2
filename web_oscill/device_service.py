@@ -3,7 +3,11 @@ import time
 from collections import deque
 from typing import Any, Deque, Dict, List, Optional, Tuple
 
-from .oscill_client import OscillClient
+import sys
+import os
+sys.path.append(os.path.dirname(__file__))
+
+from oscill_client import OscillClient
 
 
 class DeviceService:
@@ -25,6 +29,7 @@ class DeviceService:
         self._seq: int = 0
         self._acq_thread: Optional[threading.Thread] = None
         self._stop_event = threading.Event()
+        self._cfg_id: int = 0  # Configuration ID for tracking config changes
 
     # ---------------- Device lifecycle ----------------
     def connect(self, port: Optional[str] = None, baud: int = 115200) -> Dict[str, Any]:
@@ -116,7 +121,9 @@ class DeviceService:
             if not self._client:
                 return {"status": "disconnected"}
             try:
-                return {"status": "ok", **self._client.get_current_status()}
+                status = self._client.get_current_status()
+                status["cfg_id"] = self._cfg_id  # Add config ID to status
+                return {"status": "ok", **status}
             except Exception as e:
                 return {"status": "error", "message": str(e)}
 
@@ -124,7 +131,7 @@ class DeviceService:
         """
         Apply requested config atomically and return new status plus warnings.
 
-        changes keys may include: v_div_mV, t_div_s, offset_V, trigger_level, trigger_mode.
+        changes keys may include: v_div_mV, t_div_s, offset_V, trigger_level, trigger_mode, trigger_slope, coupling.
         """
         warnings: List[str] = []
         with self._dev_lock:
@@ -157,11 +164,29 @@ class DeviceService:
             except Exception as e:
                 warnings.append(f"set trigger_mode failed: {e}")
             try:
+                if changes.get("trigger_slope") is not None:
+                    # For now, trigger slope is part of trigger_mode
+                    # This might need more complex logic depending on device
+                    pass
+            except Exception as e:
+                warnings.append(f"set trigger_slope failed: {e}")
+            try:
+                if changes.get("coupling") is not None:
+                    # Set channel coupling mode
+                    coupling_map = {"AC": 0x01, "DC": 0x00, "GND": 0x02}
+                    mode = coupling_map.get(changes["coupling"], 0x00)
+                    c.set_channel_hw_mode(mode)
+            except Exception as e:
+                warnings.append(f"set coupling failed: {e}")
+            try:
                 c.ensure_qs()
             except Exception as e:
                 warnings.append(f"ensure_qs failed: {e}")
             try:
                 status = c.get_current_status()
+                # Increment config ID on any config change
+                self._cfg_id += 1
+                status["cfg_id"] = self._cfg_id
             except Exception as e:
                 warnings.append(f"get_current_status failed: {e}")
                 status = {}
@@ -266,6 +291,11 @@ class DeviceService:
             cfg["samples_per_div"] = getattr(c, 'SAMPLES_PER_DIV', 32)
         except Exception:
             cfg["samples_per_div"] = 32
+        # New fields for coupling and trigger slope (derived from mode)
+        # Note: get_channel_hw_mode not implemented, using defaults
+        cfg["coupling"] = "DC"  # Default
+        cfg["trigger_slope"] = "Rising"  # Default
+        cfg["cfg_id"] = self._cfg_id  # Add config ID
         return cfg
 
     def _record_frame(self, payload: Dict[str, Any]):

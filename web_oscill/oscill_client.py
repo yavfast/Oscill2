@@ -427,27 +427,51 @@ class OscillClient:
         return self.get_sample_period_s() * self.SAMPLES_PER_DIV
 
     def set_scan_delay(self, value: int) -> int:
-        """Sets the scan delay (TD). 4-byte unsigned value."""
+        """
+        Sets the scan delay (TD).
+        :param value: 4-byte unsigned integer for the delay.
+        :return: The actual value set in the register.
+        """
         return self.set_reg_4('TD', value, signed=False)
 
     def set_max_sync_wait_auto(self, value: int) -> int:
-        """Sets the max sync wait time for auto-start (TA). 4-byte unsigned value."""
+        """
+        Sets the max sync wait time for auto-start (TA).
+        :param value: 4-byte unsigned integer for the wait time.
+        :return: The actual value set in the register.
+        """
         return self.set_reg_4('TA', value, signed=False)
 
     def set_max_sync_wait_on_trig(self, value: int) -> int:
-        """Sets the max sync wait time for waiting-start (TW). 4-byte unsigned value."""
+        """
+        Sets the max sync wait time for waiting-start (TW).
+        :param value: 4-byte unsigned integer for the wait time.
+        :return: The actual value set in the register.
+        """
         return self.set_reg_4('TW', value, signed=False)
 
     def set_avg_passes(self, value: int) -> int:
-        """Sets the number of averaging/peak passes (AP). 1-byte value."""
+        """
+        Sets the number of averaging/peak passes (AP).
+        :param value: 1-byte integer for the number of passes.
+        :return: The actual value set in the register.
+        """
         return self.set_reg_1('AP', value)
 
     def set_min_ris_passes(self, value: int) -> int:
-        """Sets the minimum number of passes in RIS mode (AR). 1-byte value."""
+        """
+        Sets the minimum number of passes in RIS mode (AR).
+        :param value: 1-byte integer for the number of passes.
+        :return: The actual value set in the register.
+        """
         return self.set_reg_1('AR', value)
 
     def set_samples_offset(self, value: int) -> int:
-        """Sets the samples offset/centering (TC). 2-byte unsigned value."""
+        """
+        Sets the samples offset/centering (TC).
+        :param value: 2-byte unsigned integer for the offset.
+        :return: The actual value set in the register.
+        """
         return self.set_reg_2('TC', value, signed=False)
 
     def ensure_qs(self, total_samples: Optional[int] = None) -> int:

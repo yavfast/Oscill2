@@ -3,81 +3,113 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Oscill2 — Minimal Web Oscilloscope</title>
+  <title>Oscill2 — Web Oscilloscope</title>
   <link rel="stylesheet" href="/static/styles.css" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+  <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
 </head>
 <body>
-  <header>
-    <h1>Oscill2 — Web Prototype</h1>
-  </header>
-
-  <section class="controls">
-    <div class="row">
-      <label for="port">Serial port:</label>
-      <input id="port" type="text" placeholder="auto" />
-      <label for="baud">Baud:</label>
-      <input id="baud" type="number" value="115200" />
-      <button id="btnConnect">Connect</button>
-      <button id="btnDisconnect" disabled>Disconnect</button>
+  <div id="status-bar">
+    <div id="core-params">
+      <span id="time-div">5 ms/div</span>
+      <span id="volts-div">200 mV/div</span>
+      <span id="trigger-mode">Auto, Rising Edge</span>
     </div>
-    <div class="row">
-      <label>V/div:</label>
-      <select id="vDiv">
-        <option value="20">20 mV</option>
-        <option value="50">50 mV</option>
-        <option value="100">0.1 V</option>
-        <option value="200">0.2 V</option>
-        <option value="500">0.5 V</option>
-        <option value="1000">1 V</option>
-        <option value="2000">2 V</option>
-        <option value="5000">5 V</option>
-        <option value="10000">10 V</option>
-      </select>
-      <label>t/div:</label>
-      <select id="tDiv">
-        <option value="1e-7">100 ns</option>
-        <option value="2e-7">200 ns</option>
-        <option value="5e-7">500 ns</option>
-        <option value="1e-6">1 µs</option>
-        <option value="2e-6">2 µs</option>
-        <option value="5e-6">5 µs</option>
-        <option value="1e-5">10 µs</option>
-        <option value="2e-5">20 µs</option>
-        <option value="5e-5">50 µs</option>
-        <option value="1e-4">100 µs</option>
-        <option value="2e-4">200 µs</option>
-        <option value="5e-4">500 µs</option>
-        <option value="1e-3">1 ms</option>
-        <option value="2e-3">2 ms</option>
-        <option value="5e-3">5 ms</option>
-        <option value="1e-2">10 ms</option>
-        <option value="2e-2">20 ms</option>
-        <option value="5e-2">50 ms</option>
-        <option value="1e-1">100 ms</option>
-        <option value="2e-1">200 ms</option>
-        <option value="5e-1">500 ms</option>
-      </select>
-      <label>Trig level:</label>
-      <input id="trigLevel" type="number" min="0" max="255" value="128" />
-      <label>Offset (V):</label>
-      <input id="offsetV" type="number" step="0.01" value="0" />
-      <button id="btnApply" disabled>Apply</button>
-      <button id="btnAcquire" disabled>Acquire</button>
-  <button id="btnVerify" disabled>Verify 20mV · 1ms</button>
-      <span id="status"></span>
+    <div id="status-info">
+      <div id="connection-status">Disconnected</div>
     </div>
-  </section>
+  </div>
 
-  <section class="device-info" id="deviceInfo"></section>
+  <div id="main-area">
+    <div id="scope-view"></div>
+    <div id="control-panel">
+      <div class="control-group acquisition-controls">
+        <button id="run-stop" class="acquisition-btn"><i class="fas fa-play"></i> Run</button>
+        <button id="single" class="acquisition-btn"><i class="fas fa-bolt"></i> Single</button>
+      </div>
 
-  <section class="plot">
-    <canvas id="scope" width="1000" height="300"></canvas>
-  </section>
+      <div class="control-group">
+        <h3>Vertical</h3>
+        <div class="control">
+          <label>Volts/Div:</label>
+          <button id="vdiv-minus"><i class="fas fa-minus"></i></button>
+          <span id="vdiv-value">200 mV</span>
+          <button id="vdiv-plus"><i class="fas fa-plus"></i></button>
+        </div>
+        <div class="control">
+          <label>Position:</label>
+          <input type="range" id="v-position" min="-4" max="4" step="0.1" value="0">
+        </div>
+        <div class="control">
+          <label>Coupling:</label>
+          <button id="coupling-ac">AC</button>
+          <button id="coupling-dc" class="active">DC</button>
+          <button id="coupling-gnd">GND</button>
+        </div>
+      </div>
 
-  <footer>
-    <small>Minimal prototype. See docs/web_app.md for scope.</small>
-  </footer>
+      <div class="control-group">
+        <h3>Horizontal</h3>
+        <div class="control">
+          <label>Time/Div:</label>
+          <button id="tdiv-minus"><i class="fas fa-minus"></i></button>
+          <span id="tdiv-value">5 ms</span>
+          <button id="tdiv-plus"><i class="fas fa-plus"></i></button>
+        </div>
+        <div class="control">
+          <label>Position:</label>
+          <input type="range" id="h-position" min="-5" max="5" step="0.1" value="0">
+        </div>
+      </div>
 
-  <script src="/static/app.js"></script>
+      <div class="control-group">
+        <h3>Trigger</h3>
+        <div class="control">
+          <label>Mode:</label>
+          <button id="trig-auto" class="active">Auto</button>
+          <button id="trig-normal">Normal</button>
+          <button id="trig-single">Single</button>
+        </div>
+        <div class="control">
+          <label>Slope:</label>
+          <button id="trig-rise" class="active">Rising</button>
+          <button id="trig-fall">Falling</button>
+        </div>
+        <div class="control">
+          <label>Level:</label>
+          <input type="range" id="trig-level" min="0" max="255" value="128">
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="measurement-panel">
+    <div class="measurement">
+      <label>Frequency:</label>
+      <span id="freq">-</span>
+    </div>
+    <div class="measurement">
+      <label>Period:</label>
+      <span id="period">-</span>
+    </div>
+    <div class="measurement">
+      <label>Vpp:</label>
+      <span id="vpp">-</span>
+    </div>
+    <div class="measurement">
+      <label>Vmax:</label>
+      <span id="vmax">-</span>
+    </div>
+    <div class="measurement">
+      <label>Vmin:</label>
+      <span id="vmin">-</span>
+    </div>
+    <div class="measurement">
+      <label>Vavg:</label>
+      <span id="vavg">-</span>
+    </div>
+  </div>
+
+  <script type="module" src="/static/app.js"></script>
 </body>
 </html>
