@@ -50,7 +50,9 @@ export class ControlPanel {
   setupEventListeners() {
     this.vdivMinus.addEventListener('click', () => this.changeVDiv(-1));
     this.vdivPlus.addEventListener('click', () => this.changeVDiv(1));
-    this.vPosition.addEventListener('input', (e) => this.changeVPosition(parseFloat(e.target.value)));
+  // Vertical offset: preview during drag (input), commit on release (change)
+  this.vPosition.addEventListener('input', (e) => this.previewVPosition(parseFloat(e.target.value)));
+  this.vPosition.addEventListener('change', (e) => this.changeVPosition(parseFloat(e.target.value)));
 
     this.couplingAc.addEventListener('click', () => this.changeCoupling('AC'));
     this.couplingDc.addEventListener('click', () => this.changeCoupling('DC'));
@@ -58,14 +60,18 @@ export class ControlPanel {
 
     this.tdivMinus.addEventListener('click', () => this.changeTDiv(-1));
     this.tdivPlus.addEventListener('click', () => this.changeTDiv(1));
-    this.hPosition.addEventListener('input', (e) => this.changeTPosition(parseFloat(e.target.value)));
+  // Horizontal offset (time offset): preview vs commit
+  this.hPosition.addEventListener('input', (e) => this.previewTPosition(parseFloat(e.target.value)));
+  this.hPosition.addEventListener('change', (e) => this.changeTPosition(parseFloat(e.target.value)));
 
     this.trigAuto.addEventListener('click', () => this.changeTriggerMode('Auto'));
     this.trigNormal.addEventListener('click', () => this.changeTriggerMode('Normal'));
     this.trigSingle.addEventListener('click', () => this.changeTriggerMode('Single'));
     this.trigRise.addEventListener('click', () => this.changeTriggerSlope('Rising'));
     this.trigFall.addEventListener('click', () => this.changeTriggerSlope('Falling'));
-    this.trigLevel.addEventListener('input', (e) => this.changeTriggerLevel(parseInt(e.target.value)));
+  // Trigger level: only send after release; preview updates scope
+  this.trigLevel.addEventListener('input', (e) => this.previewTriggerLevel(parseInt(e.target.value)));
+  this.trigLevel.addEventListener('change', (e) => this.changeTriggerLevel(parseInt(e.target.value)));
 
     this.runStop.addEventListener('click', () => this.toggleRunStop());
     this.single.addEventListener('click', () => this.onAcquisitionChange('single'));
@@ -88,9 +94,18 @@ export class ControlPanel {
     this.onConfigChange({ v_offset: value });
   }
 
+  previewVPosition(value) {
+    this.vPositionValue = value;
+    // No config send, purely visual (future: update scope immediately if needed)
+  }
+
   changeTPosition(value) {
     this.tPositionValue = value;
     this.onConfigChange({ t_offset: value });
+  }
+
+  previewTPosition(value) {
+    this.tPositionValue = value;
   }
 
   changeCoupling(coupling) {
@@ -117,6 +132,13 @@ export class ControlPanel {
     // Notify scope view of trigger level change
     if (this.onTriggerLevelChange) {
       this.onTriggerLevelChange(level);
+    }
+  }
+
+  previewTriggerLevel(level) {
+    this.triggerLevel = level;
+    if (this.onTriggerLevelChange) {
+      this.onTriggerLevelChange(level); // visual update only
     }
   }
 

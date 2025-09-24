@@ -9,6 +9,10 @@ export class ScopeView {
     this.currentCfgId = null; // Track current config ID
     this.onTriggerLevelChange = null; // Callback for trigger level changes
     this.isDraggingTrigger = false;
+    this.triangleGeom = null; // Store geometry of trigger triangle for hit-test
+    this.xRange = null;
+    this.yRange = null;
+    this.pendingApply = null; // queued apply while dragging
   }
 
   init() {
@@ -16,6 +20,8 @@ export class ScopeView {
       paper_bgcolor: '#1e1e1e',
       plot_bgcolor: '#1e1e1e',
       font: { color: '#ffffff' },
+      // Disable box/region selection & zoom via drag
+      dragmode: false,
       xaxis: {
         gridcolor: '#666666',
         linecolor: '#666666',
@@ -95,6 +101,7 @@ export class ScopeView {
     this.plot.addEventListener('mousemove', this.handleMouseMove.bind(this));
     this.plot.addEventListener('mouseup', this.handleMouseUp.bind(this));
     this.plot.addEventListener('mouseleave', this.handleMouseUp.bind(this));
+    this.plot.addEventListener('mousemove', this.handleHoverCursor.bind(this));
   }
 
   update(frames, config) {
@@ -189,18 +196,40 @@ export class ScopeView {
         y1: this.triggerLevelToVoltage(currentTriggerLevel, totalVoltage),
         line: { color: '#ff0000', width: 1, dash: 'dash' }
       }, {
+        // Smaller trigger triangle shifted a bit to the left (inside plot)
         type: 'path',
-        path: `M ${totalTime / 2 + this.tOffset} ${this.triggerLevelToVoltage(currentTriggerLevel, totalVoltage)} L ${totalTime / 2 + this.tOffset + totalTime * 0.03} ${this.triggerLevelToVoltage(currentTriggerLevel, totalVoltage) - totalVoltage * 0.015} L ${totalTime / 2 + this.tOffset + totalTime * 0.03} ${this.triggerLevelToVoltage(currentTriggerLevel, totalVoltage) + totalVoltage * 0.015} Z`,
+        // Geometry: left-pointing triangle
+        // tipX moved left by 2% of total time axis; width reduced; height reduced
+        path: (() => {
+          const yLevel = this.triggerLevelToVoltage(currentTriggerLevel, totalVoltage);
+            const tipX = totalTime / 2 + this.tOffset - totalTime * 0.02; // shift left
+            const baseX = tipX + totalTime * 0.015; // narrower width
+            const halfH = totalVoltage * 0.01; // smaller height
+            // Save geometry for hit test
+            this.triangleGeom = { tipX, baseX, yLevel, halfH };
+            return `M ${tipX} ${yLevel} L ${baseX} ${yLevel - halfH} L ${baseX} ${yLevel + halfH} Z`;
+        })(),
         fillcolor: '#00ff00',
         line: { color: '#00ff00', width: 1 }
       }]
     };
 
     Plotly.update(this.containerId, updateData, updateLayout);
+
+    // Store axis ranges for coordinate transforms in hit-test
+    this.xRange = updateLayout.xaxis.range.slice();
+    this.yRange = updateLayout.yaxis.range.slice();
   }
 
   setTriggerLevel(level) {
+    // If user is actively dragging, ignore external set (will apply after release)
+    if (this.isDraggingTrigger) {
+      this.pendingApply = level;
+      return;
+    }
     this.triggerLevel = level;
+    this.tempTriggerLevel = level;
+    this.redrawTriggerShape();
   }
 
   setVOffset(offset) {
@@ -215,17 +244,23 @@ export class ScopeView {
     const rect = this.plot.getBoundingClientRect();
     const x = event.clientX - rect.left;
     const y = event.clientY - rect.top;
-    
-    // Check if click is near the trigger triangle (right side)
+    if (!this.triangleGeom || !this.xRange || !this.yRange) return;
+
+    const { tipX, baseX, yLevel, halfH } = this.triangleGeom;
     const plotWidth = rect.width;
     const plotHeight = rect.height;
-    
-    // Convert pixel coordinates to plot coordinates
-    const xFraction = x / plotWidth;
-    const yFraction = 1 - (y / plotHeight); // Flip Y axis
-    
-    // Check if we're in the right area where the triangle should be (right 10% of plot)
-    if (xFraction > 0.9) { // Right 10% of the plot
+
+    // Convert pixel to data coordinates
+    const xData = this.xRange[0] + (x / plotWidth) * (this.xRange[1] - this.xRange[0]);
+    const yData = this.yRange[0] + (1 - (y / plotHeight)) * (this.yRange[1] - this.yRange[0]);
+
+    // Bounding box + small padding
+    const padX = (baseX - tipX) * 0.4;
+    const padY = halfH * 0.6;
+    const withinX = xData >= tipX - padX && xData <= baseX + padX;
+    const withinY = yData >= (yLevel - halfH - padY) && yData <= (yLevel + halfH + padY);
+
+    if (withinX && withinY) {
       this.isDraggingTrigger = true;
       this.tempTriggerLevel = this.triggerLevel; // Store current level
       event.preventDefault();
@@ -234,16 +269,55 @@ export class ScopeView {
 
   handleMouseMove(event) {
     if (!this.isDraggingTrigger) return;
-    
+    if (!this.yRange) return;
+
     const rect = this.plot.getBoundingClientRect();
     const y = event.clientY - rect.top;
     const plotHeight = rect.height;
-    const yFraction = 1 - (y / plotHeight); // Flip Y axis
-    
-    // Update temporary trigger level for visual feedback, but don't send to API yet
-    this.tempTriggerLevel = Math.max(0, Math.min(255, Math.round(yFraction * 255)));
-    this.updateTriggerDisplay(); // Update visual display without sending to API
+
+    // Convert pixel y to data y (voltage domain currently used in layout)
+    const yData = this.yRange[0] + (1 - (y / plotHeight)) * (this.yRange[1] - this.yRange[0]);
+
+    // Map voltage range (yRange) to 0..255 trigger scale
+    const minY = this.yRange[0];
+    const maxY = this.yRange[1];
+    const clampedY = Math.max(minY, Math.min(maxY, yData));
+    const ratio = (clampedY - minY) / (maxY - minY); // 0..1 from bottom to top
+    const level = Math.round(ratio * 255);
+
+    this.tempTriggerLevel = Math.max(0, Math.min(255, level));
+    // Just force a redraw by calling update with empty frames but current config? Simpler: rely on next polling update.
+    // We can optionally issue a lightweight Plotly.relayout to move shapes without data fetch.
+    this.redrawTriggerShape();
     event.preventDefault();
+  }
+
+  handleHoverCursor(event) {
+    if (this.isDraggingTrigger) {
+      this.plot.style.cursor = 'ns-resize';
+      return;
+    }
+    if (!this.triangleGeom || !this.xRange || !this.yRange) {
+      this.plot.style.cursor = 'default';
+      return;
+    }
+    const rect = this.plot.getBoundingClientRect();
+    const x = event.clientX - rect.left;
+    const y = event.clientY - rect.top;
+    const plotWidth = rect.width;
+    const plotHeight = rect.height;
+    const xData = this.xRange[0] + (x / plotWidth) * (this.xRange[1] - this.xRange[0]);
+    const yData = this.yRange[0] + (1 - (y / plotHeight)) * (this.yRange[1] - this.yRange[0]);
+    const { tipX, baseX, yLevel, halfH } = this.triangleGeom;
+    const padX = (baseX - tipX) * 0.5;
+    const padY = halfH * 0.8;
+    const withinX = xData >= tipX - padX && xData <= baseX + padX;
+    const withinY = yData >= (yLevel - halfH - padY) && yData <= (yLevel + halfH + padY);
+    if (withinX && withinY) {
+      this.plot.style.cursor = 'ns-resize';
+    } else {
+      this.plot.style.cursor = 'default';
+    }
   }
 
   handleMouseUp(event) {
@@ -254,6 +328,13 @@ export class ScopeView {
         this.onTriggerLevelChange(this.triggerLevel);
       }
       this.isDraggingTrigger = false;
+      // If while dragging we received an external update, apply it now (but do not send back to API)
+      if (this.pendingApply !== null) {
+        this.triggerLevel = this.pendingApply;
+        this.tempTriggerLevel = this.pendingApply;
+        this.pendingApply = null;
+        this.redrawTriggerShape();
+      }
     }
   }
 
@@ -263,6 +344,26 @@ export class ScopeView {
 
   updateTriggerDisplay() {
     // This method is no longer used - visual updates happen in the main update method
+  }
+
+  redrawTriggerShape() {
+    if (!this.plot || !this.triangleGeom || !this.xRange || !this.yRange) return;
+    const shapes = this.plot.layout.shapes || [];
+    if (shapes.length < 2) return;
+    const totalTime = this.xRange[1] - this.xRange[0];
+    const totalVoltage = this.yRange[1] - this.yRange[0];
+    const currentTriggerLevel = this.isDraggingTrigger ? this.tempTriggerLevel : this.triggerLevel;
+    const yLevel = this.triggerLevelToVoltage(currentTriggerLevel, totalVoltage);
+
+    // Update line (shape 0)
+    shapes[0].y0 = yLevel;
+    shapes[0].y1 = yLevel;
+
+    // Recompute triangle path with stored geometry base relationships
+    const { tipX, baseX, halfH } = this.triangleGeom;
+    shapes[1].path = `M ${tipX} ${yLevel} L ${baseX} ${yLevel - halfH} L ${baseX} ${yLevel + halfH} Z`;
+
+    Plotly.relayout(this.plot, { shapes });
   }
 
   setTriggerLevelChangeCallback(callback) {

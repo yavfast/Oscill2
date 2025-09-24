@@ -23,8 +23,9 @@ class App {
     this.scopeView.init();
     this.controlPanel.init();
 
-    // Connect scope view trigger level changes to control panel
+    // Connect scope view trigger level changes: callback fires only on mouseup (end of drag)
     this.scopeView.setTriggerLevelChangeCallback((level) => {
+      // Send config only after drag completes
       this.onConfigChange({ trigger_level: level });
     });
 
@@ -73,7 +74,9 @@ class App {
               this.statusBar.updateStatus(null, data.config);
               // Update scope view trigger level
               if (data.config.trigger_level !== undefined) {
-                this.scopeView.setTriggerLevel(data.config.trigger_level);
+                if (!this.scopeView.isDraggingTrigger) {
+                  this.scopeView.setTriggerLevel(data.config.trigger_level);
+                }
               }
             }
         }
@@ -135,7 +138,9 @@ class App {
       this.controlPanel.updateControls(status.config);
       // Update scope view trigger level
       if (status.config.trigger_level !== undefined) {
-        this.scopeView.setTriggerLevel(status.config.trigger_level);
+        if (!this.scopeView.isDraggingTrigger) {
+          this.scopeView.setTriggerLevel(status.config.trigger_level);
+        }
       }
     }
   }
