@@ -12,7 +12,7 @@ sys.path.append(os.path.dirname(__file__))
 from oscill_client import OscillClient
 from device_service import DeviceService
 
-app = FastAPI(title="Oscill2 Web Prototype")
+app = FastAPI(title="Oscill2 Web App")
 
 app.add_middleware(
     CORSMiddleware,

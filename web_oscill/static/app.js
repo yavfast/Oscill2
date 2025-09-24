@@ -16,6 +16,7 @@ class App {
     this.statusInterval = null;
     this.currentCfgId = null; // Track current config ID
     this.isDeviceConnected = false; // Track device connection status
+    this.frameRequestInFlight = false; // Guard to avoid overlapping frame requests
   }
 
   async init() {
@@ -47,30 +48,39 @@ class App {
   startPolling() {
     if (this.pollInterval) clearInterval(this.pollInterval);
     this.pollInterval = setInterval(async () => {
-      if (!this.isRunning) return;
+      // Avoid launching new request if:
+      // 1) Acquisition stopped
+      // 2) Previous request still in flight (prevents duplicates you observed)
+      if (!this.isRunning || this.frameRequestInFlight) return;
 
+      this.frameRequestInFlight = true;
       try {
-        const data = await this.api.getFrames(this.api.getLastSeq());
+        const lastSeq = this.api.getLastSeq();
+        const data = await this.api.getFrames(lastSeq);
+
         if (data.frames && data.frames.length > 0) {
           this.scopeView.update(data.frames, data.config || {});
           const latestFrame = data.frames[data.frames.length - 1];
           this.measurementPanel.displayMeasurements(latestFrame.measurements);
         }
+
         if (data.config) {
           // Update current config ID if it's newer
-          if (data.config.cfg_id !== undefined && 
-              (this.currentCfgId === null || data.config.cfg_id >= this.currentCfgId)) {
-            this.currentCfgId = data.config.cfg_id;
-            this.controlPanel.updateControls(data.config);
-            this.statusBar.updateStatus(null, data.config);
-            // Update scope view trigger level
-            if (data.config.trigger_level !== undefined) {
-              this.scopeView.setTriggerLevel(data.config.trigger_level);
+            if (data.config.cfg_id !== undefined &&
+                (this.currentCfgId === null || data.config.cfg_id >= this.currentCfgId)) {
+              this.currentCfgId = data.config.cfg_id;
+              this.controlPanel.updateControls(data.config);
+              this.statusBar.updateStatus(null, data.config);
+              // Update scope view trigger level
+              if (data.config.trigger_level !== undefined) {
+                this.scopeView.setTriggerLevel(data.config.trigger_level);
+              }
             }
-          }
         }
       } catch (e) {
         console.error('Polling error:', e);
+      } finally {
+        this.frameRequestInFlight = false;
       }
     }, 100); // 10 Hz
   }
@@ -80,6 +90,7 @@ class App {
       clearInterval(this.pollInterval);
       this.pollInterval = null;
     }
+    this.frameRequestInFlight = false; // Reset guard
   }
 
   startStatusPolling() {
