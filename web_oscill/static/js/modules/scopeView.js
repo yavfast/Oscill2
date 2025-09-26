@@ -19,26 +19,16 @@ export class ScopeView {
     // State
     this.triggerLevel = 128;
     this.tempTriggerLevel = 128;
-    this.vOffset = 0;
-    this.tOffset = 0;
     this.currentCfgId = null;
     this.onTriggerLevelChange = null;
-    this.onOffsetChange = null;
-    this.onTimeOffsetChange = null;
 
     this.isDraggingTrigger = false;
-    this.isDraggingCenterY = false;
-    this.isDraggingCenterX = false;
 
     this.xRange = null; // [min,max] seconds
     this.yRange = null; // [min,max] volts
     this.pendingApply = null;
 
     // Throttling
-    this.lastOffsetNotifyTime = 0;
-    this.offsetNotifyIntervalMs = 80;
-    this.lastSentVOffset = null;
-    this.lastSentTOffset = null;
 
     this.lastFrames = null;
     this.lastConfig = null;
@@ -124,7 +114,7 @@ export class ScopeView {
     const points = [];
     for (let i = 0; i < samples.length; i++) {
       const time = (i / samples.length) * totalTime - totalTime / 2; // do not apply tOffset visually
-      const voltage = ((samples[i] - 128) / 128) * (totalVoltage / 2) + this.vOffset; // include vOffset for preview
+      const voltage = ((samples[i] - 128) / 128) * (totalVoltage / 2);
       points.push(toX(time), toY(voltage));
     }
     this.waveLine.points(points);
@@ -148,42 +138,7 @@ export class ScopeView {
     }
   }
 
-  setVOffset(offset) {
-    this.vOffset = offset;
-    this.redrawWave();
-  }
-
-  setTOffset(offset) {
-    this.tOffset = offset;
-  }
-
   setTriggerLevelChangeCallback(callback) { this.onTriggerLevelChange = callback; }
-  setOffsetChangeCallback(callback) { this.onOffsetChange = callback; }
-  setTimeOffsetChangeCallback(callback) { this.onTimeOffsetChange = callback; }
-
-  notifyLiveVOffset() {
-    if (!this.onOffsetChange) return;
-    const now = performance.now();
-    const totalVoltage = (this.yRange && this.yRange.length === 2) ? (this.yRange[1] - this.yRange[0]) : 8;
-    const deltaThreshold = totalVoltage * 0.002;
-    if (this.lastSentVOffset === null || (now - this.lastOffsetNotifyTime) >= this.offsetNotifyIntervalMs || Math.abs(this.vOffset - this.lastSentVOffset) >= deltaThreshold) {
-      this.lastOffsetNotifyTime = now;
-      this.lastSentVOffset = this.vOffset;
-      this.onOffsetChange(this.vOffset);
-    }
-  }
-
-  notifyLiveTOffset() {
-    if (!this.onTimeOffsetChange) return;
-    const now = performance.now();
-    const totalTime = (this.xRange && this.xRange.length === 2) ? (this.xRange[1] - this.xRange[0]) : 0.05;
-    const deltaThreshold = totalTime * 0.002;
-    if (this.lastSentTOffset === null || (now - this.lastOffsetNotifyTime) >= this.offsetNotifyIntervalMs || Math.abs(this.tOffset - this.lastSentTOffset) >= deltaThreshold) {
-      this.lastOffsetNotifyTime = now;
-      this.lastSentTOffset = this.tOffset;
-      this.onTimeOffsetChange(this.tOffset);
-    }
-  }
 
   triggerLevelToVoltage(level, totalVoltage) { return ((level - 128) / 128) * (totalVoltage / 2); }
   // Formatting delegated to format.js
@@ -238,7 +193,7 @@ export class ScopeView {
     const points = [];
     for (let i = 0; i < samples.length; i++) {
       const time = (i / samples.length) * totalTime + this.xRange[0];
-      const voltage = ((samples[i] - 128) / 128) * (totalVoltage / 2) + this.vOffset;
+      const voltage = ((samples[i] - 128) / 128) * (totalVoltage / 2);
       points.push(toX(time), toY(voltage));
     }
     this.waveLine.points(points);
@@ -372,58 +327,26 @@ export class ScopeView {
   _positionTriggerGroup(yPix) { if (!this.triggerGroup) return; const r = this.getInnerRect(); this.triggerGroup.position({ x: r.left, y: yPix }); this.overlayLayer.batchDraw(); }
 
   _createCenterYGroup() {
-    const group = new Konva.Group({ x: 0, y: 0, draggable: true });
+    const group = new Konva.Group({ x: 0, y: 0 });
     const inner = () => this.getInnerRect();
     const line = new Konva.Line({ name: 'lineCY', points: [0, 0, inner().width, 0], stroke: '#00bcd4', strokeWidth: 1, dash: [4, 4] });
     const tri = new Konva.RegularPolygon({ name: 'triCY', x: inner().width - Math.max(8, inner().width * 0.02), y: 0, sides: 3, radius: Math.max(5, inner().height * 0.011), fill: '#00bcd4' });
     tri.rotation(90);
     group.add(line, tri);
     group.on('draw', () => { const r = inner(); line.points([0, 0, r.width, 0]); tri.x(r.width - Math.max(8, r.width * 0.02)); tri.radius(Math.max(5, r.height * 0.011)); });
-    group.dragBoundFunc((pos) => { const r = inner(); const y = Math.max(r.top, Math.min(r.top + r.height, pos.y)); return { x: r.left, y }; });
-    group.on('mouseenter', () => { this.stage.container().style.cursor = 'ns-resize'; });
-    group.on('mouseleave', () => { this.stage.container().style.cursor = 'default'; });
-    let startY = 0; let startOffset = 0;
-    group.on('dragstart', () => { this.isDraggingCenterY = true; startY = group.y(); startOffset = this.vOffset; });
-    group.on('dragmove', () => {
-      const yPix = group.y();
-      const deltaPix = yPix - startY;
-      const r = inner();
-      const totalVoltage = this.yRange ? (this.yRange[1] - this.yRange[0]) : 8;
-      const voltsPerPix = totalVoltage / Math.max(1, r.height);
-      const deltaV = deltaPix * voltsPerPix; // down => +pixels => -volts
-      this.vOffset = startOffset - deltaV;
-      this.redrawWave();
-      this.notifyLiveVOffset();
-    });
-    group.on('dragend', () => { this.isDraggingCenterY = false; if (this.onOffsetChange) this.onOffsetChange(this.vOffset); });
     return group;
   }
 
   _positionCenterYGroup(yPix) { if (!this.centerYGroup) return; const r = this.getInnerRect(); this.centerYGroup.position({ x: r.left, y: yPix }); this.overlayLayer.batchDraw(); }
 
   _createCenterXGroup() {
-    const group = new Konva.Group({ x: 0, y: 0, draggable: true });
+    const group = new Konva.Group({ x: 0, y: 0 });
     const inner = () => this.getInnerRect();
     const line = new Konva.Line({ name: 'lineCX', points: [0, 0, 0, inner().height], stroke: '#e91e63', strokeWidth: 1, dash: [4, 4] });
     const tri = new Konva.RegularPolygon({ name: 'triCX', x: 0, y: Math.max(10, inner().height * 0.05), sides: 3, radius: Math.max(5, inner().height * 0.011), fill: '#e91e63' });
     tri.rotation(180);
     group.add(line, tri);
     group.on('draw', () => { const r = inner(); line.points([0, 0, 0, r.height]); tri.y(Math.max(10, r.height * 0.05)); tri.radius(Math.max(5, r.height * 0.011)); });
-    group.dragBoundFunc((pos) => { const r = inner(); const x = Math.max(r.left, Math.min(r.left + r.width, pos.x)); return { x, y: r.top }; });
-    group.on('mouseenter', () => { this.stage.container().style.cursor = 'ew-resize'; });
-    group.on('mouseleave', () => { this.stage.container().style.cursor = 'default'; });
-    let startX = 0; let startT = 0;
-    group.on('dragstart', () => { this.isDraggingCenterX = true; startX = group.x(); startT = this.tOffset; });
-    group.on('dragmove', () => {
-      const xPix = group.x();
-      const deltaPix = xPix - startX;
-      const r = inner();
-      const totalTime = this.xRange ? (this.xRange[1] - this.xRange[0]) : 0.05;
-      const timePerPix = totalTime / Math.max(1, r.width);
-      this.tOffset = startT + deltaPix * timePerPix;
-      this.notifyLiveTOffset();
-    });
-    group.on('dragend', () => { this.isDraggingCenterX = false; if (this.onTimeOffsetChange) this.onTimeOffsetChange(this.tOffset); });
     return group;
   }
 

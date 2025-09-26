@@ -14,7 +14,6 @@ export class ControlPanel {
     this.triggerLevel = 128;
     this.vPositionValue = 0; // in DIVS (-4..4)
     this.tPositionValue = 0;
-    this.onVOffsetPreview = null;
     this.onTriggerLevelChange = null;
 
     this._ui = {}; // store Konva nodes
@@ -256,13 +255,6 @@ export class ControlPanel {
     this.onConfigChange({ offset_V: volts });
   }
 
-  previewVPosition(value) {
-    this.vPositionValue = value;
-    const vDivV = (this.vDivValues[this.currentVIndex] || 200) / 1000.0;
-    const volts = value * vDivV;
-    if (this.onVOffsetPreview) this.onVOffsetPreview(volts);
-  }
-
   changeTPosition(value) {
     this.tPositionValue = value;
     // Optional: backend currently expects t_offset_samples; this UI preview is informational only
@@ -332,14 +324,6 @@ export class ControlPanel {
       this._ui.levelSlider.handle.x(x);
       this._ui.levelSlider.valueText.text(`${Math.round(this.triggerLevel)}`);
     }
-    if (config.v_offset && typeof config.v_offset.v === 'number' && this._ui.vposSlider) {
-      const vDivV = (this.vDivValues[this.currentVIndex] || 200) / 1000.0;
-      const divs = Math.max(-4, Math.min(4, config.v_offset.v / vDivV));
-      this.vPositionValue = divs;
-      const x = this._ui.vposSlider.toX(divs);
-      this._ui.vposSlider.handle.x(x);
-      this._ui.vposSlider.valueText.text(`${divs.toFixed(1)} div`);
-    }
     // t_offset is represented in samples in config; the UI slider is in divs; keep as-is for now.
     this.layer && this.layer.batchDraw();
   }
@@ -351,7 +335,6 @@ export class ControlPanel {
     this.layer.batchDraw();
   }
 
-  setVOffsetPreviewCallback(callback) { this.onVOffsetPreview = callback; }
   setTriggerLevelChangeCallback(callback) { this.onTriggerLevelChange = callback; }
 
   // Formatting delegated to format.js (formatUniversal)

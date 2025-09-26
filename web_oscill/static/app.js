@@ -17,7 +17,6 @@ class App {
     this.currentCfgId = null; // Track current config ID
     this.isDeviceConnected = false; // Track device connection status
     this.frameRequestInFlight = false; // Guard to avoid overlapping frame requests
-    this.lastLocalVOffsetAt = 0; // timestamp of last local vOffset change
   }
 
   async init() {
@@ -39,42 +38,7 @@ class App {
     this.controlPanel.setTriggerLevelChangeCallback((level) => {
       this.scopeView.setTriggerLevel(level);
     });
-    // Preview V offset from slider moves the waveform immediately
-    this.controlPanel.setVOffsetPreviewCallback((volts) => {
-      this.scopeView.setVOffset(volts);
-      this.lastLocalVOffsetAt = Date.now();
-    });
     
-    // Connect scope view vertical offset changes: fires during drag (throttled) and on mouseup
-    this.scopeView.setOffsetChangeCallback(async (newOffsetV) => {
-      this.onConfigChange({ offset_V: newOffsetV });
-    });
-
-    this.scopeView.setTimeOffsetChangeCallback(async (newOffsetT) => {
-      // The tOffset in scopeView is in seconds. We need to convert it to samples for the device.
-      const status = await this.api.getStatus();
-      if (status && status.config && status.config.t_div) {
-        const tDiv = status.config.t_div.v;
-        const samplesPerDiv = status.config.samples_per_div || 32;
-        const totalSamples = samplesPerDiv * 10; // 10 divisions on screen
-        const totalTime = tDiv * 10;
-        const timePerSample = totalTime / totalSamples;
-        
-        // Convert the time offset in seconds to a sample offset.
-        // The 'TC' register on the device represents the number of pre-trigger samples.
-        // A positive tOffset on the screen (waveform shifted right) means we want to see more of the signal *after* the trigger,
-        // which corresponds to *fewer* pre-trigger samples.
-        const centerSamples = totalSamples / 2;
-        const offsetInSamples = newOffsetT / timePerSample;
-        const newTcValue = Math.round(centerSamples - offsetInSamples);
-
-        // Clamp the value to the valid range for the TC register (e.g., 0 to totalSamples)
-        const clampedTc = Math.max(0, Math.min(totalSamples, newTcValue));
-        
-        this.onConfigChange({ t_offset_samples: clampedTc });
-      }
-    });
-
     // Try to get initial status
     try {
       const status = await this.api.getStatus();
@@ -161,13 +125,6 @@ class App {
                   this.scopeView.setTriggerLevel(data.config.trigger_level);
                 }
               }
-              // Sync vOffset from device so waveform matches hardware
-              if (data.config.v_offset && typeof data.config.v_offset.v === 'number') {
-                // Avoid overriding a local change immediately (race with polling)
-                if (Date.now() - this.lastLocalVOffsetAt > 400) {
-                  this.scopeView.setVOffset(data.config.v_offset.v);
-                }
-              }
             }
         }
       } catch (e) {
@@ -232,11 +189,6 @@ class App {
           this.scopeView.setTriggerLevel(status.config.trigger_level);
         }
       }
-      if (status.config.v_offset && typeof status.config.v_offset.v === 'number') {
-        if (Date.now() - this.lastLocalVOffsetAt > 400) {
-          this.scopeView.setVOffset(status.config.v_offset.v);
-        }
-      }
     }
   }
 
@@ -249,14 +201,6 @@ class App {
         }
         this.controlPanel.updateControls(response.config);
         this.statusBar.updateStatus(null, response.config);
-        // If this was an offset_V change, immediately reflect it visually and mark as local
-        if (Object.prototype.hasOwnProperty.call(changes, 'offset_V')) {
-          const v = Number(changes.offset_V);
-          if (!Number.isNaN(v)) {
-            this.scopeView.setVOffset(v);
-            this.lastLocalVOffsetAt = Date.now();
-          }
-        }
       }
     }).catch(e => {
       console.error('Config change error:', e);
