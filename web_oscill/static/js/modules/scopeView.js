@@ -306,11 +306,14 @@ export class ScopeView {
   _createTriggerGroup() {
     const group = new Konva.Group({ x: 0, y: 0, draggable: true });
     const inner = () => this.getInnerRect();
-    const line = new Konva.Line({ name: 'lineTrig', points: [0, 0, inner().width, 0], stroke: '#ff0000', strokeWidth: 1, dash: [6, 4] });
-    const tri = new Konva.RegularPolygon({ name: 'triTrig', x: inner().width - Math.max(8, inner().width * 0.02), y: 0, sides: 3, radius: Math.max(6, inner().height * 0.012), fill: '#00ff00' });
-    tri.rotation(90);
-    group.add(line, tri);
-    group.on('draw', () => { const r = inner(); line.points([0, 0, r.width, 0]); tri.x(r.width - Math.max(8, r.width * 0.02)); tri.radius(Math.max(6, r.height * 0.012)); });
+    const markerX = inner().width;
+    const line = new Konva.Line({ name: 'lineTrig', points: [0, 0, markerX, 0], stroke: '#ff0000', strokeWidth: 1, dash: [6, 4] });
+    const tri = new Konva.RegularPolygon({ name: 'triTrig', x: markerX + 3, y: 0, sides: 3, radius: 6, fill: '#ff0000' });
+    tri.rotation(270); 
+    const rect = new Konva.Rect({ name: 'rectTrig', x: markerX + 6, y: -5, width: 10, height: 10, fill: '#ff0000', stroke: '#ff0000', strokeWidth: 1 });
+    const text = new Konva.Text({ name: 'textTrig', x: markerX + 8, y: -4, text: 'T', fontSize: 10, fill: '#ffffff', fontFamily: 'system-ui, -apple-system, Segoe UI, Roboto, Arial' });
+    group.add(line, tri, rect, text);
+    group.on('draw', () => { const r = inner(); const mx = r.width - 30; line.points([0, 0, mx, 0]); tri.x(mx); rect.x(mx + 6); text.x(mx + 8); });
     group.dragBoundFunc((pos) => { const r = inner(); const y = Math.max(r.top, Math.min(r.top + r.height, pos.y)); return { x: r.left, y }; });
     group.on('mouseenter', () => { this.stage.container().style.cursor = 'ns-resize'; });
     group.on('mouseleave', () => { this.stage.container().style.cursor = 'default'; });
