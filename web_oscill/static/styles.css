@@ -10,17 +10,17 @@ body {
   color: #ffffff;
   height: 100vh;
   display: grid;
-  grid-template-rows: auto 1fr auto;
+  grid-template-rows: auto 1fr;
   grid-template-areas:
     "status"
-    "main"
-    "measurements";
+    "main";
+  overflow-x: hidden;
 }
 
 #status-bar {
   grid-area: status;
   background-color: #2d2d2d;
-  padding: 8px 16px;
+  padding: 0;
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -70,26 +70,45 @@ body {
   text-align: center;
 }
 
+/* Main layout: left pane (scope + bottom measurements), right pane controls full height */
 #main-area {
   grid-area: main;
   display: grid;
-  grid-template-columns: 1fr 300px;
-  grid-template-areas: "scope controls";
+  grid-template-columns: 1fr 320px;
+  column-gap: 0;
+  width: 100%;
+  height: 100%;
+}
+
+#left-pane {
+  display: grid;
+  grid-template-rows: 1fr auto; /* scope grows, measurements stick to bottom */
+  min-height: 0; /* allow child to shrink */
+  height: 100%;
+  min-width: 0; /* allow content to shrink within grid column */
 }
 
 #scope-view {
-  grid-area: scope;
   background-color: #1e1e1e;
-  padding: 8px;
-  height: 100%;
+  padding: 0;
   min-height: 400px;
+  min-width: 0;
+}
+
+#measurement-panel {
+  background-color: #2d2d2d;
+  padding: 0;
+  display: block; /* Konva canvas handles layout */
+  min-height: 60px;
 }
 
 #control-panel {
-  grid-area: controls;
   background-color: #2d2d2d;
-  padding: 16px;
+  padding: 0;
   overflow-y: auto;
+  height: 100%;
+  min-width: 320px;
+  max-width: 320px;
 }
 
 .control-group {
@@ -180,16 +199,6 @@ body {
   margin-left: 8px;
 }
 
-#measurement-panel {
-  grid-area: measurements;
-  background-color: #2d2d2d;
-  padding: 8px 16px;
-  display: flex;
-  justify-content: space-around;
-  align-items: center;
-  min-height: 60px;
-}
-
 .measurement {
   display: flex;
   flex-direction: column;
@@ -205,4 +214,11 @@ body {
 .measurement span {
   color: #ffffff;
   font-weight: bold;
+}
+
+/* Status Konva container sizing */
+#status-canvas {
+  width: 100%;
+  height: 40px;
+  padding: 0;
 }

@@ -5,110 +5,20 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Oscill2 — Web Oscilloscope</title>
   <link rel="stylesheet" href="/static/styles.css" />
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
-  <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+  <script src="https://unpkg.com/konva@9/konva.min.js"></script>
 </head>
 <body>
-  <div id="status-bar">
-    <div id="core-params">
-      <span id="time-div">5 ms/div</span>
-      <span id="volts-div">200 mV/div</span>
-      <span id="trigger-mode">Auto, Rising Edge</span>
-    </div>
-    <div id="status-info">
-      <div id="connection-status">Disconnected</div>
-    </div>
-  </div>
+  <div id="status-bar"><div id="status-canvas"></div></div>
 
   <div id="main-area">
-    <div id="scope-view"></div>
-    <div id="control-panel">
-      <div class="control-group acquisition-controls">
-        <button id="run-stop" class="acquisition-btn"><i class="fas fa-play"></i> Run</button>
-        <button id="single" class="acquisition-btn"><i class="fas fa-bolt"></i> Single</button>
-      </div>
-
-      <div class="control-group">
-        <h3>Vertical</h3>
-        <div class="control">
-          <label>Volts/Div:</label>
-          <button id="vdiv-minus"><i class="fas fa-minus"></i></button>
-          <span id="vdiv-value">200 mV</span>
-          <button id="vdiv-plus"><i class="fas fa-plus"></i></button>
-        </div>
-        <div class="control">
-          <label>Position:</label>
-          <input type="range" id="v-position" min="-4" max="4" step="0.1" value="0">
-        </div>
-        <div class="control">
-          <label>Coupling:</label>
-          <button id="coupling-ac">AC</button>
-          <button id="coupling-dc" class="active">DC</button>
-          <button id="coupling-gnd">GND</button>
-        </div>
-      </div>
-
-      <div class="control-group">
-        <h3>Horizontal</h3>
-        <div class="control">
-          <label>Time/Div:</label>
-          <button id="tdiv-minus"><i class="fas fa-minus"></i></button>
-          <span id="tdiv-value">5 ms</span>
-          <button id="tdiv-plus"><i class="fas fa-plus"></i></button>
-        </div>
-        <div class="control">
-          <label>Position:</label>
-          <input type="range" id="h-position" min="-5" max="5" step="0.1" value="0">
-        </div>
-      </div>
-
-      <div class="control-group">
-        <h3>Trigger</h3>
-        <div class="control">
-          <label>Mode:</label>
-          <button id="trig-auto" class="active">Auto</button>
-          <button id="trig-normal">Normal</button>
-          <button id="trig-single">Single</button>
-        </div>
-        <div class="control">
-          <label>Slope:</label>
-          <button id="trig-rise" class="active">Rising</button>
-          <button id="trig-fall">Falling</button>
-        </div>
-        <div class="control">
-          <label>Level:</label>
-          <input type="range" id="trig-level" min="0" max="255" value="128">
-        </div>
-      </div>
+    <div id="left-pane">
+      <div id="scope-view"></div>
+      <div id="measurement-panel"></div>
     </div>
+    <div id="control-panel"></div>
   </div>
 
-  <div id="measurement-panel">
-    <div class="measurement">
-      <label>Frequency:</label>
-      <span id="freq">-</span>
-    </div>
-    <div class="measurement">
-      <label>Period:</label>
-      <span id="period">-</span>
-    </div>
-    <div class="measurement">
-      <label>Vpp:</label>
-      <span id="vpp">-</span>
-    </div>
-    <div class="measurement">
-      <label>Vmax:</label>
-      <span id="vmax">-</span>
-    </div>
-    <div class="measurement">
-      <label>Vmin:</label>
-      <span id="vmin">-</span>
-    </div>
-    <div class="measurement">
-      <label>Vavg:</label>
-      <span id="vavg">-</span>
-    </div>
-  </div>
+  
 
   <script type="module" src="/static/app.js"></script>
 </body>

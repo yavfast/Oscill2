@@ -71,7 +71,9 @@ def api_acquire_single():
         if v_div_mv is not None and samples:
             full_scale_mv = v_div_mv * 8.0
             center = 127.5
-            samples_mv = [ ( (s - center) / 256.0 ) * full_scale_mv for s in samples ]
+            # The offset is applied on the device, so raw samples are already shifted.
+            # We just need to scale them to the voltage range.
+            samples_mv = [ ((s - center) / 128.0) * (full_scale_mv / 2.0) for s in samples ]
             try:
                 min_mv = min(samples_mv)
                 max_mv = max(samples_mv)
@@ -126,6 +128,7 @@ class ConfigReq(BaseModel):
     v_div_mV: Optional[int] = None
     t_div_s: Optional[float] = None
     offset_V: Optional[float] = None
+    t_offset_samples: Optional[int] = None
     trigger_level: Optional[int] = None
     trigger_mode: Optional[str] = None  # "Auto", "Normal", "Single"
     trigger_slope: Optional[str] = None  # "Rising", "Falling"
@@ -144,6 +147,8 @@ def api_config(req: ConfigReq):
             changes["t_div_s"] = req.t_div_s
         if req.offset_V is not None:
             changes["offset_V"] = req.offset_V
+        if req.t_offset_samples is not None:
+            changes["t_offset_samples"] = req.t_offset_samples
         if req.trigger_level is not None:
             changes["trigger_level"] = req.trigger_level
         if req.trigger_mode is not None:
@@ -158,7 +163,26 @@ def api_config(req: ConfigReq):
             changes["coupling"] = req.coupling
 
         status, warnings = service.apply_config(changes)
-        return {"status": "ok", **status, "warnings": warnings}
+        # Convert embedded config to UI format for consistency
+        raw_cfg = status.get("config", {}) if isinstance(status, dict) else {}
+        new_config: Dict[str, Any] = {}
+        if "v_div_mV" in raw_cfg and raw_cfg["v_div_mV"] is not None:
+            new_config["v_div"] = {"v": raw_cfg["v_div_mV"], "u": "mV"}
+        if "t_div_s" in raw_cfg and raw_cfg["t_div_s"] is not None:
+            new_config["t_div"] = {"v": raw_cfg["t_div_s"], "u": "s"}
+        if "offset_V" in raw_cfg and raw_cfg["offset_V"] is not None:
+            new_config["v_offset"] = {"v": raw_cfg["offset_V"], "u": "V"}
+        if "t_offset_samples" in raw_cfg:
+            new_config["t_offset"] = {"v": raw_cfg["t_offset_samples"], "u": "samples"}
+        if "trigger_level" in raw_cfg:
+            new_config["trigger_level"] = raw_cfg["trigger_level"]
+        if "trigger_mode" in raw_cfg:
+            new_config["trigger_mode"] = raw_cfg["trigger_mode"]
+        if "samples_per_div" in raw_cfg:
+            new_config["samples_per_div"] = raw_cfg["samples_per_div"]
+        if "cfg_id" in raw_cfg:
+            new_config["cfg_id"] = raw_cfg["cfg_id"]
+        return {"status": "ok", "config": new_config, "warnings": warnings}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -235,10 +259,12 @@ def calculate_measurements(samples: List[int], config: Dict[str, Any]) -> Dict[s
     full_scale_mv = v_div_mv * 8.0
     center = 127.5
     
+    # We do not add offset_v here because the device already applied it.
+    # The raw samples are shifted. We just scale them.
     voltages_mv = []
     for s in samples:
         # Convert ADC value to voltage in mV
-        v_mv = ((s - center) / 256.0) * full_scale_mv + (offset_v * 1000)
+        v_mv = ((s - center) / 128.0) * (full_scale_mv / 2.0)
         voltages_mv.append(v_mv)
     
     if not voltages_mv:

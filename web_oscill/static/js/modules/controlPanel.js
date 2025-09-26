@@ -1,3 +1,5 @@
+import { formatUniversal, Quantity, FormatType } from './format.js';
+
 export class ControlPanel {
   constructor(onConfigChange, onAcquisitionChange) {
     this.onConfigChange = onConfigChange;
@@ -10,97 +12,260 @@ export class ControlPanel {
     this.triggerMode = 'Auto';
     this.triggerSlope = 'Rising';
     this.triggerLevel = 128;
-    this.vPosition = 0;
-    this.tPosition = 0;
-    this.onTriggerLevelChange = null; // Callback for trigger level changes
+    this.vPositionValue = 0; // in DIVS (-4..4)
+    this.tPositionValue = 0;
+    this.onVOffsetPreview = null;
+    this.onTriggerLevelChange = null;
+
+    this._ui = {}; // store Konva nodes
   }
 
   init() {
-    this.bindElements();
-    this.setupEventListeners();
-    this.updateDisplay();
-    this.updateRunStopButton(); // Initialize button state
+    this.container = document.getElementById('control-panel');
+    // Clear existing DOM controls and mount canvas UI
+    this.container.innerHTML = '';
+    const width = this.container.clientWidth || 320;
+    const height = this.container.clientHeight || window.innerHeight - 60;
+    this.stage = new Konva.Stage({ container: this.container, width, height });
+    this.layer = new Konva.Layer();
+    this.stage.add(this.layer);
+
+    this._buildUI();
+    this._layoutUI();
+
+    this._resizeObserver = new ResizeObserver(() => this._resize());
+    this._resizeObserver.observe(this.container);
   }
 
-  bindElements() {
-    this.vdivMinus = document.getElementById('vdiv-minus');
-    this.vdivPlus = document.getElementById('vdiv-plus');
-    this.vdivValue = document.getElementById('vdiv-value');
-    this.vPosition = document.getElementById('v-position');
-    this.couplingAc = document.getElementById('coupling-ac');
-    this.couplingDc = document.getElementById('coupling-dc');
-    this.couplingGnd = document.getElementById('coupling-gnd');
-
-    this.tdivMinus = document.getElementById('tdiv-minus');
-    this.tdivPlus = document.getElementById('tdiv-plus');
-    this.tdivValue = document.getElementById('tdiv-value');
-    this.hPosition = document.getElementById('h-position');
-
-    this.trigAuto = document.getElementById('trig-auto');
-    this.trigNormal = document.getElementById('trig-normal');
-    this.trigSingle = document.getElementById('trig-single');
-    this.trigRise = document.getElementById('trig-rise');
-    this.trigFall = document.getElementById('trig-fall');
-    this.trigLevel = document.getElementById('trig-level');
-
-    this.runStop = document.getElementById('run-stop');
-    this.single = document.getElementById('single');
+  _resize() {
+    const w = this.container.clientWidth || 320;
+    const h = this.container.clientHeight || window.innerHeight - 60;
+    this.stage.size({ width: w, height: h });
+    this._layoutUI();
   }
 
-  setupEventListeners() {
-    this.vdivMinus.addEventListener('click', () => this.changeVDiv(-1));
-    this.vdivPlus.addEventListener('click', () => this.changeVDiv(1));
-  // Vertical offset: preview during drag (input), commit on release (change)
-  this.vPosition.addEventListener('input', (e) => this.previewVPosition(parseFloat(e.target.value)));
-  this.vPosition.addEventListener('change', (e) => this.changeVPosition(parseFloat(e.target.value)));
+  _button(x, y, w, h, label, onClick, opts = {}) {
+    const group = new Konva.Group({ x, y });
+    const rect = new Konva.Rect({ width: w, height: h, cornerRadius: 6, fill: opts.active ? '#007acc' : '#3c3c3c', stroke: opts.active ? '#007acc' : '#555', strokeWidth: 1 });
+    const text = new Konva.Text({ x: 0, y: 0, width: w, height: h, align: 'center', verticalAlign: 'middle', text: label, fontSize: 14, fill: '#fff' });
+    group.add(rect, text);
+    group.on('mouseenter', () => { document.body.style.cursor = 'pointer'; rect.fill(opts.active ? '#1286d8' : '#4c4c4c'); this.layer.draw(); });
+    group.on('mouseleave', () => { document.body.style.cursor = 'default'; rect.fill(opts.active ? '#007acc' : '#3c3c3c'); this.layer.draw(); });
+    group.on('click', () => onClick && onClick());
+    return { group, rect, text };
+  }
 
-    this.couplingAc.addEventListener('click', () => this.changeCoupling('AC'));
-    this.couplingDc.addEventListener('click', () => this.changeCoupling('DC'));
-    this.couplingGnd.addEventListener('click', () => this.changeCoupling('GND'));
+  _label(x, y, textStr, size = 14, color = '#ccc') {
+    const t = new Konva.Text({ x, y, text: textStr, fontSize: size, fill: color });
+    return t;
+  }
 
-    this.tdivMinus.addEventListener('click', () => this.changeTDiv(-1));
-    this.tdivPlus.addEventListener('click', () => this.changeTDiv(1));
-  // Horizontal offset (time offset): preview vs commit
-  this.hPosition.addEventListener('input', (e) => this.previewTPosition(parseFloat(e.target.value)));
-  this.hPosition.addEventListener('change', (e) => this.changeTPosition(parseFloat(e.target.value)));
+  _slider(x, y, w, min, max, value, onChange, onCommit, opts = {}) {
+    const group = new Konva.Group({ x, y });
+    const track = new Konva.Rect({ x: 0, y: 10, width: w, height: 4, fill: '#555', cornerRadius: 2 });
+    const range = max - min;
+    const toX = (val) => ((val - min) / range) * w;
+    const toVal = (px) => min + (px / w) * range;
+    const handle = new Konva.Circle({ x: toX(value), y: 12, radius: 8, fill: '#999', stroke: '#ddd', strokeWidth: 1, draggable: true });
+    const valueText = new Konva.Text({ x: w + 8, y: 4, text: opts.format ? opts.format(value) : String(value), fontSize: 12, fill: '#ddd' });
+    handle.on('dragmove', () => {
+      const nx = Math.max(0, Math.min(w, handle.x()));
+      handle.x(nx);
+      const val = toVal(nx);
+      valueText.text(opts.format ? opts.format(val) : val.toFixed(2));
+      onChange && onChange(val);
+      this.layer.batchDraw();
+    });
+    handle.on('dragend', () => {
+      const val = toVal(handle.x());
+      onCommit && onCommit(val);
+    });
+    group.add(track, handle, valueText);
+    return { group, handle, valueText, toX, toVal };
+  }
 
-    this.trigAuto.addEventListener('click', () => this.changeTriggerMode('Auto'));
-    this.trigNormal.addEventListener('click', () => this.changeTriggerMode('Normal'));
-    this.trigSingle.addEventListener('click', () => this.changeTriggerMode('Single'));
-    this.trigRise.addEventListener('click', () => this.changeTriggerSlope('Rising'));
-    this.trigFall.addEventListener('click', () => this.changeTriggerSlope('Falling'));
-  // Trigger level: only send after release; preview updates scope
-  this.trigLevel.addEventListener('input', (e) => this.previewTriggerLevel(parseInt(e.target.value)));
-  this.trigLevel.addEventListener('change', (e) => this.changeTriggerLevel(parseInt(e.target.value)));
+  _buildUI() {
+    const padX = 12;
+    const colW = (this.stage.width() - padX * 2);
+    let y = 8;
 
-    this.runStop.addEventListener('click', () => this.toggleRunStop());
-    this.single.addEventListener('click', () => this.onAcquisitionChange('single'));
+    // Acquisition controls
+    this._ui.acqLabel = this._label(padX, y, 'Acquisition', 16, '#ccc');
+    y += 22;
+    this._ui.runStop = this._button(padX, y, colW * 0.55, 36, 'Run', () => this._toggleRunStop());
+    this._ui.single = this._button(padX + colW * 0.6, y, colW * 0.4, 36, 'Single', () => this.onAcquisitionChange('single'));
+    y += 48;
+
+    // Vertical group
+    this._ui.vertLabel = this._label(padX, y, 'Vertical', 16, '#ccc');
+    y += 22;
+    this._ui.vdivMinus = this._button(padX, y, 36, 28, '−', () => this.changeVDiv(-1));
+    this._ui.vdivValue = this._label(
+      padX + 44,
+      y + 6,
+      formatUniversal(this.vDivValues[this.currentVIndex], 'm', 'auto', Quantity.V, FormatType.std),
+      14,
+      '#fff'
+    );
+    this._ui.vdivPlus = this._button(padX + 180, y, 36, 28, '+', () => this.changeVDiv(1));
+    y += 36;
+    this._ui.vposLabel = this._label(padX, y, 'Position');
+    this._ui.vposSlider = this._slider(padX + 80, y - 6, colW - 160, -4, 4, this.vPositionValue,
+      (val) => { // onChange preview
+        this.previewVPosition(val);
+      },
+      (val) => { // onCommit
+        this.changeVPosition(val);
+      },
+      { format: (v) => `${v.toFixed(1)} div` }
+    );
+    y += 40;
+    this._ui.cplLabel = this._label(padX, y, 'Coupling');
+    this._ui.cplAc = this._button(padX + 80, y - 6, 60, 28, 'AC', () => this.changeCoupling('AC'), { active: this.coupling === 'AC' });
+    this._ui.cplDc = this._button(padX + 146, y - 6, 60, 28, 'DC', () => this.changeCoupling('DC'), { active: this.coupling === 'DC' });
+    this._ui.cplGnd = this._button(padX + 212, y - 6, 60, 28, 'GND', () => this.changeCoupling('GND'), { active: this.coupling === 'GND' });
+    y += 46;
+
+    // Horizontal group
+    this._ui.horzLabel = this._label(padX, y, 'Horizontal', 16, '#ccc');
+    y += 22;
+    this._ui.tdivMinus = this._button(padX, y, 36, 28, '−', () => this.changeTDiv(-1));
+    this._ui.tdivValue = this._label(
+      padX + 44,
+      y + 6,
+      formatUniversal(this.tDivValues[this.currentTIndex], '_', 'auto', Quantity.s, FormatType.std),
+      14,
+      '#fff'
+    );
+    this._ui.tdivPlus = this._button(padX + 180, y, 36, 28, '+', () => this.changeTDiv(1));
+    y += 36;
+    this._ui.hposLabel = this._label(padX, y, 'Position');
+    this._ui.hposSlider = this._slider(padX + 80, y - 6, colW - 160, -5, 5, this.tPositionValue,
+      (val) => { this.previewTPosition(val); },
+      (val) => { this.changeTPosition(val); },
+      { format: (v) => `${v.toFixed(1)} div` }
+    );
+    y += 46;
+
+    // Trigger group
+    this._ui.trigLabel = this._label(padX, y, 'Trigger', 16, '#ccc');
+    y += 22;
+    this._ui.trigAuto = this._button(padX, y, 70, 28, 'Auto', () => this.changeTriggerMode('Auto'), { active: this.triggerMode === 'Auto' });
+    this._ui.trigNormal = this._button(padX + 76, y, 80, 28, 'Normal', () => this.changeTriggerMode('Normal'), { active: this.triggerMode === 'Normal' });
+    this._ui.trigSingle = this._button(padX + 162, y, 80, 28, 'Single', () => this.changeTriggerMode('Single'), { active: this.triggerMode === 'Single' });
+    y += 36;
+    this._ui.slopeLabel = this._label(padX, y, 'Slope');
+    this._ui.trigRise = this._button(padX + 80, y - 6, 80, 28, 'Rising', () => this.changeTriggerSlope('Rising'), { active: this.triggerSlope === 'Rising' });
+    this._ui.trigFall = this._button(padX + 166, y - 6, 80, 28, 'Falling', () => this.changeTriggerSlope('Falling'), { active: this.triggerSlope === 'Falling' });
+    y += 36;
+    this._ui.levelLabel = this._label(padX, y, 'Level');
+    this._ui.levelSlider = this._slider(padX + 80, y - 6, colW - 160, 0, 255, this.triggerLevel,
+      (val) => this.previewTriggerLevel(Math.round(val)),
+      (val) => this.changeTriggerLevel(Math.round(val)),
+      { format: (v) => `${Math.round(v)}` }
+    );
+    y += 60;
+
+    // Add all to layer
+    this.layer.add(
+      this._ui.acqLabel,
+      this._ui.runStop.group,
+      this._ui.single.group,
+      this._ui.vertLabel,
+      this._ui.vdivMinus.group,
+      this._ui.vdivValue,
+      this._ui.vdivPlus.group,
+      this._ui.vposLabel,
+      this._ui.vposSlider.group,
+      this._ui.cplLabel,
+      this._ui.cplAc.group,
+      this._ui.cplDc.group,
+      this._ui.cplGnd.group,
+      this._ui.horzLabel,
+      this._ui.tdivMinus.group,
+      this._ui.tdivValue,
+      this._ui.tdivPlus.group,
+      this._ui.hposLabel,
+      this._ui.hposSlider.group,
+      this._ui.trigLabel,
+      this._ui.trigAuto.group,
+      this._ui.trigNormal.group,
+      this._ui.trigSingle.group,
+      this._ui.slopeLabel,
+      this._ui.trigRise.group,
+      this._ui.trigFall.group,
+      this._ui.levelLabel,
+      this._ui.levelSlider.group,
+    );
+
+    this.layer.draw();
+  }
+
+  _layoutUI() {
+    // Reposition width-dependent elements like slider widths and labels
+    const padX = 12;
+    const colW = (this.stage.width() - padX * 2);
+    // Update widths of elements that depend on colW
+    // VDiv section: value label stays at padX + 44; plus button at padX+180 is acceptable baseline
+    // Sliders: adjust width and value text x
+    const setSliderWidth = (slider, w) => {
+      slider.group.findOne('Rect').width(w);
+      const val = slider.toVal(slider.handle.x());
+      slider.group.findOne('Text').x(w + 8);
+    };
+    setSliderWidth(this._ui.vposSlider, colW - 160);
+    setSliderWidth(this._ui.hposSlider, colW - 160);
+    setSliderWidth(this._ui.levelSlider, colW - 160);
+    this.layer.batchDraw();
+  }
+
+  _toggleRunStop() {
+    const isRun = this._ui.runStop.text.text() === 'Run' ? false : true;
+    if (isRun) {
+      this._ui.runStop.text.text('Run');
+      this.onAcquisitionChange('stop');
+    } else {
+      this._ui.runStop.text.text('Stop');
+      this.onAcquisitionChange('run');
+    }
+    this.layer.batchDraw();
   }
 
   changeVDiv(delta) {
     this.currentVIndex = Math.max(0, Math.min(this.vDivValues.length - 1, this.currentVIndex + delta));
-    this.updateDisplay();
+    this._ui.vdivValue.text(
+      formatUniversal(this.vDivValues[this.currentVIndex], 'm', 'auto', Quantity.V, FormatType.std)
+    );
+    this.layer.batchDraw();
     this.onConfigChange({ v_div_mV: this.vDivValues[this.currentVIndex] });
   }
 
   changeTDiv(delta) {
     this.currentTIndex = Math.max(0, Math.min(this.tDivValues.length - 1, this.currentTIndex + delta));
-    this.updateDisplay();
+    this._ui.tdivValue.text(
+      formatUniversal(this.tDivValues[this.currentTIndex], '_', 'auto', Quantity.s, FormatType.std)
+    );
+    this.layer.batchDraw();
     this.onConfigChange({ t_div_s: this.tDivValues[this.currentTIndex] });
   }
 
   changeVPosition(value) {
     this.vPositionValue = value;
-    this.onConfigChange({ v_offset: value });
+    const vDivV = (this.vDivValues[this.currentVIndex] || 200) / 1000.0;
+    const volts = value * vDivV;
+    this.onConfigChange({ offset_V: volts });
   }
 
   previewVPosition(value) {
     this.vPositionValue = value;
-    // No config send, purely visual (future: update scope immediately if needed)
+    const vDivV = (this.vDivValues[this.currentVIndex] || 200) / 1000.0;
+    const volts = value * vDivV;
+    if (this.onVOffsetPreview) this.onVOffsetPreview(volts);
   }
 
   changeTPosition(value) {
     this.tPositionValue = value;
+    // Optional: backend currently expects t_offset_samples; this UI preview is informational only
     this.onConfigChange({ t_offset: value });
   }
 
@@ -110,121 +275,84 @@ export class ControlPanel {
 
   changeCoupling(coupling) {
     this.coupling = coupling;
-    this.updateCouplingButtons();
+    const setActive = (btn, active) => { btn.rect.fill(active ? '#007acc' : '#3c3c3c'); btn.rect.stroke(active ? '#007acc' : '#555'); };
+    setActive(this._ui.cplAc, coupling === 'AC');
+    setActive(this._ui.cplDc, coupling === 'DC');
+    setActive(this._ui.cplGnd, coupling === 'GND');
+    this.layer.batchDraw();
     this.onConfigChange({ coupling });
   }
 
   changeTriggerMode(mode) {
     this.triggerMode = mode;
-    this.updateTriggerModeButtons();
+    const setActive = (btn, active) => { btn.rect.fill(active ? '#007acc' : '#3c3c3c'); btn.rect.stroke(active ? '#007acc' : '#555'); };
+    setActive(this._ui.trigAuto, mode === 'Auto');
+    setActive(this._ui.trigNormal, mode === 'Normal');
+    setActive(this._ui.trigSingle, mode === 'Single');
+    this.layer.batchDraw();
     this.onConfigChange({ trigger_mode: mode.toLowerCase() });
   }
 
   changeTriggerSlope(slope) {
     this.triggerSlope = slope;
-    this.updateTriggerSlopeButtons();
+    const setActive = (btn, active) => { btn.rect.fill(active ? '#007acc' : '#3c3c3c'); btn.rect.stroke(active ? '#007acc' : '#555'); };
+    setActive(this._ui.trigRise, slope === 'Rising');
+    setActive(this._ui.trigFall, slope === 'Falling');
+    this.layer.batchDraw();
     this.onConfigChange({ trigger_slope: slope.toLowerCase() });
   }
 
   changeTriggerLevel(level) {
     this.triggerLevel = level;
     this.onConfigChange({ trigger_level: level });
-    // Notify scope view of trigger level change
-    if (this.onTriggerLevelChange) {
-      this.onTriggerLevelChange(level);
-    }
+    if (this.onTriggerLevelChange) this.onTriggerLevelChange(level);
   }
 
   previewTriggerLevel(level) {
     this.triggerLevel = level;
-    if (this.onTriggerLevelChange) {
-      this.onTriggerLevelChange(level); // visual update only
-    }
-  }
-
-  toggleRunStop() {
-    const isRunning = this.runStop.innerHTML.includes('Stop');
-    if (isRunning) {
-      this.runStop.innerHTML = '<i class="fas fa-play"></i> Run';
-      this.onAcquisitionChange('stop');
-    } else {
-      this.runStop.innerHTML = '<i class="fas fa-pause"></i> Stop';
-      this.onAcquisitionChange('run');
-    }
-  }
-
-  updateDisplay() {
-    this.vdivValue.textContent = this.formatVoltage(this.vDivValues[this.currentVIndex]);
-    this.tdivValue.textContent = this.formatTime(this.tDivValues[this.currentTIndex]);
-  }
-
-  updateCouplingButtons() {
-    this.couplingAc.classList.toggle('active', this.coupling === 'AC');
-    this.couplingDc.classList.toggle('active', this.coupling === 'DC');
-    this.couplingGnd.classList.toggle('active', this.coupling === 'GND');
-  }
-
-  updateTriggerModeButtons() {
-    this.trigAuto.classList.toggle('active', this.triggerMode === 'Auto');
-    this.trigNormal.classList.toggle('active', this.triggerMode === 'Normal');
-    this.trigSingle.classList.toggle('active', this.triggerMode === 'Single');
-  }
-
-  updateTriggerSlopeButtons() {
-    this.trigRise.classList.toggle('active', this.triggerSlope === 'Rising');
-    this.trigFall.classList.toggle('active', this.triggerSlope === 'Falling');
+    if (this.onTriggerLevelChange) this.onTriggerLevelChange(level);
   }
 
   updateControls(config) {
     if (config.v_div) {
       const vValue = config.v_div.v;
-      this.currentVIndex = this.vDivValues.indexOf(vValue);
-      if (this.currentVIndex === -1) this.currentVIndex = 3; // default
+      const idx = this.vDivValues.indexOf(vValue);
+      this.currentVIndex = idx !== -1 ? idx : this.currentVIndex;
+      if (this._ui.vdivValue) this._ui.vdivValue.text(this.formatVoltage(this.vDivValues[this.currentVIndex]));
     }
     if (config.t_div) {
       const tValue = config.t_div.v;
-      this.currentTIndex = this.tDivValues.indexOf(tValue);
-      if (this.currentTIndex === -1) this.currentTIndex = 5; // default
+      const idx = this.tDivValues.indexOf(tValue);
+      this.currentTIndex = idx !== -1 ? idx : this.currentTIndex;
+      if (this._ui.tdivValue) this._ui.tdivValue.text(this.formatTime(this.tDivValues[this.currentTIndex]));
     }
-    if (config.trigger_level !== undefined) {
+    if (config.trigger_level !== undefined && this._ui.levelSlider) {
       this.triggerLevel = config.trigger_level;
-      this.trigLevel.value = config.trigger_level;
+      const x = this._ui.levelSlider.toX(this.triggerLevel);
+      this._ui.levelSlider.handle.x(x);
+      this._ui.levelSlider.valueText.text(`${Math.round(this.triggerLevel)}`);
     }
-    if (config.v_offset !== undefined) {
-      this.vPosition.value = config.v_offset;
+    if (config.v_offset && typeof config.v_offset.v === 'number' && this._ui.vposSlider) {
+      const vDivV = (this.vDivValues[this.currentVIndex] || 200) / 1000.0;
+      const divs = Math.max(-4, Math.min(4, config.v_offset.v / vDivV));
+      this.vPositionValue = divs;
+      const x = this._ui.vposSlider.toX(divs);
+      this._ui.vposSlider.handle.x(x);
+      this._ui.vposSlider.valueText.text(`${divs.toFixed(1)} div`);
     }
-    if (config.t_offset !== undefined) {
-      this.hPosition.value = config.t_offset;
-    }
-    this.updateDisplay();
-  }
-
-  updateRunStopButton() {
-    // This method can be called to sync button state with app.isRunning if needed
-    // For now, button starts with play icon and "Run" text by default
+    // t_offset is represented in samples in config; the UI slider is in divs; keep as-is for now.
+    this.layer && this.layer.batchDraw();
   }
 
   setAcquisitionState(state) {
-    if (state === 'run') {
-      this.runStop.innerHTML = '<i class="fas fa-pause"></i> Stop';
-    } else if (state === 'stop') {
-      this.runStop.innerHTML = '<i class="fas fa-play"></i> Run';
-    }
+    if (!this._ui.runStop) return;
+    if (state === 'run') this._ui.runStop.text.text('Stop');
+    else if (state === 'stop') this._ui.runStop.text.text('Run');
+    this.layer.batchDraw();
   }
 
-  setTriggerLevelChangeCallback(callback) {
-    this.onTriggerLevelChange = callback;
-  }
+  setVOffsetPreviewCallback(callback) { this.onVOffsetPreview = callback; }
+  setTriggerLevelChangeCallback(callback) { this.onTriggerLevelChange = callback; }
 
-  formatVoltage(mv) {
-    if (mv >= 1000) return `${(mv / 1000).toFixed(1)} V`;
-    return `${mv} mV`;
-  }
-
-  formatTime(s) {
-    if (s >= 1) return `${s.toFixed(1)} s`;
-    if (s >= 0.001) return `${(s * 1000).toFixed(0)} ms`;
-    if (s >= 0.000001) return `${(s * 1000000).toFixed(0)} µs`;
-    return `${(s * 1000000000).toFixed(0)} ns`;
-  }
+  // Formatting delegated to format.js (formatUniversal)
 }

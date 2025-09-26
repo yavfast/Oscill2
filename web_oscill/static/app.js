@@ -17,13 +17,19 @@ class App {
     this.currentCfgId = null; // Track current config ID
     this.isDeviceConnected = false; // Track device connection status
     this.frameRequestInFlight = false; // Guard to avoid overlapping frame requests
+    this.lastLocalVOffsetAt = 0; // timestamp of last local vOffset change
   }
 
   async init() {
+    // Apply absolute layout before initializing Konva components
+    this.applyAbsoluteLayout();
+    // Keep layout stable on window resize
+    window.addEventListener('resize', () => this.applyAbsoluteLayout());
+
     this.scopeView.init();
     this.controlPanel.init();
 
-    // Connect scope view trigger level changes: callback fires only on mouseup (end of drag)
+    // Connect scope view trigger level changes: callback fires on mouseup (end of drag)
     this.scopeView.setTriggerLevelChangeCallback((level) => {
       // Send config only after drag completes
       this.onConfigChange({ trigger_level: level });
@@ -32,6 +38,41 @@ class App {
     // Connect control panel trigger level changes to scope view
     this.controlPanel.setTriggerLevelChangeCallback((level) => {
       this.scopeView.setTriggerLevel(level);
+    });
+    // Preview V offset from slider moves the waveform immediately
+    this.controlPanel.setVOffsetPreviewCallback((volts) => {
+      this.scopeView.setVOffset(volts);
+      this.lastLocalVOffsetAt = Date.now();
+    });
+    
+    // Connect scope view vertical offset changes: fires during drag (throttled) and on mouseup
+    this.scopeView.setOffsetChangeCallback(async (newOffsetV) => {
+      this.onConfigChange({ offset_V: newOffsetV });
+    });
+
+    this.scopeView.setTimeOffsetChangeCallback(async (newOffsetT) => {
+      // The tOffset in scopeView is in seconds. We need to convert it to samples for the device.
+      const status = await this.api.getStatus();
+      if (status && status.config && status.config.t_div) {
+        const tDiv = status.config.t_div.v;
+        const samplesPerDiv = status.config.samples_per_div || 32;
+        const totalSamples = samplesPerDiv * 10; // 10 divisions on screen
+        const totalTime = tDiv * 10;
+        const timePerSample = totalTime / totalSamples;
+        
+        // Convert the time offset in seconds to a sample offset.
+        // The 'TC' register on the device represents the number of pre-trigger samples.
+        // A positive tOffset on the screen (waveform shifted right) means we want to see more of the signal *after* the trigger,
+        // which corresponds to *fewer* pre-trigger samples.
+        const centerSamples = totalSamples / 2;
+        const offsetInSamples = newOffsetT / timePerSample;
+        const newTcValue = Math.round(centerSamples - offsetInSamples);
+
+        // Clamp the value to the valid range for the TC register (e.g., 0 to totalSamples)
+        const clampedTc = Math.max(0, Math.min(totalSamples, newTcValue));
+        
+        this.onConfigChange({ t_offset_samples: clampedTc });
+      }
     });
 
     // Try to get initial status
@@ -44,6 +85,48 @@ class App {
 
     // Start status polling only (frame polling will start when device connects)
     this.startStatusPolling();
+  }
+
+  applyAbsoluteLayout() {
+    const ww = window.innerWidth || document.documentElement.clientWidth;
+    const wh = window.innerHeight || document.documentElement.clientHeight;
+
+    const STATUS_H = 40; // status bar height
+    const RIGHT_W = 320; // control panel width
+    const MEAS_H = 72;   // measurement panel height
+
+    const statusBar = document.getElementById('status-bar');
+    const statusCanvas = document.getElementById('status-canvas');
+    const mainArea = document.getElementById('main-area');
+    const leftPane = document.getElementById('left-pane');
+    const controlPanel = document.getElementById('control-panel');
+    const scopeView = document.getElementById('scope-view');
+    const measurementPanel = document.getElementById('measurement-panel');
+
+    if (!statusBar || !mainArea || !leftPane || !controlPanel || !scopeView || !measurementPanel) return;
+
+    // Status bar
+    statusBar.style.height = `${STATUS_H}px`;
+    if (statusCanvas) statusCanvas.style.height = `${STATUS_H}px`;
+
+    // Main area sizes
+    const mainH = Math.max(0, wh - STATUS_H);
+    const leftW = Math.max(0, ww - RIGHT_W);
+    mainArea.style.height = `${mainH}px`;
+    leftPane.style.width = `${leftW}px`;
+    leftPane.style.height = `${mainH}px`;
+
+    controlPanel.style.width = `${RIGHT_W}px`;
+    controlPanel.style.minWidth = `${RIGHT_W}px`;
+    controlPanel.style.maxWidth = `${RIGHT_W}px`;
+    controlPanel.style.height = `${mainH}px`;
+
+    // Left pane children
+    const scopeH = Math.max(120, mainH - MEAS_H);
+    scopeView.style.width = `${leftW}px`;
+    scopeView.style.height = `${scopeH}px`;
+    measurementPanel.style.width = `${leftW}px`;
+    measurementPanel.style.height = `${MEAS_H}px`;
   }
 
   startPolling() {
@@ -76,6 +159,13 @@ class App {
               if (data.config.trigger_level !== undefined) {
                 if (!this.scopeView.isDraggingTrigger) {
                   this.scopeView.setTriggerLevel(data.config.trigger_level);
+                }
+              }
+              // Sync vOffset from device so waveform matches hardware
+              if (data.config.v_offset && typeof data.config.v_offset.v === 'number') {
+                // Avoid overriding a local change immediately (race with polling)
+                if (Date.now() - this.lastLocalVOffsetAt > 400) {
+                  this.scopeView.setVOffset(data.config.v_offset.v);
                 }
               }
             }
@@ -142,6 +232,11 @@ class App {
           this.scopeView.setTriggerLevel(status.config.trigger_level);
         }
       }
+      if (status.config.v_offset && typeof status.config.v_offset.v === 'number') {
+        if (Date.now() - this.lastLocalVOffsetAt > 400) {
+          this.scopeView.setVOffset(status.config.v_offset.v);
+        }
+      }
     }
   }
 
@@ -154,6 +249,14 @@ class App {
         }
         this.controlPanel.updateControls(response.config);
         this.statusBar.updateStatus(null, response.config);
+        // If this was an offset_V change, immediately reflect it visually and mark as local
+        if (Object.prototype.hasOwnProperty.call(changes, 'offset_V')) {
+          const v = Number(changes.offset_V);
+          if (!Number.isNaN(v)) {
+            this.scopeView.setVOffset(v);
+            this.lastLocalVOffsetAt = Date.now();
+          }
+        }
       }
     }).catch(e => {
       console.error('Config change error:', e);

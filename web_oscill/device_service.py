@@ -1,4 +1,5 @@
 import threading
+import logging
 import time
 from collections import deque
 from typing import Any, Deque, Dict, List, Optional, Tuple
@@ -22,6 +23,9 @@ class DeviceService:
     """
 
     def __init__(self, buffer_size: int = 256):
+        # Basic logging setup (safe to call multiple times)
+        logging.basicConfig(level=logging.INFO, format='[%(asctime)s] %(levelname)s %(name)s: %(message)s')
+        self._log = logging.getLogger(self.__class__.__name__)
         self._client: Optional[OscillClient] = None
         self._dev_lock = threading.RLock()
         self._frames: Deque[Dict[str, Any]] = deque(maxlen=max(8, buffer_size))
@@ -145,7 +149,14 @@ class DeviceService:
                 warnings.append(f"set v_div_mV failed: {e}")
             try:
                 if changes.get("offset_V") is not None:
-                    c.set_offset_volts(float(changes["offset_V"]))
+                    req_v = float(changes["offset_V"])
+                    self._log.info(f"Applying offset_V request: {req_v:.6f} V")
+                    c.set_offset_volts(req_v)
+                    try:
+                        rb_v = c.get_offset_volts()
+                        self._log.info(f"Offset_V applied, readback: {rb_v:.6f} V (delta {rb_v-req_v:+.6f} V)")
+                    except Exception as e:
+                        self._log.warning(f"Offset_V readback failed: {e}")
             except Exception as e:
                 warnings.append(f"set offset_V failed: {e}")
             try:
@@ -153,6 +164,11 @@ class DeviceService:
                     c.set_time_div_s(float(changes["t_div_s"]))
             except Exception as e:
                 warnings.append(f"set t_div_s failed: {e}")
+            try:
+                if changes.get("t_offset_samples") is not None:
+                    c.set_samples_offset(int(changes["t_offset_samples"]))
+            except Exception as e:
+                warnings.append(f"set t_offset_samples failed: {e}")
             try:
                 if changes.get("trigger_level") is not None:
                     c.set_trigger_level(int(changes["trigger_level"]))

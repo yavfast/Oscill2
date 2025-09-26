@@ -1,388 +1,431 @@
+import { formatSecondsAxis, formatVoltsAxis } from './format.js';
+
 export class ScopeView {
   constructor(containerId) {
     this.containerId = containerId;
-    this.plot = null;
+    // Konva stage and layers
+    this.stage = null;
+    this.gridLayer = null;
+    this.waveLayer = null;
+    this.overlayLayer = null;
+  this.axisLayer = null;
+
+    // Shapes
+    this.waveLine = null;
+    this.triggerGroup = null; // line + triangle, vertical drag
+    this.centerYGroup = null;  // cyan horizontal line + triangle, vertical drag
+    this.centerXGroup = null;  // magenta vertical line + triangle, horizontal drag
+
+    // State
     this.triggerLevel = 128;
-    this.tempTriggerLevel = 128; // Temporary trigger level during dragging
+    this.tempTriggerLevel = 128;
     this.vOffset = 0;
     this.tOffset = 0;
-    this.currentCfgId = null; // Track current config ID
-    this.onTriggerLevelChange = null; // Callback for trigger level changes
+    this.currentCfgId = null;
+    this.onTriggerLevelChange = null;
+    this.onOffsetChange = null;
+    this.onTimeOffsetChange = null;
+
     this.isDraggingTrigger = false;
-    this.triangleGeom = null; // Store geometry of trigger triangle for hit-test
-    this.xRange = null;
-    this.yRange = null;
-    this.pendingApply = null; // queued apply while dragging
+    this.isDraggingCenterY = false;
+    this.isDraggingCenterX = false;
+
+    this.xRange = null; // [min,max] seconds
+    this.yRange = null; // [min,max] volts
+    this.pendingApply = null;
+
+    // Throttling
+    this.lastOffsetNotifyTime = 0;
+    this.offsetNotifyIntervalMs = 80;
+    this.lastSentVOffset = null;
+    this.lastSentTOffset = null;
+
+    this.lastFrames = null;
+    this.lastConfig = null;
+
+    this.totalDivsX = 10;
+    this.totalDivsY = 8;
+
+    // Plot margins for axis labels (pixels)
+    this.margins = { left: 56, right: 16, top: 8, bottom: 24 };
   }
 
   init() {
-    const layout = {
-      paper_bgcolor: '#1e1e1e',
-      plot_bgcolor: '#1e1e1e',
-      font: { color: '#ffffff' },
-      // Disable box/region selection & zoom via drag
-      dragmode: false,
-      xaxis: {
-        gridcolor: '#666666',
-        linecolor: '#666666',
-        linewidth: 1,
-        tickcolor: '#666666',
-        tickfont: { color: '#ffffff' },
-        range: [-5, 5],
-        autorange: false,
-        dtick: 1.0,
-        tickvals: [-5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5],
-        ticktext: ['-5', '-4', '-3', '-2', '-1', '0', '1', '2', '3', '4', '5'],
-        showgrid: true,
-        gridwidth: 1,
-        zeroline: true,
-        zerolinecolor: '#cccccc',
-        zerolinewidth: 3,
-        minor: {
-          showgrid: true,
-          gridcolor: '#333333',
-          gridwidth: 0.5,
-          dtick: 0.2
-        },
-        nticks: 50
-      },
-      yaxis: {
-        gridcolor: '#666666',
-        linecolor: '#666666',
-        linewidth: 1,
-        tickcolor: '#666666',
-        tickfont: { color: '#ffffff' },
-        range: [-4, 4],
-        autorange: false,
-        dtick: 1.0,
-        tickvals: [-4, -3, -2, -1, 0, 1, 2, 3, 4],
-        ticktext: ['-4', '-3', '-2', '-1', '0', '1', '2', '3', '4'],
-        showgrid: true,
-        gridwidth: 1,
-        zeroline: true,
-        zerolinecolor: '#cccccc',
-        zerolinewidth: 3,
-        minor: {
-          showgrid: true,
-          gridcolor: '#333333',
-          gridwidth: 0.5,
-          dtick: 0.5
-        },
-        nticks: 40
-      },
-      margin: { l: 50, r: 20, t: 20, b: 40 },
-      shapes: [],
-      showlegend: false
-    };
+    const container = document.getElementById(this.containerId);
+    if (!container) return;
+    const width = Math.max(10, container.clientWidth);
+    const height = Math.max(10, container.clientHeight);
+    this.stage = new Konva.Stage({ container: this.containerId, width, height });
 
-    const data = [{
-      x: [],
-      y: [],
-      type: 'scatter',
-      mode: 'lines',
-      line: { color: '#00ff00', width: 2 }
-    }];
+  this.gridLayer = new Konva.Layer();
+  this.axisLayer = new Konva.Layer();
+  this.waveLayer = new Konva.Layer();
+  this.overlayLayer = new Konva.Layer();
+  // Order: grid (back), axis labels, waveform, overlays (top)
+  this.stage.add(this.gridLayer, this.axisLayer, this.waveLayer, this.overlayLayer);
 
-    const config = {
-      responsive: true,
-      displayModeBar: false,
-      displaylogo: false,
-      modeBarButtonsToRemove: ['zoom2d', 'pan2d', 'select2d', 'lasso2d', 'zoomIn2d', 'zoomOut2d', 'autoScale2d', 'resetScale2d', 'hoverClosestCartesian', 'hoverCompareCartesian', 'toggleSpikelines'],
-      scrollZoom: false,
-      doubleClick: false,
-      staticPlot: false
-    };
+  this.waveLine = new Konva.Line({ points: [], stroke: '#ffd700', strokeWidth: 2, lineCap: 'round', lineJoin: 'round' });
+    this.waveLayer.add(this.waveLine);
 
-    Plotly.newPlot(this.containerId, data, layout, config);
-    this.plot = document.getElementById(this.containerId);
-    
-    // Add mouse event listeners for trigger level dragging
-    this.plot.addEventListener('mousedown', this.handleMouseDown.bind(this));
-    this.plot.addEventListener('mousemove', this.handleMouseMove.bind(this));
-    this.plot.addEventListener('mouseup', this.handleMouseUp.bind(this));
-    this.plot.addEventListener('mouseleave', this.handleMouseUp.bind(this));
-    this.plot.addEventListener('mousemove', this.handleHoverCursor.bind(this));
+    this.triggerGroup = this._createTriggerGroup();
+    this.overlayLayer.add(this.triggerGroup);
+    this.centerYGroup = this._createCenterYGroup();
+    this.overlayLayer.add(this.centerYGroup);
+    this.centerXGroup = this._createCenterXGroup();
+    this.overlayLayer.add(this.centerXGroup);
+
+    // Bind and subscribe resize
+    this.handleResize = this.handleResize.bind(this);
+    window.addEventListener('resize', this.handleResize);
+
+    this.stage.draw();
   }
 
   update(frames, config) {
     if (!frames || frames.length === 0) return;
-
-    // Update current config ID
-    if (config && config.cfg_id !== undefined) {
-      this.currentCfgId = config.cfg_id;
-    }
+    this.lastFrames = frames;
+    this.lastConfig = config;
+    if (config && config.cfg_id !== undefined) this.currentCfgId = config.cfg_id;
 
     const latestFrame = frames[frames.length - 1];
     const samples = latestFrame.samples || [];
     if (samples.length === 0) return;
 
-    // Skip frames with old config
-    if (latestFrame.config && latestFrame.config.cfg_id !== undefined && 
-        this.currentCfgId !== null && latestFrame.config.cfg_id < this.currentCfgId) {
-      return; // Skip old config frames
+    if (
+      latestFrame.config && latestFrame.config.cfg_id !== undefined &&
+      this.currentCfgId !== null && latestFrame.config.cfg_id < this.currentCfgId
+    ) {
+      return;
     }
 
-    // Assuming samples are 0-255, convert to voltage
-    const vDiv = config.v_div ? config.v_div.v / 1000 : 0.2; // default 200mV
-    const tDiv = config.t_div ? config.t_div.v : 0.005; // default 5ms
-    const samplesPerDiv = config.samples_per_div || 32;
+    // Scale
+    const vDiv = config.v_div ? config.v_div.v / 1000 : 0.2;
+    const tDiv = config.t_div ? config.t_div.v : 0.005;
+    const totalTime = tDiv * this.totalDivsX;
+    const totalVoltage = vDiv * this.totalDivsY;
+    this.xRange = [-totalTime / 2, totalTime / 2];
+    this.yRange = [-totalVoltage / 2, totalVoltage / 2];
 
-    const x = [];
-    const y = [];
-    const totalDivsX = 10;
-    const totalDivsY = 8;
-    const totalTime = tDiv * totalDivsX;
-    const totalVoltage = vDiv * totalDivsY;
-    const currentTriggerLevel = this.isDraggingTrigger ? this.tempTriggerLevel : this.triggerLevel;
+    // Grid
+    this.drawGrid();
 
+    // Inner plot rect and mappers
+    const inner = this.getInnerRect();
+    const toX = (time) => {
+      const [xmin, xmax] = this.xRange; const w = inner.width;
+      return inner.left + ((time - xmin) / (xmax - xmin)) * w;
+    };
+    const toY = (volt) => {
+      const [ymin, ymax] = this.yRange; const h = inner.height;
+      return inner.top + (1 - (volt - ymin) / (ymax - ymin)) * h;
+    };
+
+    // Waveform
+    const points = [];
     for (let i = 0; i < samples.length; i++) {
-      const time = (i / samples.length) * totalTime - totalTime / 2 + this.tOffset;
-      const voltage = ((samples[i] - 128) / 128) * (totalVoltage / 2) + this.vOffset;
-      x.push(time);
-      y.push(voltage);
+      const time = (i / samples.length) * totalTime - totalTime / 2; // do not apply tOffset visually
+      const voltage = ((samples[i] - 128) / 128) * (totalVoltage / 2) + this.vOffset; // include vOffset for preview
+      points.push(toX(time), toY(voltage));
     }
+    this.waveLine.points(points);
+    this.waveLayer.batchDraw();
 
-    const updateData = {
-      x: [x],
-      y: [y]
-    };
-
-    const updateLayout = {
-      xaxis: {
-        title: `Time (${this.formatTime(tDiv)}/div)`,
-        range: [-totalTime / 2 + this.tOffset, totalTime / 2 + this.tOffset],
-        showgrid: true,
-        gridcolor: '#666666',
-        gridwidth: 1,
-        linecolor: '#666666',
-        linewidth: 1,
-        tickcolor: '#666666',
-        zeroline: true,
-        zerolinecolor: '#cccccc',
-        zerolinewidth: 3,
-        dtick: totalTime / 10, // 10 divisions
-        minor: {
-          showgrid: true,
-          gridcolor: '#333333',
-          gridwidth: 0.5,
-          dtick: totalTime / 50 // 5 minor divisions per major
-        }
-      },
-      yaxis: {
-        title: `Voltage (${this.formatVoltage(vDiv)}/div)`,
-        range: [-totalVoltage / 2 + this.vOffset, totalVoltage / 2 + this.vOffset],
-        showgrid: true,
-        gridcolor: '#666666',
-        gridwidth: 1,
-        linecolor: '#666666',
-        linewidth: 1,
-        tickcolor: '#666666',
-        zeroline: true,
-        zerolinecolor: '#cccccc',
-        zerolinewidth: 3,
-        dtick: totalVoltage / 8, // 8 divisions
-        minor: {
-          showgrid: true,
-          gridcolor: '#333333',
-          gridwidth: 0.5,
-          dtick: totalVoltage / 40 // 5 minor divisions per major
-        }
-      },
-      shapes: [{
-        type: 'line',
-        x0: -totalTime / 2 + this.tOffset,
-        x1: totalTime / 2 + this.tOffset,
-        y0: this.triggerLevelToVoltage(currentTriggerLevel, totalVoltage),
-        y1: this.triggerLevelToVoltage(currentTriggerLevel, totalVoltage),
-        line: { color: '#ff0000', width: 1, dash: 'dash' }
-      }, {
-        // Smaller trigger triangle shifted a bit to the left (inside plot)
-        type: 'path',
-        // Geometry: left-pointing triangle
-        // tipX moved left by 2% of total time axis; width reduced; height reduced
-        path: (() => {
-          const yLevel = this.triggerLevelToVoltage(currentTriggerLevel, totalVoltage);
-            const tipX = totalTime / 2 + this.tOffset - totalTime * 0.02; // shift left
-            const baseX = tipX + totalTime * 0.015; // narrower width
-            const halfH = totalVoltage * 0.01; // smaller height
-            // Save geometry for hit test
-            this.triangleGeom = { tipX, baseX, yLevel, halfH };
-            return `M ${tipX} ${yLevel} L ${baseX} ${yLevel - halfH} L ${baseX} ${yLevel + halfH} Z`;
-        })(),
-        fillcolor: '#00ff00',
-        line: { color: '#00ff00', width: 1 }
-      }]
-    };
-
-    Plotly.update(this.containerId, updateData, updateLayout);
-
-    // Store axis ranges for coordinate transforms in hit-test
-    this.xRange = updateLayout.xaxis.range.slice();
-    this.yRange = updateLayout.yaxis.range.slice();
+    // Overlays
+    const currentTriggerLevel = this.isDraggingTrigger ? this.tempTriggerLevel : this.triggerLevel;
+    const trigYVolt = this.triggerLevelToVoltage(currentTriggerLevel, totalVoltage);
+    this._positionTriggerGroup(toY(trigYVolt));
+    this._positionCenterYGroup(toY(0));
+    this._positionCenterXGroup(toX(0));
   }
 
   setTriggerLevel(level) {
-    // If user is actively dragging, ignore external set (will apply after release)
-    if (this.isDraggingTrigger) {
-      this.pendingApply = level;
-      return;
+    if (this.isDraggingTrigger) { this.pendingApply = level; return; }
+    this.triggerLevel = level; this.tempTriggerLevel = level;
+    if (this.yRange) {
+      const totalVoltage = this.yRange[1] - this.yRange[0];
+      const yVolt = this.triggerLevelToVoltage(level, totalVoltage);
+      this._positionTriggerGroup(this.dataToYPixel(yVolt));
     }
-    this.triggerLevel = level;
-    this.tempTriggerLevel = level;
-    this.redrawTriggerShape();
   }
 
   setVOffset(offset) {
     this.vOffset = offset;
+    this.redrawWave();
   }
 
   setTOffset(offset) {
     this.tOffset = offset;
   }
 
-  handleMouseDown(event) {
-    const rect = this.plot.getBoundingClientRect();
-    const x = event.clientX - rect.left;
-    const y = event.clientY - rect.top;
-    if (!this.triangleGeom || !this.xRange || !this.yRange) return;
+  setTriggerLevelChangeCallback(callback) { this.onTriggerLevelChange = callback; }
+  setOffsetChangeCallback(callback) { this.onOffsetChange = callback; }
+  setTimeOffsetChangeCallback(callback) { this.onTimeOffsetChange = callback; }
 
-    const { tipX, baseX, yLevel, halfH } = this.triangleGeom;
-    const plotWidth = rect.width;
-    const plotHeight = rect.height;
-
-    // Convert pixel to data coordinates
-    const xData = this.xRange[0] + (x / plotWidth) * (this.xRange[1] - this.xRange[0]);
-    const yData = this.yRange[0] + (1 - (y / plotHeight)) * (this.yRange[1] - this.yRange[0]);
-
-    // Bounding box + small padding
-    const padX = (baseX - tipX) * 0.4;
-    const padY = halfH * 0.6;
-    const withinX = xData >= tipX - padX && xData <= baseX + padX;
-    const withinY = yData >= (yLevel - halfH - padY) && yData <= (yLevel + halfH + padY);
-
-    if (withinX && withinY) {
-      this.isDraggingTrigger = true;
-      this.tempTriggerLevel = this.triggerLevel; // Store current level
-      event.preventDefault();
+  notifyLiveVOffset() {
+    if (!this.onOffsetChange) return;
+    const now = performance.now();
+    const totalVoltage = (this.yRange && this.yRange.length === 2) ? (this.yRange[1] - this.yRange[0]) : 8;
+    const deltaThreshold = totalVoltage * 0.002;
+    if (this.lastSentVOffset === null || (now - this.lastOffsetNotifyTime) >= this.offsetNotifyIntervalMs || Math.abs(this.vOffset - this.lastSentVOffset) >= deltaThreshold) {
+      this.lastOffsetNotifyTime = now;
+      this.lastSentVOffset = this.vOffset;
+      this.onOffsetChange(this.vOffset);
     }
   }
 
-  handleMouseMove(event) {
-    if (!this.isDraggingTrigger) return;
-    if (!this.yRange) return;
-
-    const rect = this.plot.getBoundingClientRect();
-    const y = event.clientY - rect.top;
-    const plotHeight = rect.height;
-
-    // Convert pixel y to data y (voltage domain currently used in layout)
-    const yData = this.yRange[0] + (1 - (y / plotHeight)) * (this.yRange[1] - this.yRange[0]);
-
-    // Map voltage range (yRange) to 0..255 trigger scale
-    const minY = this.yRange[0];
-    const maxY = this.yRange[1];
-    const clampedY = Math.max(minY, Math.min(maxY, yData));
-    const ratio = (clampedY - minY) / (maxY - minY); // 0..1 from bottom to top
-    const level = Math.round(ratio * 255);
-
-    this.tempTriggerLevel = Math.max(0, Math.min(255, level));
-    // Just force a redraw by calling update with empty frames but current config? Simpler: rely on next polling update.
-    // We can optionally issue a lightweight Plotly.relayout to move shapes without data fetch.
-    this.redrawTriggerShape();
-    event.preventDefault();
-  }
-
-  handleHoverCursor(event) {
-    if (this.isDraggingTrigger) {
-      this.plot.style.cursor = 'ns-resize';
-      return;
-    }
-    if (!this.triangleGeom || !this.xRange || !this.yRange) {
-      this.plot.style.cursor = 'default';
-      return;
-    }
-    const rect = this.plot.getBoundingClientRect();
-    const x = event.clientX - rect.left;
-    const y = event.clientY - rect.top;
-    const plotWidth = rect.width;
-    const plotHeight = rect.height;
-    const xData = this.xRange[0] + (x / plotWidth) * (this.xRange[1] - this.xRange[0]);
-    const yData = this.yRange[0] + (1 - (y / plotHeight)) * (this.yRange[1] - this.yRange[0]);
-    const { tipX, baseX, yLevel, halfH } = this.triangleGeom;
-    const padX = (baseX - tipX) * 0.5;
-    const padY = halfH * 0.8;
-    const withinX = xData >= tipX - padX && xData <= baseX + padX;
-    const withinY = yData >= (yLevel - halfH - padY) && yData <= (yLevel + halfH + padY);
-    if (withinX && withinY) {
-      this.plot.style.cursor = 'ns-resize';
-    } else {
-      this.plot.style.cursor = 'default';
+  notifyLiveTOffset() {
+    if (!this.onTimeOffsetChange) return;
+    const now = performance.now();
+    const totalTime = (this.xRange && this.xRange.length === 2) ? (this.xRange[1] - this.xRange[0]) : 0.05;
+    const deltaThreshold = totalTime * 0.002;
+    if (this.lastSentTOffset === null || (now - this.lastOffsetNotifyTime) >= this.offsetNotifyIntervalMs || Math.abs(this.tOffset - this.lastSentTOffset) >= deltaThreshold) {
+      this.lastOffsetNotifyTime = now;
+      this.lastSentTOffset = this.tOffset;
+      this.onTimeOffsetChange(this.tOffset);
     }
   }
 
-  handleMouseUp(event) {
-    if (this.isDraggingTrigger) {
-      // Apply the trigger level change only when mouse is released
-      this.triggerLevel = this.tempTriggerLevel;
-      if (this.onTriggerLevelChange) {
-        this.onTriggerLevelChange(this.triggerLevel);
-      }
-      this.isDraggingTrigger = false;
-      // If while dragging we received an external update, apply it now (but do not send back to API)
-      if (this.pendingApply !== null) {
-        this.triggerLevel = this.pendingApply;
-        this.tempTriggerLevel = this.pendingApply;
-        this.pendingApply = null;
-        this.redrawTriggerShape();
-      }
+  triggerLevelToVoltage(level, totalVoltage) { return ((level - 128) / 128) * (totalVoltage / 2); }
+  // Formatting delegated to format.js
+  
+
+  // Helpers
+  dataToXPixel(xVal) {
+    if (!this.xRange || !this.stage) return 0;
+    const inner = this.getInnerRect();
+    const [xmin, xmax] = this.xRange; return inner.left + ((xVal - xmin) / (xmax - xmin)) * inner.width;
+  }
+  dataToYPixel(yVal) {
+    if (!this.yRange || !this.stage) return 0;
+    const inner = this.getInnerRect();
+    const [ymin, ymax] = this.yRange; return inner.top + (1 - (yVal - ymin) / (ymax - ymin)) * inner.height;
+  }
+  yPixelToLevel(yPix) {
+    if (!this.yRange || !this.stage) return 128;
+    const [ymin, ymax] = this.yRange; const r = this.getInnerRect();
+    const clamped = Math.max(r.top, Math.min(r.top + r.height, yPix));
+    const yData = ymin + (1 - ((clamped - r.top) / Math.max(1, r.height))) * (ymax - ymin);
+    const ratio = (yData - ymin) / (ymax - ymin);
+    return Math.max(0, Math.min(255, Math.round(ratio * 255)));
+  }
+
+  handleResize() {
+    const container = document.getElementById(this.containerId);
+    if (!container || !this.stage) return;
+    const width = Math.max(10, container.clientWidth);
+    const height = Math.max(10, container.clientHeight);
+    this.stage.size({ width, height });
+    this.drawGrid();
+    if (this.xRange && this.yRange) {
+      const totalVoltage = this.yRange[1] - this.yRange[0];
+      const trigYVolt = this.triggerLevelToVoltage(this.isDraggingTrigger ? this.tempTriggerLevel : this.triggerLevel, totalVoltage);
+      this._positionTriggerGroup(this.dataToYPixel(trigYVolt));
+      this._positionCenterYGroup(this.dataToYPixel(0));
+      this._positionCenterXGroup(this.dataToXPixel(0));
     }
+    this.redrawWave();
   }
 
-  updateTriggerLevelFromMouse(yFraction) {
-    // This method is no longer used - trigger changes are applied on mouse release
-  }
-
-  updateTriggerDisplay() {
-    // This method is no longer used - visual updates happen in the main update method
-  }
-
-  redrawTriggerShape() {
-    if (!this.plot || !this.triangleGeom || !this.xRange || !this.yRange) return;
-    const shapes = this.plot.layout.shapes || [];
-    if (shapes.length < 2) return;
+  redrawWave() {
+    if (!this.lastFrames || !this.lastConfig || !this.xRange || !this.yRange || !this.stage) return;
+    const latestFrame = this.lastFrames[this.lastFrames.length - 1];
+    const samples = latestFrame.samples || [];
     const totalTime = this.xRange[1] - this.xRange[0];
     const totalVoltage = this.yRange[1] - this.yRange[0];
-    const currentTriggerLevel = this.isDraggingTrigger ? this.tempTriggerLevel : this.triggerLevel;
-    const yLevel = this.triggerLevelToVoltage(currentTriggerLevel, totalVoltage);
-
-    // Update line (shape 0)
-    shapes[0].y0 = yLevel;
-    shapes[0].y1 = yLevel;
-
-    // Recompute triangle path with stored geometry base relationships
-    const { tipX, baseX, halfH } = this.triangleGeom;
-    shapes[1].path = `M ${tipX} ${yLevel} L ${baseX} ${yLevel - halfH} L ${baseX} ${yLevel + halfH} Z`;
-
-    Plotly.relayout(this.plot, { shapes });
+    const inner = this.getInnerRect();
+    const toX = (time) => { const [xmin, xmax] = this.xRange; const w = inner.width; return inner.left + ((time - xmin) / (xmax - xmin)) * w; };
+    const toY = (volt) => { const [ymin, ymax] = this.yRange; const h = inner.height; return inner.top + (1 - (volt - ymin) / (ymax - ymin)) * h; };
+    const points = [];
+    for (let i = 0; i < samples.length; i++) {
+      const time = (i / samples.length) * totalTime + this.xRange[0];
+      const voltage = ((samples[i] - 128) / 128) * (totalVoltage / 2) + this.vOffset;
+      points.push(toX(time), toY(voltage));
+    }
+    this.waveLine.points(points);
+    this.waveLayer.batchDraw();
   }
 
-  setTriggerLevelChangeCallback(callback) {
-    this.onTriggerLevelChange = callback;
+  drawGrid() {
+    if (!this.gridLayer || !this.stage) return;
+    this.gridLayer.destroyChildren();
+    if (this.axisLayer) this.axisLayer.destroyChildren();
+    const w = this.stage.width();
+    const h = this.stage.height();
+    const majorColor = '#666666';
+    const minorColor = '#333333';
+    const zeroColor = '#cccccc';
+    const bg = new Konva.Rect({ x: 0, y: 0, width: w, height: h, fill: '#1e1e1e' });
+    this.gridLayer.add(bg);
+
+    const inner = this.getInnerRect();
+    // Plot background
+    this.gridLayer.add(new Konva.Rect({ x: inner.left, y: inner.top, width: inner.width, height: inner.height, fill: '#1a1a1a' }));
+
+    // Minor grid (5 subdivisions per major)
+    const minorX = this.totalDivsX * 5;
+    const minorY = this.totalDivsY * 5;
+    for (let i = 0; i <= minorX; i++) {
+      const x = inner.left + (i / minorX) * inner.width;
+      this.gridLayer.add(new Konva.Line({ points: [x, inner.top, x, inner.top + inner.height], stroke: minorColor, strokeWidth: 0.5 }));
+    }
+    for (let j = 0; j <= minorY; j++) {
+      const y = inner.top + (j / minorY) * inner.height;
+      this.gridLayer.add(new Konva.Line({ points: [inner.left, y, inner.left + inner.width, y], stroke: minorColor, strokeWidth: 0.5 }));
+    }
+    // Major grid
+    for (let i = 0; i <= this.totalDivsX; i++) {
+      const x = inner.left + (i / this.totalDivsX) * inner.width;
+      this.gridLayer.add(new Konva.Line({ points: [x, inner.top, x, inner.top + inner.height], stroke: majorColor, strokeWidth: 1 }));
+    }
+    for (let j = 0; j <= this.totalDivsY; j++) {
+      const y = inner.top + (j / this.totalDivsY) * inner.height;
+      this.gridLayer.add(new Konva.Line({ points: [inner.left, y, inner.left + inner.width, y], stroke: majorColor, strokeWidth: 1 }));
+    }
+    // Zero axes
+    if (this.xRange && this.yRange) {
+      const yZero = this.dataToYPixel(0);
+      const xZero = this.dataToXPixel(0);
+      this.gridLayer.add(new Konva.Line({ points: [inner.left, yZero, inner.left + inner.width, yZero], stroke: zeroColor, strokeWidth: 2 }));
+      this.gridLayer.add(new Konva.Line({ points: [xZero, inner.top, xZero, inner.top + inner.height], stroke: zeroColor, strokeWidth: 2 }));
+    }
+    this.gridLayer.batchDraw();
+
+    // Axis tick labels (time X-axis at bottom, voltage Y-axis at left)
+    if (this.axisLayer && this.xRange && this.yRange) {
+      const [xmin, xmax] = this.xRange;
+      const [ymin, ymax] = this.yRange;
+      const fontFamily = 'system-ui, -apple-system, Segoe UI, Roboto, Arial';
+      const labelColor = '#aaaaaa';
+
+      // X labels at major divisions
+      for (let i = 0; i <= this.totalDivsX; i++) {
+        const frac = i / this.totalDivsX;
+        const x = inner.left + frac * inner.width;
+        const t = xmin + frac * (xmax - xmin);
+        const txt = new Konva.Text({
+          x: x,
+          y: inner.top + inner.height + 4,
+          text: formatSecondsAxis(t),
+          fontSize: 10,
+          fill: labelColor,
+          fontFamily,
+          align: 'center',
+        });
+        // center horizontally
+        txt.offsetX(txt.width() / 2);
+        this.axisLayer.add(txt);
+      }
+
+      // Y labels at major divisions (right-aligned to the left edge of inner plot)
+      for (let j = 0; j <= this.totalDivsY; j++) {
+        const frac = j / this.totalDivsY;
+        const y = inner.top + frac * inner.height;
+        const v = ymax - frac * (ymax - ymin);
+        const txt = new Konva.Text({
+          x: inner.left - 4, // small gap from plot area
+          y: y - 6,
+          text: formatVoltsAxis(v),
+          fontSize: 10,
+          fill: labelColor,
+          fontFamily,
+        });
+        // Align the right edge of text to the left edge of the plot
+        txt.offsetX(txt.width());
+        this.axisLayer.add(txt);
+      }
+      this.axisLayer.batchDraw();
+    }
   }
 
-  triggerLevelToVoltage(level, totalVoltage) {
-    return ((level - 128) / 128) * (totalVoltage / 2);
+  getInnerRect() {
+    const w = this.stage ? this.stage.width() : 0;
+    const h = this.stage ? this.stage.height() : 0;
+    const m = this.margins;
+    const left = m.left;
+    const top = m.top;
+    const width = Math.max(0, w - m.left - m.right);
+    const height = Math.max(0, h - m.top - m.bottom);
+    return { left, top, width, height };
   }
 
-  formatTime(seconds) {
-    if (seconds >= 1) return `${seconds.toFixed(2)} s`;
-    if (seconds >= 0.001) return `${(seconds * 1000).toFixed(0)} ms`;
-    if (seconds >= 0.000001) return `${(seconds * 1000000).toFixed(0)} µs`;
-    return `${(seconds * 1000000000).toFixed(0)} ns`;
+  _createTriggerGroup() {
+    const group = new Konva.Group({ x: 0, y: 0, draggable: true });
+    const inner = () => this.getInnerRect();
+    const line = new Konva.Line({ name: 'lineTrig', points: [0, 0, inner().width, 0], stroke: '#ff0000', strokeWidth: 1, dash: [6, 4] });
+    const tri = new Konva.RegularPolygon({ name: 'triTrig', x: inner().width - Math.max(8, inner().width * 0.02), y: 0, sides: 3, radius: Math.max(6, inner().height * 0.012), fill: '#00ff00' });
+    tri.rotation(90);
+    group.add(line, tri);
+    group.on('draw', () => { const r = inner(); line.points([0, 0, r.width, 0]); tri.x(r.width - Math.max(8, r.width * 0.02)); tri.radius(Math.max(6, r.height * 0.012)); });
+    group.dragBoundFunc((pos) => { const r = inner(); const y = Math.max(r.top, Math.min(r.top + r.height, pos.y)); return { x: r.left, y }; });
+    group.on('mouseenter', () => { this.stage.container().style.cursor = 'ns-resize'; });
+    group.on('mouseleave', () => { this.stage.container().style.cursor = 'default'; });
+    group.on('dragstart', () => { this.isDraggingTrigger = true; this.tempTriggerLevel = this.triggerLevel; });
+    group.on('dragmove', () => { const yPix = group.y(); this.tempTriggerLevel = this.yPixelToLevel(yPix); });
+    group.on('dragend', () => {
+      this.isDraggingTrigger = false; this.triggerLevel = this.tempTriggerLevel;
+      if (this.onTriggerLevelChange) this.onTriggerLevelChange(this.triggerLevel);
+      if (this.pendingApply !== null) { this.setTriggerLevel(this.pendingApply); this.pendingApply = null; }
+    });
+    return group;
   }
 
-  formatVoltage(volts) {
-    if (volts >= 1) return `${volts.toFixed(2)} V`;
-    return `${(volts * 1000).toFixed(0)} mV`;
+  _positionTriggerGroup(yPix) { if (!this.triggerGroup) return; const r = this.getInnerRect(); this.triggerGroup.position({ x: r.left, y: yPix }); this.overlayLayer.batchDraw(); }
+
+  _createCenterYGroup() {
+    const group = new Konva.Group({ x: 0, y: 0, draggable: true });
+    const inner = () => this.getInnerRect();
+    const line = new Konva.Line({ name: 'lineCY', points: [0, 0, inner().width, 0], stroke: '#00bcd4', strokeWidth: 1, dash: [4, 4] });
+    const tri = new Konva.RegularPolygon({ name: 'triCY', x: inner().width - Math.max(8, inner().width * 0.02), y: 0, sides: 3, radius: Math.max(5, inner().height * 0.011), fill: '#00bcd4' });
+    tri.rotation(90);
+    group.add(line, tri);
+    group.on('draw', () => { const r = inner(); line.points([0, 0, r.width, 0]); tri.x(r.width - Math.max(8, r.width * 0.02)); tri.radius(Math.max(5, r.height * 0.011)); });
+    group.dragBoundFunc((pos) => { const r = inner(); const y = Math.max(r.top, Math.min(r.top + r.height, pos.y)); return { x: r.left, y }; });
+    group.on('mouseenter', () => { this.stage.container().style.cursor = 'ns-resize'; });
+    group.on('mouseleave', () => { this.stage.container().style.cursor = 'default'; });
+    let startY = 0; let startOffset = 0;
+    group.on('dragstart', () => { this.isDraggingCenterY = true; startY = group.y(); startOffset = this.vOffset; });
+    group.on('dragmove', () => {
+      const yPix = group.y();
+      const deltaPix = yPix - startY;
+      const r = inner();
+      const totalVoltage = this.yRange ? (this.yRange[1] - this.yRange[0]) : 8;
+      const voltsPerPix = totalVoltage / Math.max(1, r.height);
+      const deltaV = deltaPix * voltsPerPix; // down => +pixels => -volts
+      this.vOffset = startOffset - deltaV;
+      this.redrawWave();
+      this.notifyLiveVOffset();
+    });
+    group.on('dragend', () => { this.isDraggingCenterY = false; if (this.onOffsetChange) this.onOffsetChange(this.vOffset); });
+    return group;
   }
+
+  _positionCenterYGroup(yPix) { if (!this.centerYGroup) return; const r = this.getInnerRect(); this.centerYGroup.position({ x: r.left, y: yPix }); this.overlayLayer.batchDraw(); }
+
+  _createCenterXGroup() {
+    const group = new Konva.Group({ x: 0, y: 0, draggable: true });
+    const inner = () => this.getInnerRect();
+    const line = new Konva.Line({ name: 'lineCX', points: [0, 0, 0, inner().height], stroke: '#e91e63', strokeWidth: 1, dash: [4, 4] });
+    const tri = new Konva.RegularPolygon({ name: 'triCX', x: 0, y: Math.max(10, inner().height * 0.05), sides: 3, radius: Math.max(5, inner().height * 0.011), fill: '#e91e63' });
+    tri.rotation(180);
+    group.add(line, tri);
+    group.on('draw', () => { const r = inner(); line.points([0, 0, 0, r.height]); tri.y(Math.max(10, r.height * 0.05)); tri.radius(Math.max(5, r.height * 0.011)); });
+    group.dragBoundFunc((pos) => { const r = inner(); const x = Math.max(r.left, Math.min(r.left + r.width, pos.x)); return { x, y: r.top }; });
+    group.on('mouseenter', () => { this.stage.container().style.cursor = 'ew-resize'; });
+    group.on('mouseleave', () => { this.stage.container().style.cursor = 'default'; });
+    let startX = 0; let startT = 0;
+    group.on('dragstart', () => { this.isDraggingCenterX = true; startX = group.x(); startT = this.tOffset; });
+    group.on('dragmove', () => {
+      const xPix = group.x();
+      const deltaPix = xPix - startX;
+      const r = inner();
+      const totalTime = this.xRange ? (this.xRange[1] - this.xRange[0]) : 0.05;
+      const timePerPix = totalTime / Math.max(1, r.width);
+      this.tOffset = startT + deltaPix * timePerPix;
+      this.notifyLiveTOffset();
+    });
+    group.on('dragend', () => { this.isDraggingCenterX = false; if (this.onTimeOffsetChange) this.onTimeOffsetChange(this.tOffset); });
+    return group;
+  }
+
+  _positionCenterXGroup(xPix) { if (!this.centerXGroup) return; const r = this.getInnerRect(); this.centerXGroup.position({ x: xPix, y: r.top }); this.overlayLayer.batchDraw(); }
 }

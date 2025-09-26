@@ -1,11 +1,87 @@
+import { formatValueWithUnit } from './format.js';
+
 export class MeasurementPanel {
   constructor() {
-    this.freq = document.getElementById('freq');
-    this.period = document.getElementById('period');
-    this.vpp = document.getElementById('vpp');
-    this.vmax = document.getElementById('vmax');
-    this.vmin = document.getElementById('vmin');
-    this.vavg = document.getElementById('vavg');
+    this.container = document.getElementById('measurement-panel');
+    this.stage = new Konva.Stage({
+      container: this.container,
+      width: this.container.clientWidth || 600,
+      height: this.container.clientHeight || 64,
+    });
+    this.layer = new Konva.Layer();
+    this.stage.add(this.layer);
+
+    // Define measurement fields and create text nodes
+    this.fields = [
+      { key: 'freq', label: 'Freq' },
+      { key: 'period', label: 'Period' },
+      { key: 'v_pp', label: 'Vpp' },
+      { key: 'v_max', label: 'Vmax' },
+      { key: 'v_min', label: 'Vmin' },
+      { key: 'v_avg', label: 'Vavg' },
+    ];
+
+    this.items = this.fields.map(() => ({ labelText: null, valueText: null }));
+    this._createTexts();
+    this._layout();
+
+    // Observe container resize to keep Konva stage in sync
+    this._resizeObserver = new ResizeObserver(() => this._resize());
+    this._resizeObserver.observe(this.container);
+  }
+
+  _createTexts() {
+    const fontFamily = 'system-ui, -apple-system, Segoe UI, Roboto, Arial';
+    this.fields.forEach((f, i) => {
+      const label = new Konva.Text({
+        text: f.label,
+        fontSize: 12,
+        fill: '#bbb',
+        fontFamily,
+        align: 'center',
+      });
+      const value = new Konva.Text({
+        text: '-',
+        fontSize: 16,
+        fill: '#fff',
+        fontStyle: 'bold',
+        fontFamily,
+        align: 'center',
+      });
+      this.items[i].labelText = label;
+      this.items[i].valueText = value;
+      this.layer.add(label);
+      this.layer.add(value);
+    });
+    this.layer.draw();
+  }
+
+  _layout() {
+    const paddingX = 8;
+    const colCount = this.items.length;
+    const w = this.stage.width();
+    const h = this.stage.height();
+    const colW = Math.max(60, (w - paddingX * 2) / colCount);
+    const labelY = Math.max(2, h * 0.18);
+    const valueY = Math.min(h - 4, h * 0.56);
+
+    this.items.forEach((item, idx) => {
+      const x = paddingX + idx * colW + colW / 2;
+      item.labelText.position({ x, y: labelY });
+      item.labelText.offsetX(item.labelText.width() / 2);
+      item.valueText.position({ x, y: valueY });
+      item.valueText.offsetX(item.valueText.width() / 2);
+    });
+    this.layer.batchDraw();
+  }
+
+  _resize() {
+    const w = this.container.clientWidth || 600;
+    const h = this.container.clientHeight || 64;
+    if (this.stage.width() !== w || this.stage.height() !== h) {
+      this.stage.size({ width: w, height: h });
+      this._layout();
+    }
   }
 
   displayMeasurements(measurements) {
@@ -13,41 +89,18 @@ export class MeasurementPanel {
       this.clearMeasurements();
       return;
     }
-
-    this.freq.textContent = measurements.freq ? this.formatValue(measurements.freq) : '-';
-    this.period.textContent = measurements.period ? this.formatValue(measurements.period) : '-';
-    this.vpp.textContent = measurements.v_pp ? this.formatValue(measurements.v_pp) : '-';
-    this.vmax.textContent = measurements.v_max ? this.formatValue(measurements.v_max) : '-';
-    this.vmin.textContent = measurements.v_min ? this.formatValue(measurements.v_min) : '-';
-    this.vavg.textContent = measurements.v_avg ? this.formatValue(measurements.v_avg) : '-';
+    this.fields.forEach((f, i) => {
+      const m = measurements[f.key];
+      const txt = m ? formatValueWithUnit(m) : '-';
+      this.items[i].valueText.text(txt);
+    });
+    this._layout();
   }
 
   clearMeasurements() {
-    this.freq.textContent = '-';
-    this.period.textContent = '-';
-    this.vpp.textContent = '-';
-    this.vmax.textContent = '-';
-    this.vmin.textContent = '-';
-    this.vavg.textContent = '-';
+    this.items.forEach((it) => it.valueText.text('-'));
+    this._layout();
   }
 
-  formatValue(valueObj) {
-    const { v, u } = valueObj;
-    if (u === 'Hz') {
-      if (v >= 1000000) return `${(v / 1000000).toFixed(2)} MHz`;
-      if (v >= 1000) return `${(v / 1000).toFixed(2)} kHz`;
-      return `${v.toFixed(2)} Hz`;
-    }
-    if (u === 's') {
-      if (v >= 1) return `${v.toFixed(2)} s`;
-      if (v >= 0.001) return `${(v * 1000).toFixed(2)} ms`;
-      if (v >= 0.000001) return `${(v * 1000000).toFixed(2)} µs`;
-      return `${(v * 1000000000).toFixed(2)} ns`;
-    }
-    if (u === 'V') {
-      if (Math.abs(v) >= 1) return `${v.toFixed(2)} V`;
-      return `${(v * 1000).toFixed(2)} mV`;
-    }
-    return `${v.toFixed(2)} ${u}`;
-  }
+  // formatting delegated to format.js
 }
