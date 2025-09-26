@@ -8,8 +8,11 @@ import com.oscill.controller.config.ChannelSensitivity;
 import com.oscill.types.BitSet;
 import com.oscill.types.Dimension;
 import com.oscill.types.Range;
+import com.oscill.utils.ArrayUtils;
 import com.oscill.utils.DataUtils;
 import com.oscill.utils.Log;
+
+import java.util.ArrayList;
 
 import math.fft.ComplexArray;
 import math.fft.Fourier;
@@ -40,6 +43,17 @@ public class OscillData {
     private float[] vData;
     private float[] vData2;
     private ComplexArray fft;
+
+    private int iDataMin;
+    private int iDataMax;
+    private int iDataAvg;
+
+    private float vDataMin;
+    private float vDataMax;
+    private float vDataAvg;
+
+    private float tDataFreq;
+    private int tDataSegmentsCount;
 
     public OscillData(@NonNull OscillConfig config, @NonNull byte[] data) {
         this.data = data;
@@ -86,14 +100,18 @@ public class OscillData {
         this.tOffset = config.getSamplesOffset().getOffset(Dimension.MILLI);
 
         ChannelSensitivity channelSensitivity = config.getChannelSensitivity();
-        this.vStep = channelSensitivity.getSensitivityStep(Dimension.MILLI);
+//        this.vStep = channelSensitivity.getSensitivityStep(Dimension.MILLI);
 
         this.vOffset = config.getChannelOffset().getRealValue();
-        this.vTrigger = config.getChannelSyncLevel().getRealValue();
+        this.vTrigger = config.getChannelSyncLevel().getRealValue() + this.vOffset;
 
         Range<Float> vRange = channelSensitivity.getSensitivityRange(Dimension.MILLI);
         this.vMax = vRange.getUpper() + vOffset;
         this.vMin = vRange.getLower() + vOffset;
+
+        float vRealRange = this.vMax - this.vMin;
+        int vRes = (getSwMode() == ChannelSWMode.SWMode.AVG_HIRES) ? 0xffff : 0xff;
+        this.vStep = vRealRange / (vRes + 1);
     }
 
     @NonNull
@@ -156,9 +174,13 @@ public class OscillData {
         return tData;
     }
 
-    void prepareData() {
+    public void prepareData() {
         getTimeData();
         getVoltData();
+
+        prepareAdvVoltData();
+        calcFreq();
+
 //        getFFT();
     }
 
@@ -203,11 +225,109 @@ public class OscillData {
         return vData2;
     }
 
+    private void prepareAdvVoltData() {
+        int[] iData = this.iData;
+        if (iData == null || iData.length == 0) {
+            return;
+        }
+
+        int iDataMin = Integer.MAX_VALUE;
+        int iDataMax = Integer.MIN_VALUE;
+        int iDataSum = 0;
+
+        for (int i = 0, iDataLength = iData.length; i < iDataLength; i++) {
+            int iValue = iData[i];
+
+            iDataSum += iValue;
+
+            if (iValue > iDataMax) {
+                iDataMax = iValue;
+            } else if (iValue < iDataMin) {
+                iDataMin = iValue;
+            }
+        }
+
+        this.iDataMin = iDataMin;
+        this.iDataMax = iDataMax;
+        this.iDataAvg = iDataSum / iData.length;
+
+        this.vDataMax = toVData(iDataMax);
+        this.vDataMin = toVData(iDataMin);
+        this.vDataAvg = toVData(this.iDataAvg);
+    }
+
+    private float toVData(int iData) {
+        return vMin + iData * vStep;
+    }
+
+    private void calcFreq() {
+        this.tDataFreq = 0f;
+
+        int[] iData = this.iData;
+        if (iData == null || iData.length == 0) {
+            return;
+        }
+
+        int iDataAvg = this.iDataAvg;
+        ArrayList<Integer> posSegments = new ArrayList<>(32);
+        ArrayList<Integer> negSegments = new ArrayList<>(32);
+
+        boolean currSegmentSign = true;
+        int currSegmentLen = 0;
+
+        for (int i = 0, iDataLength = iData.length; i < iDataLength; i++) {
+            int iValue = iData[i];
+
+            boolean sign = iValue - iDataAvg > 0;
+            if (currSegmentSign == sign) {
+                currSegmentLen++;
+            } else {
+                if (currSegmentLen > 0) {
+                    ArrayList<Integer> currSegments = currSegmentSign ? posSegments : negSegments;
+                    currSegments.add(currSegmentLen);
+                }
+
+                currSegmentSign = sign;
+                currSegmentLen = 0;
+            }
+        }
+
+        if (ArrayUtils.isNotEmpty(posSegments) && ArrayUtils.isNotEmpty(negSegments)) {
+            int avgSegment = (calcAvg(posSegments) + calcAvg(negSegments)) / 2;
+
+            // Remove short segments
+            posSegments = ArrayUtils.filteredArray(posSegments, item -> item >= avgSegment);
+            negSegments = ArrayUtils.filteredArray(negSegments, item -> item >= avgSegment);
+
+            int segmentsCount = posSegments.size() + negSegments.size();
+            this.tDataSegmentsCount = segmentsCount;
+
+            if (segmentsCount < 3) {
+                return;
+            }
+
+            float tPeriod = (calcAvg(posSegments) + calcAvg(negSegments)) * this.tStep;
+            this.tDataFreq = 1000f / tPeriod;
+        }
+    }
+
+    private static int calcAvg(@NonNull ArrayList<Integer> arrayList) {
+        int arrayListSize = arrayList.size();
+        if (arrayListSize == 0) {
+            return 0;
+        }
+
+        int sum = 0;
+        for (int i = 0; i < arrayListSize; i++) {
+            sum += arrayList.get(i);
+        }
+        return sum / arrayListSize;
+    }
 
     @NonNull
     private float[] prepareSimpleData() {
         int[] data = getIntData();
-        float vStep = Math.abs(getMaxV() - getMinV()) / (float) 0xff;
+        float vStep = getVStep();
         float vMin = getMinV();
 
         int dataSize = getDataSize();
@@ -225,7 +345,7 @@ public class OscillData {
     @NonNull
     private float[] prepareAvgHiResData() {
         int[] data = getIntData();
-        float vStep = Math.abs(getMaxV() - getMinV()) / (float) 0xffff;
+        float vStep = getVStep();
         float vMin = getMinV();
 
         int dataSize = getDataSize();
@@ -247,7 +367,7 @@ public class OscillData {
         float[] vDataMax = new float[dataSize];
 
         int[] data = getIntData();
-        float vStep = Math.abs(getMaxV() - getMinV()) / (float) 0xff;
+        float vStep = getVStep();
         float vMin = getMinV();
 
         int idx = 0;
@@ -271,7 +391,35 @@ public class OscillData {
         return vMin;
     }
 
+    public float getVStep() {
+        return vStep;
+    }
+
+    public float getTOffset() {
+        return tOffset;
+    }
+
     public float getTriggerV() {
         return vTrigger;
+    }
+
+    public float getVDataMin() {
+        return vDataMin;
+    }
+
+    public float getVDataMax() {
+        return vDataMax;
+    }
+
+    public float getVDataAvg() {
+        return vDataAvg;
+    }
+
+    public float getDataFreq() {
+        return tDataFreq;
+    }
+
+    public int getDataSegmentsCount() {
+        return tDataSegmentsCount;
     }
 }

@@ -355,6 +355,12 @@ public class ViewUtils {
         }
     }
 
+    public static void setTextColor(@Nullable TextView textView, @ColorRes int colorResId) {
+        if (textView != null) {
+            textView.setTextColor(ViewUtils.getColor(colorResId));
+        }
+    }
+
     public static void setText(@Nullable TextView textView, @StringRes int resId) {
         if (ResourceUtils.isValidResId(resId)) {
             setText(textView, ResourceUtils.getString(resId));
@@ -608,10 +614,17 @@ public class ViewUtils {
         return (getSystemUiVisibility(activity) != 0);
     }
 
+    private static String lastToastMessage = null;
+
     public static void showToast(@Nullable String message, int duration) {
         if (StringUtils.isNotEmpty(message)) {
             Log.i("Toast", message);
-            Executor.runInUIThread(() -> Toast.makeText(AppContextWrapper.getAppContext(), message, duration).show());
+            Executor.runInUIThread(() -> {
+                if (!StringUtils.equals(lastToastMessage, message)) {
+                    lastToastMessage = message;
+                    Toast.makeText(AppContextWrapper.getAppContext(), message, duration).show();
+                }
+            });
         }
     }
 

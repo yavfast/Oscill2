@@ -231,12 +231,10 @@ public class UsbObexTransport implements ObexTransport {
                         } else {
                             if (count > 0) {
                                 Log.w(TAG, "EOF: ", res);
-                                break;
                             } else {
-                                // TODO: Maybe internal restart device
                                 Log.w(TAG, "WAIT DATA: ", res, "; readDataLen: ", readDataLen);
-                                SystemClock.sleep(50L);
                             }
+                            break;
                         }
                     }
 
@@ -306,8 +304,8 @@ public class UsbObexTransport implements ObexTransport {
             UsbSerialPort usbPort = getUsbPort();
             if (usbPort != null) {
                 byte[] out = toByteArray();
-                Log.i(TAG, "Write: ", ConvertUtils.bytesToHexStr(out, out.length));
                 usbPort.write(out, 100);
+                Log.i(TAG, "Write: ", ConvertUtils.bytesToHexStr(out, out.length));
             }
             reset();
         }
