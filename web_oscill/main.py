@@ -58,11 +58,16 @@ def api_acquire_single():
         # Respond gracefully so frontends can gate polling without error spam
         return {"status": "disconnected", "message": "Not connected"}
     try:
+        status = service.get_status()
         frame = service.get_latest_frame()
         if not frame:
             raise HTTPException(status_code=502, detail="No data")
-        # compute scaled mV values from raw samples given current V/div in frame's config
-        cfg = (frame or {}).get("config", {})
+        # Use current config snapshot from status (already includes cfg_id)
+        cfg = (status or {}).get("config", {}) or {}
+        frame_cfg_id = frame.get("cfg_id")
+        if frame_cfg_id is not None and cfg.get("cfg_id") is None:
+            cfg = dict(cfg)
+            cfg["cfg_id"] = frame_cfg_id
         v_div_mv = get_voltage_mv(cfg)
         t_div_ms = get_time_ms(cfg)
         samples = frame.get("samples", [])
@@ -92,6 +97,7 @@ def api_acquire_single():
             "channels": frame.get("channels", 1),
             "time": frame.get("time"),
             "time_iso": frame.get("time_iso"),
+            "cfg_id": frame_cfg_id,
             "config": cfg,
         }
     except HTTPException:
@@ -118,6 +124,12 @@ class ConfigReq(BaseModel):
     trigger_mode: Optional[str] = None  # "Auto", "Normal", "Single"
     trigger_slope: Optional[str] = None  # "Rising", "Falling"
     coupling: Optional[str] = None  # "AC", "DC", "GND"
+    filter_high: Optional[bool] = None
+    filter_low: Optional[bool] = None
+    sw_mode: Optional[str] = None
+    sync_type: Optional[str] = None
+    sync_front: Optional[bool] = None
+    sync_back: Optional[bool] = None
     # Legacy support
     v_div_mV: Optional[int] = None
     t_div_s: Optional[float] = None
@@ -159,12 +171,27 @@ def api_config(req: ConfigReq):
         if req.coupling is not None:
             # This might need to be handled in device_service
             changes["coupling"] = req.coupling
+        if req.filter_high is not None:
+            changes["filter_high"] = req.filter_high
+        if req.filter_low is not None:
+            changes["filter_low"] = req.filter_low
+        if req.sw_mode is not None:
+            changes["sw_mode"] = req.sw_mode
+        if req.sync_type is not None:
+            changes["sync_type"] = req.sync_type
+        if req.sync_front is not None:
+            changes["sync_front"] = req.sync_front
+        if req.sync_back is not None:
+            changes["sync_back"] = req.sync_back
 
         status, warnings = service.apply_config(changes)
         # Convert embedded config to UI format for consistency
         raw_cfg = status.get("config", {}) if isinstance(status, dict) else {}
         new_config = raw_cfg  # Already in correct format
-        return {"status": "ok", "config": new_config, "warnings": warnings}
+        response = {"status": "ok", "config": new_config, "warnings": warnings}
+        if isinstance(status, dict) and status.get("cfg_id") is not None:
+            response["cfg_id"] = status["cfg_id"]
+        return response
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -184,9 +211,9 @@ def api_frames(since: Optional[int] = None, limit: int = 64):
         processed_frames = []
         for frame in frames:
             processed_frame = dict(frame)
-            samples = frame.get("samples", [])
-            if samples:
-                measurements = calculate_measurements(samples, current_config)
+            processed_frame.pop("config", None)
+            measurements = calculate_measurements(frame, current_config)
+            if measurements:
                 processed_frame["measurements"] = measurements
             processed_frames.append(processed_frame)
         
@@ -230,84 +257,88 @@ def static_files(path: str):
         raise HTTPException(status_code=404)
     return FileResponse(fp)
 
-def calculate_measurements(samples: List[int], config: Dict[str, Any]) -> Dict[str, Any]:
-    """Calculate measurements from samples: frequency, period, Vpp, Vmax, Vmin, Vavg"""
+def _samples_to_millivolts(samples: List[int], sample_bits: int, config: Dict[str, Any]) -> List[float]:
+    if not samples:
+        return []
+    v_div_mv = get_voltage_mv(config)
+    full_scale_mv = v_div_mv * 8.0
+    max_code = (1 << sample_bits) - 1
+    center = max_code / 2.0
+    if center <= 0:
+        return [0.0 for _ in samples]
+    scale = full_scale_mv / 2.0
+    return [((s - center) / center) * scale for s in samples]
+
+
+def calculate_measurements(frame: Dict[str, Any], config: Dict[str, Any]) -> Dict[str, Any]:
+    """Calculate measurements from frame metadata: frequency, period, Vpp, Vmax, Vmin, Vavg."""
+    if not frame:
+        return {}
+
+    sample_bits = int(frame.get("sample_bits") or 8)
+    samples = list(frame.get("samples") or [])
+    peak_min = frame.get("samples_peak_min") or []
+    peak_max = frame.get("samples_peak_max") or []
+
+    if peak_min and peak_max:
+        count = min(len(peak_min), len(peak_max))
+        peak_min = list(peak_min[:count])
+        peak_max = list(peak_max[:count])
+        if not samples or len(samples) != count:
+            samples = [(lo + hi) // 2 for lo, hi in zip(peak_min, peak_max)]
+
     if not samples:
         return {}
-    
-    # Convert raw samples to voltage values
-    v_div_mv = get_voltage_mv(config)
-    offset_v = get_offset_v(config)
-    t_div_ms = get_time_ms(config)
-    
-    # Full scale is 8 divisions * v_div
-    full_scale_mv = v_div_mv * 8.0
-    center = 127.5
-    
-    # We do not add offset_v here because the device already applied it.
-    # The raw samples are shifted. We just scale them.
-    voltages_mv = []
-    for s in samples:
-        # Convert ADC value to voltage in mV
-        v_mv = ((s - center) / 128.0) * (full_scale_mv / 2.0)
-        voltages_mv.append(v_mv)
-    
+
+    voltages_mv = _samples_to_millivolts(samples, sample_bits, config)
     if not voltages_mv:
         return {}
-    
-    # Basic measurements
-    v_min = min(voltages_mv)
-    v_max = max(voltages_mv)
-    v_pp = v_max - v_min
-    v_avg = sum(voltages_mv) / len(voltages_mv)
-    
-    # Frequency and period calculation (simple zero-crossing method)
+
+    if peak_min and peak_max:
+        voltages_min_mv = _samples_to_millivolts(peak_min, sample_bits, config)
+        voltages_max_mv = _samples_to_millivolts(peak_max, sample_bits, config)
+        v_min_mv = min(voltages_min_mv) if voltages_min_mv else min(voltages_mv)
+        v_max_mv = max(voltages_max_mv) if voltages_max_mv else max(voltages_mv)
+    else:
+        v_min_mv = min(voltages_mv)
+        v_max_mv = max(voltages_mv)
+
+    v_pp_mv = v_max_mv - v_min_mv
+    v_avg_mv = sum(voltages_mv) / len(voltages_mv)
+
+    # Frequency and period calculation (simple zero-crossing method) on averaged waveform
     freq = None
     period = None
-    
     try:
-        # Find zero crossings
-        zero_crossings = []
-        threshold = v_avg  # Use average as threshold
-        
+        zero_crossings: List[int] = []
+        threshold = v_avg_mv
         for i in range(1, len(voltages_mv)):
-            if (voltages_mv[i-1] <= threshold and voltages_mv[i] > threshold) or \
-               (voltages_mv[i-1] >= threshold and voltages_mv[i] < threshold):
+            prev = voltages_mv[i - 1]
+            current = voltages_mv[i]
+            if (prev <= threshold < current) or (prev >= threshold > current):
                 zero_crossings.append(i)
-        
         if len(zero_crossings) >= 2:
-            # Calculate average period between crossings
-            periods = []
-            for i in range(1, len(zero_crossings)):
-                periods.append(zero_crossings[i] - zero_crossings[i-1])
-            
-            if periods:
-                avg_period_samples = sum(periods) / len(periods)
-                
-                # Convert to time units
-                t_div_ms = get_time_ms(config)
+            diffs = [zero_crossings[i] - zero_crossings[i - 1] for i in range(1, len(zero_crossings))]
+            if diffs:
+                avg_period_samples = sum(diffs) / len(diffs)
                 samples_per_div = config.get("samples_per_div", 32)
-                total_samples_per_div = samples_per_div  # Assuming 10 horizontal divs
-                
-                # Time per sample
-                time_per_sample = (t_div_ms / 1000) / total_samples_per_div
-                
+                t_div_ms = get_time_ms(config)
+                time_per_sample = (t_div_ms / 1000.0) / max(1, samples_per_div)
                 period_s = avg_period_samples * time_per_sample
-                freq_hz = 1.0 / period_s if period_s > 0 else None
-                
-                freq = freq_hz
-                period = period_s
+                if period_s > 0:
+                    freq = 1.0 / period_s
+                    period = period_s
     except Exception:
-        pass  # Frequency calculation failed, leave as None
-    
-    measurements = {}
+        pass
+
+    measurements: Dict[str, Any] = {}
     if freq is not None:
         measurements["freq"] = {"v": freq, "u": "Hz"}
     if period is not None:
         measurements["period"] = {"v": period, "u": "s"}
-    measurements["v_pp"] = {"v": v_pp / 1000.0, "u": "V"}  # Convert to V
-    measurements["v_max"] = {"v": v_max / 1000.0, "u": "V"}
-    measurements["v_min"] = {"v": v_min / 1000.0, "u": "V"}
-    measurements["v_avg"] = {"v": v_avg / 1000.0, "u": "V"}
-    
+    measurements["v_pp"] = {"v": v_pp_mv / 1000.0, "u": "V"}
+    measurements["v_max"] = {"v": v_max_mv / 1000.0, "u": "V"}
+    measurements["v_min"] = {"v": v_min_mv / 1000.0, "u": "V"}
+    measurements["v_avg"] = {"v": v_avg_mv / 1000.0, "u": "V"}
+
     return measurements

@@ -16,6 +16,11 @@ export class ControlPanel {
     this.tPositionValue = 0;
     this.onTriggerLevelChange = null;
     this._isAcquiring = false;
+    this.swMode = 'NORMAL';
+    this.filters = { high: false, low: false };
+    this.syncType = 'AUTO';
+    this.syncFront = true;
+    this.syncBack = false;
 
     this._ui = {}; // store Konva nodes
   }
@@ -95,6 +100,25 @@ export class ControlPanel {
   this._ui.single = this._button(padX + buttonW + 12, y, buttonW, 36, '⏺ Single', () => this.onAcquisitionChange('single'));
   y += 46;
 
+  // Processing modes
+  const modeGap = 12;
+  this._ui.procLabel = this._label(padX, y, 'Processing', 16, '#ccc');
+  y += 22;
+  const modeBtnW = (colW - modeGap * 3) / 4;
+  this._ui.modeNormal = this._button(padX, y, modeBtnW, 32, 'Normal', () => this.setSwMode('NORMAL'), { active: this.swMode === 'NORMAL' });
+  this._ui.modePeak = this._button(padX + (modeBtnW + modeGap), y, modeBtnW, 32, 'Peak', () => this.setSwMode('PEAK'), { active: this.swMode === 'PEAK' || this.swMode === 'PEAK_HI' });
+  this._ui.modeAvg = this._button(padX + 2 * (modeBtnW + modeGap), y, modeBtnW, 32, 'Avg', () => this.setSwMode('AVG'), { active: this.swMode === 'AVG' });
+  this._ui.modeAvgHi = this._button(padX + 3 * (modeBtnW + modeGap), y, modeBtnW, 32, 'Avg Hi-Res', () => this.setSwMode('AVG_HIRES'), { active: this.swMode === 'AVG_HIRES' });
+  y += 40;
+
+  // Hardware filters
+  this._ui.filterLabel = this._label(padX, y, 'Filters', 16, '#ccc');
+  y += 22;
+  const filterBtnW = (colW - modeGap) / 2;
+  this._ui.filterHigh = this._button(padX, y, filterBtnW, 32, 'High 3MHz', () => this.toggleFilter('high'), { active: this.filters.high });
+  this._ui.filterLow = this._button(padX + filterBtnW + modeGap, y, filterBtnW, 32, 'Low 3kHz', () => this.toggleFilter('low'), { active: this.filters.low });
+  y += 40;
+
     // Vertical group
     this._ui.vertLabel = this._label(padX, y, 'Vertical', 16, '#ccc');
     y += 22;
@@ -149,14 +173,18 @@ export class ControlPanel {
     // Trigger group
     this._ui.trigLabel = this._label(padX, y, 'Trigger', 16, '#ccc');
     y += 22;
-    this._ui.trigAuto = this._button(padX, y, 70, 28, 'Auto', () => this.changeTriggerMode('Auto'), { active: this.triggerMode === 'Auto' });
-    this._ui.trigNormal = this._button(padX + 76, y, 80, 28, 'Normal', () => this.changeTriggerMode('Normal'), { active: this.triggerMode === 'Normal' });
-    this._ui.trigSingle = this._button(padX + 162, y, 80, 28, 'Single', () => this.changeTriggerMode('Single'), { active: this.triggerMode === 'Single' });
-    y += 36;
-    this._ui.slopeLabel = this._label(padX, y, 'Slope');
-    this._ui.trigRise = this._button(padX + 80, y - 6, 80, 28, 'Rising', () => this.changeTriggerSlope('Rising'), { active: this.triggerSlope === 'Rising' });
-    this._ui.trigFall = this._button(padX + 166, y - 6, 80, 28, 'Falling', () => this.changeTriggerSlope('Falling'), { active: this.triggerSlope === 'Falling' });
-    y += 36;
+  const trigBtnW = (colW - modeGap * 3) / 4;
+  this._ui.trigAuto = this._button(padX, y, trigBtnW, 28, 'Auto', () => this.setSyncType('AUTO'), { active: this.syncType === 'AUTO' });
+  this._ui.trigTimeout = this._button(padX + (trigBtnW + modeGap), y, trigBtnW, 28, 'Timeout', () => this.setSyncType('WAIT_TIMEOUT'), { active: this.syncType === 'WAIT_TIMEOUT' });
+  this._ui.trigWait = this._button(padX + 2 * (trigBtnW + modeGap), y, trigBtnW, 28, 'Wait', () => this.setSyncType('WAIT'), { active: this.syncType === 'WAIT' });
+  this._ui.trigFree = this._button(padX + 3 * (trigBtnW + modeGap), y, trigBtnW, 28, 'Free', () => this.setSyncType('FREE'), { active: this.syncType === 'FREE' });
+  y += 36;
+  this._ui.edgeLabel = this._label(padX, y, 'Sync Edges');
+  y += 22;
+  const edgeBtnW = (colW - modeGap) / 2;
+  this._ui.trigFront = this._button(padX, y, edgeBtnW, 28, 'Front', () => this.toggleSyncEdge('front'), { active: this.syncFront });
+  this._ui.trigBack = this._button(padX + edgeBtnW + modeGap, y, edgeBtnW, 28, 'Back', () => this.toggleSyncEdge('back'), { active: this.syncBack });
+  y += 36;
     this._ui.levelLabel = this._label(padX, y, 'Level');
     this._ui.levelSlider = this._slider(padX + 80, y - 6, colW - 160, 0, 255, this.triggerLevel,
       (val) => this.previewTriggerLevel(Math.round(val)),
@@ -169,6 +197,14 @@ export class ControlPanel {
     this.layer.add(
       this._ui.runStop.group,
       this._ui.single.group,
+  this._ui.procLabel,
+  this._ui.modeNormal.group,
+  this._ui.modePeak.group,
+  this._ui.modeAvg.group,
+  this._ui.modeAvgHi.group,
+  this._ui.filterLabel,
+  this._ui.filterHigh.group,
+  this._ui.filterLow.group,
       this._ui.vertLabel,
       this._ui.vdivMinus.group,
       this._ui.vdivValue,
@@ -187,11 +223,12 @@ export class ControlPanel {
       this._ui.hposSlider.group,
       this._ui.trigLabel,
       this._ui.trigAuto.group,
-      this._ui.trigNormal.group,
-      this._ui.trigSingle.group,
-      this._ui.slopeLabel,
-      this._ui.trigRise.group,
-      this._ui.trigFall.group,
+      this._ui.trigTimeout.group,
+      this._ui.trigWait.group,
+      this._ui.trigFree.group,
+      this._ui.edgeLabel,
+      this._ui.trigFront.group,
+      this._ui.trigBack.group,
       this._ui.levelLabel,
       this._ui.levelSlider.group,
     );
@@ -271,31 +308,81 @@ export class ControlPanel {
 
   changeCoupling(coupling) {
     this.coupling = coupling;
-    const setActive = (btn, active) => { btn.rect.fill(active ? '#007acc' : '#3c3c3c'); btn.rect.stroke(active ? '#007acc' : '#555'); };
-    setActive(this._ui.cplAc, coupling === 'AC');
-    setActive(this._ui.cplDc, coupling === 'DC');
-    setActive(this._ui.cplGnd, coupling === 'GND');
+    this._setButtonActive(this._ui.cplAc, coupling === 'AC');
+    this._setButtonActive(this._ui.cplDc, coupling === 'DC');
+    this._setButtonActive(this._ui.cplGnd, coupling === 'GND');
     this.layer.batchDraw();
     this.onConfigChange({ coupling });
   }
 
-  changeTriggerMode(mode) {
-    this.triggerMode = mode;
-    const setActive = (btn, active) => { btn.rect.fill(active ? '#007acc' : '#3c3c3c'); btn.rect.stroke(active ? '#007acc' : '#555'); };
-    setActive(this._ui.trigAuto, mode === 'Auto');
-    setActive(this._ui.trigNormal, mode === 'Normal');
-    setActive(this._ui.trigSingle, mode === 'Single');
-    this.layer.batchDraw();
-    this.onConfigChange({ trigger_mode: mode.toLowerCase() });
+  _applySwModeState(mode) {
+    const normalized = (mode || 'NORMAL').toUpperCase();
+    this.swMode = normalized;
+    const isPeak = normalized.startsWith('PEAK');
+    this._setButtonActive(this._ui.modeNormal, normalized === 'NORMAL');
+    this._setButtonActive(this._ui.modePeak, isPeak);
+    this._setButtonActive(this._ui.modeAvg, normalized === 'AVG');
+    this._setButtonActive(this._ui.modeAvgHi, normalized === 'AVG_HIRES');
   }
 
-  changeTriggerSlope(slope) {
-    this.triggerSlope = slope;
-    const setActive = (btn, active) => { btn.rect.fill(active ? '#007acc' : '#3c3c3c'); btn.rect.stroke(active ? '#007acc' : '#555'); };
-    setActive(this._ui.trigRise, slope === 'Rising');
-    setActive(this._ui.trigFall, slope === 'Falling');
+  setSwMode(mode) {
+    this._applySwModeState(mode);
     this.layer.batchDraw();
-    this.onConfigChange({ trigger_slope: slope.toLowerCase() });
+    this.onConfigChange({ sw_mode: this.swMode });
+  }
+
+  _applyFilterState() {
+    this._setButtonActive(this._ui.filterHigh, !!this.filters.high);
+    this._setButtonActive(this._ui.filterLow, !!this.filters.low);
+  }
+
+  toggleFilter(name, explicitValue = null) {
+    if (!(name in this.filters)) return;
+    const nextValue = explicitValue === null ? !this.filters[name] : !!explicitValue;
+    this.filters[name] = nextValue;
+    this._applyFilterState();
+    this.layer.batchDraw();
+    this.onConfigChange({ filter_high: this.filters.high, filter_low: this.filters.low });
+  }
+
+  _applySyncTypeState(type) {
+    const normalized = (type || 'AUTO').toUpperCase();
+    this.syncType = normalized;
+    if (this._ui.trigAuto) this._setButtonActive(this._ui.trigAuto, normalized === 'AUTO');
+    if (this._ui.trigTimeout) this._setButtonActive(this._ui.trigTimeout, normalized === 'WAIT_TIMEOUT');
+    if (this._ui.trigWait) this._setButtonActive(this._ui.trigWait, normalized === 'WAIT');
+    if (this._ui.trigFree) this._setButtonActive(this._ui.trigFree, normalized === 'FREE');
+  }
+
+  setSyncType(type) {
+    this._applySyncTypeState(type);
+    this.layer.batchDraw();
+    this.onConfigChange({ sync_type: this.syncType });
+  }
+
+  _applySyncEdgesState(front = this.syncFront, back = this.syncBack) {
+    this.syncFront = typeof front === 'boolean' ? front : this.syncFront;
+    this.syncBack = typeof back === 'boolean' ? back : this.syncBack;
+    if (this._ui.trigFront) this._setButtonActive(this._ui.trigFront, this.syncFront);
+    if (this._ui.trigBack) this._setButtonActive(this._ui.trigBack, this.syncBack);
+  }
+
+  toggleSyncEdge(edge, explicitValue = null) {
+    if (edge === 'front') {
+      const next = explicitValue === null ? !this.syncFront : !!explicitValue;
+      this._applySyncEdgesState(next, this.syncBack);
+    } else if (edge === 'back') {
+      const next = explicitValue === null ? !this.syncBack : !!explicitValue;
+      this._applySyncEdgesState(this.syncFront, next);
+    } else {
+      return;
+    }
+    this.layer.batchDraw();
+    this.onConfigChange({ sync_front: this.syncFront, sync_back: this.syncBack });
+  }
+
+  changeTriggerMode(mode) {
+    this.setSyncType(mode);
   }
 
   changeTriggerLevel(level) {
@@ -329,6 +416,28 @@ export class ControlPanel {
       this._ui.levelSlider.handle.x(x);
       this._ui.levelSlider.valueText.text(`${Math.round(this.triggerLevel)}`);
     }
+    if (config.coupling) {
+      this.coupling = config.coupling;
+      this._setButtonActive(this._ui.cplAc, this.coupling === 'AC');
+      this._setButtonActive(this._ui.cplDc, this.coupling === 'DC');
+      this._setButtonActive(this._ui.cplGnd, this.coupling === 'GND');
+    }
+    if (config.filters) {
+      this.filters.high = !!config.filters.high;
+      this.filters.low = !!config.filters.low;
+      this._applyFilterState();
+    }
+    if (config.sw_mode) {
+      this._applySwModeState(config.sw_mode);
+    }
+    if (config.sync_type) {
+      this._applySyncTypeState(config.sync_type);
+    }
+    if (typeof config.sync_front === 'boolean' || typeof config.sync_back === 'boolean') {
+      const front = typeof config.sync_front === 'boolean' ? config.sync_front : this.syncFront;
+      const back = typeof config.sync_back === 'boolean' ? config.sync_back : this.syncBack;
+      this._applySyncEdgesState(front, back);
+    }
     // t_offset is represented in samples in config; the UI slider is in divs; keep as-is for now.
     this.layer && this.layer.batchDraw();
   }
@@ -361,6 +470,12 @@ export class ControlPanel {
     text.fill(labelColor);
     group.opacity(enabled ? 1 : 0.5);
     this.layer && this.layer.batchDraw();
+  }
+
+  _setButtonActive(buttonRef, active) {
+    if (!buttonRef) return;
+    buttonRef.rect.fill(active ? '#007acc' : '#3c3c3c');
+    buttonRef.rect.stroke(active ? '#007acc' : '#555');
   }
 
   _setRunButtonLabel() {

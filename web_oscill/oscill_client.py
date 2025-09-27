@@ -28,6 +28,16 @@ class OscillClient:
     SAMPLES_PER_DIV = 32
     H_DIVS = 8
 
+    # Channel data format codes (bits 2..0 of the FIRST channel attribute byte)
+    # Mapping follows Android implementation in ChannelSWMode + OscillData docs.
+    SAMPLE_FORMATS = {
+        0x00: {"name": "AVG", "value_bits": 8, "components": 1},
+        0x01: {"name": "AVG_HIRES", "value_bits": 16, "components": 1},
+        0x02: {"name": "PEAK_INTERLACED", "value_bits": 8, "components": 1},
+        0x03: {"name": "PEAK_DOUBLE", "value_bits": 8, "components": 2},
+        0x04: {"name": "NORMAL", "value_bits": 8, "components": 1},
+    }
+
     def __init__(self, port: str, baud: int = 115200, timeout: float = 3.0):
         self.port = port
         self.baud = baud
@@ -392,9 +402,17 @@ class OscillClient:
         """Sets the channel hardware mode (O1). 1-byte value."""
         return self.set_reg_1('O1', o1_bits)
 
+    def get_channel_hw_mode(self) -> int:
+        """Returns raw O1 register bits for channel hardware mode."""
+        return self.get_reg_1('O1')
+
     def set_channel_sw_mode(self, m1_bits: int) -> int:
         """Sets the channel software/processing mode (M1). 1-byte value."""
         return self.set_reg_1('M1', m1_bits)
+
+    def get_channel_sw_mode(self) -> int:
+        """Returns raw M1 register bits for channel software mode."""
+        return self.get_reg_1('M1')
 
     def get_rs_mode(self) -> int:
         return self.get_reg_1('RS')
@@ -468,6 +486,14 @@ class OscillClient:
         """
         return self.set_reg_1('AR', value)
 
+    def get_sync_type(self) -> int:
+        """Returns raw RT register bits describing acquisition sync type."""
+        return self.get_reg_1('RT')
+
+    def set_sync_type(self, value: int) -> int:
+        """Sets the RT register controlling acquisition sync type."""
+        return self.set_reg_1('RT', value)
+
     def set_samples_offset(self, value: int) -> int:
         """
         Sets the samples offset/centering (TC).
@@ -496,9 +522,60 @@ class OscillClient:
             ch_attrs = int.from_bytes(body[pos:pos+2], 'big'); pos += 2
             size = int.from_bytes(body[pos:pos+2], 'big'); pos += 2
             data = body[pos:pos+size]; pos += size
-            channels.append({"attrs": ch_attrs, "data": data})
-        first = channels[0]["data"] if channels else b""
-        return {"channels": ch_count, "samples": list(first)}
+            channels.append({"attrs": ch_attrs, "size": size, "data": data})
+
+        first_channel = channels[0] if channels else None
+        if not first_channel:
+            return {"channels": ch_count, "samples": []}
+
+        channel_attrs = first_channel["attrs"]
+        sample_format = (channel_attrs >> 8) & 0x07
+        fmt_info = OscillClient.SAMPLE_FORMATS.get(sample_format, {"name": "UNKNOWN", "value_bits": 8, "components": 1})
+        value_bits = max(1, fmt_info.get("value_bits", 8))
+        components = max(1, fmt_info.get("components", 1))
+        value_bytes = max(1, value_bits // 8)
+        total_bytes_per_sample = value_bytes * components
+        raw_data = first_channel["data"]
+
+        samples: List[int] = []
+        peak_min: Optional[List[int]] = None
+        peak_max: Optional[List[int]] = None
+
+        limit = len(raw_data) - (len(raw_data) % total_bytes_per_sample)
+        if components == 1:
+            if value_bytes == 2:
+                samples = [
+                    int.from_bytes(raw_data[i:i + value_bytes], 'big')
+                    for i in range(0, limit, value_bytes)
+                ]
+            else:
+                samples = list(raw_data[:limit])
+        else:
+            peak_min = []
+            peak_max = []
+            for i in range(0, limit, total_bytes_per_sample):
+                first_val = int.from_bytes(raw_data[i:i + value_bytes], 'big')
+                second_val = int.from_bytes(raw_data[i + value_bytes:i + 2 * value_bytes], 'big')
+                peak_min.append(first_val)
+                peak_max.append(second_val)
+                samples.append((first_val + second_val) // 2)
+
+        sample_bits = value_bits
+        frame: Dict[str, Any] = {
+            "channels": ch_count,
+            "samples": samples,
+            "sample_format": sample_format,
+            "sample_format_label": fmt_info.get("name", "UNKNOWN"),
+            "sample_bytes": value_bytes,
+            "sample_bits": sample_bits,
+            "sample_components": components,
+            "frame_attrs": attrs,
+            "channel_attrs": channel_attrs,
+        }
+        if peak_min is not None and peak_max is not None:
+            frame["samples_peak_min"] = peak_min
+            frame["samples_peak_max"] = peak_max
+        return frame
 
     def get_frame(self) -> Optional[Dict[str, Any]]:
         raw = self.get_data_single()

@@ -47,14 +47,20 @@ export class ScopeView {
     const height = Math.max(10, container.clientHeight);
     this.stage = new Konva.Stage({ container: this.containerId, width, height });
 
-  this.gridLayer = new Konva.Layer();
-  this.axisLayer = new Konva.Layer();
-  this.waveLayer = new Konva.Layer();
-  this.overlayLayer = new Konva.Layer();
-  // Order: grid (back), axis labels, waveform, overlays (top)
-  this.stage.add(this.gridLayer, this.axisLayer, this.waveLayer, this.overlayLayer);
+    this.gridLayer = new Konva.Layer();
+    this.axisLayer = new Konva.Layer();
+    this.waveLayer = new Konva.Layer();
+    this.overlayLayer = new Konva.Layer();
+    // Order: grid (back), axis labels, waveform, overlays (top)
+    this.stage.add(this.gridLayer, this.axisLayer, this.waveLayer, this.overlayLayer);
 
-  this.waveLine = new Konva.Line({ points: [], stroke: '#ffd700', strokeWidth: 2, lineCap: 'round', lineJoin: 'round' });
+    this.waveLine = new Konva.Line({
+      points: [],
+      stroke: '#ffd700',
+      strokeWidth: 2,
+      lineCap: 'round',
+      lineJoin: 'round',
+    });
     this.waveLayer.add(this.waveLine);
 
     this.triggerGroup = this._createTriggerGroup();
@@ -71,6 +77,51 @@ export class ScopeView {
     this.stage.draw();
   }
 
+  redrawWave() {
+    if (!this.lastFrames || !this.lastConfig || !this.xRange || !this.yRange || !this.stage) return;
+    const latestFrame = this.lastFrames[this.lastFrames.length - 1];
+    const samples = latestFrame.samples || [];
+    if (samples.length === 0) {
+      this.waveLine.points([]);
+      this.waveLayer.batchDraw();
+      return;
+    }
+    const sampleBits = Math.max(1, latestFrame.sample_bits || 8);
+    const totalTime = this.xRange[1] - this.xRange[0];
+    const totalVoltage = this.yRange[1] - this.yRange[0];
+    const inner = this.getInnerRect();
+    const toX = (time) => {
+      const [xmin, xmax] = this.xRange;
+      const width = inner.width;
+      return inner.left + ((time - xmin) / (xmax - xmin)) * width;
+    };
+    const toY = (volt) => {
+      const [ymin, ymax] = this.yRange;
+      const height = inner.height;
+      return inner.top + (1 - (volt - ymin) / (ymax - ymin)) * height;
+    };
+    const points = [];
+    for (let i = 0; i < samples.length; i++) {
+      const time = (i / Math.max(1, samples.length)) * totalTime + this.xRange[0];
+      const voltage = this.sampleToVoltage(samples[i], sampleBits, totalVoltage);
+      points.push(toX(time), toY(voltage));
+    }
+    this.waveLine.points(points);
+    this.waveLayer.batchDraw();
+  }
+
+  triggerLevelToVoltage(level, totalVoltage) { return ((level - 128) / 128) * (totalVoltage / 2); }
+
+  sampleToVoltage(sample, sampleBits, totalVoltage) {
+    const bits = Math.max(1, sampleBits || 8);
+    if (bits === 1) {
+      const normalized = sample ? 1 : -1;
+      return normalized * (totalVoltage / 2);
+    }
+    const center = 2 ** (bits - 1);
+    const normalized = (sample - center) / center;
+    return normalized * (totalVoltage / 2);
+  }
   update(frames, config) {
     if (!frames || frames.length === 0) return;
     this.lastFrames = frames;
@@ -81,9 +132,12 @@ export class ScopeView {
     const samples = latestFrame.samples || [];
     if (samples.length === 0) return;
 
+    const sampleBits = Math.max(1, latestFrame.sample_bits || 8);
+
+    const frameCfgId = latestFrame.cfg_id;
     if (
-      latestFrame.config && latestFrame.config.cfg_id !== undefined &&
-      this.currentCfgId !== null && latestFrame.config.cfg_id < this.currentCfgId
+      frameCfgId !== undefined && frameCfgId !== null &&
+      this.currentCfgId !== null && frameCfgId < this.currentCfgId
     ) {
       return;
     }
@@ -120,7 +174,7 @@ export class ScopeView {
     const points = [];
     for (let i = 0; i < samples.length; i++) {
       const time = (i / samples.length) * totalTime - totalTime / 2; // do not apply tOffset visually
-      const voltage = ((samples[i] - 128) / 128) * (totalVoltage / 2);
+      const voltage = this.sampleToVoltage(samples[i], sampleBits, totalVoltage);
       points.push(toX(time), toY(voltage));
     }
     this.waveLine.points(points);
@@ -145,10 +199,6 @@ export class ScopeView {
   }
 
   setTriggerLevelChangeCallback(callback) { this.onTriggerLevelChange = callback; }
-
-  triggerLevelToVoltage(level, totalVoltage) { return ((level - 128) / 128) * (totalVoltage / 2); }
-  // Formatting delegated to format.js
-  
 
   // Helpers
   dataToXPixel(xVal) {
@@ -191,19 +241,42 @@ export class ScopeView {
     if (!this.lastFrames || !this.lastConfig || !this.xRange || !this.yRange || !this.stage) return;
     const latestFrame = this.lastFrames[this.lastFrames.length - 1];
     const samples = latestFrame.samples || [];
+    const sampleBits = Math.max(1, latestFrame.sample_bits || 8);
     const totalTime = this.xRange[1] - this.xRange[0];
     const totalVoltage = this.yRange[1] - this.yRange[0];
     const inner = this.getInnerRect();
-    const toX = (time) => { const [xmin, xmax] = this.xRange; const w = inner.width; return inner.left + ((time - xmin) / (xmax - xmin)) * w; };
-    const toY = (volt) => { const [ymin, ymax] = this.yRange; const h = inner.height; return inner.top + (1 - (volt - ymin) / (ymax - ymin)) * h; };
+    const toX = (time) => {
+      const [xmin, xmax] = this.xRange;
+      const width = inner.width;
+      return inner.left + ((time - xmin) / (xmax - xmin)) * width;
+    };
+    const toY = (volt) => {
+      const [ymin, ymax] = this.yRange;
+      const height = inner.height;
+      return inner.top + (1 - (volt - ymin) / (ymax - ymin)) * height;
+    };
     const points = [];
-    for (let i = 0; i < samples.length; i++) {
-      const time = (i / samples.length) * totalTime + this.xRange[0];
-      const voltage = ((samples[i] - 128) / 128) * (totalVoltage / 2);
+    const count = samples.length;
+    for (let i = 0; i < count; i++) {
+      const time = (i / count) * totalTime + this.xRange[0];
+      const voltage = this.sampleToVoltage(samples[i], sampleBits, totalVoltage);
       points.push(toX(time), toY(voltage));
     }
     this.waveLine.points(points);
     this.waveLayer.batchDraw();
+  }
+
+  triggerLevelToVoltage(level, totalVoltage) { return ((level - 128) / 128) * (totalVoltage / 2); }
+
+  sampleToVoltage(sample, sampleBits, totalVoltage) {
+    const bits = Math.max(1, sampleBits || 8);
+    if (bits === 1) {
+      const normalized = sample ? 1 : -1;
+      return normalized * (totalVoltage / 2);
+    }
+    const center = 2 ** (bits - 1);
+    const normalized = (sample - center) / center;
+    return normalized * (totalVoltage / 2);
   }
 
   drawGrid() {

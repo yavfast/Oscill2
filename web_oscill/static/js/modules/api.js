@@ -21,6 +21,30 @@ export class ApiService {
     return await response.json();
   }
 
+  async setSwMode(mode) {
+    return this.applyConfig({ sw_mode: mode });
+  }
+
+  async setFilters({ high, low }) {
+    const payload = {};
+    if (typeof high === 'boolean') payload.filter_high = high;
+    if (typeof low === 'boolean') payload.filter_low = low;
+    if (Object.keys(payload).length === 0) return { status: 'noop' };
+    return this.applyConfig(payload);
+  }
+
+  async setSyncType(type) {
+    return this.applyConfig({ sync_type: type });
+  }
+
+  async setSyncEdges({ front, back }) {
+    const payload = {};
+    if (typeof front === 'boolean') payload.sync_front = front;
+    if (typeof back === 'boolean') payload.sync_back = back;
+    if (Object.keys(payload).length === 0) return { status: 'noop' };
+    return this.applyConfig(payload);
+  }
+
   async getFrames(since = null) {
     const params = since ? `?since=${since}` : '';
     const response = await fetch(`${API_BASE}/frames${params}`);
