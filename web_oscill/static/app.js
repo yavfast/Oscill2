@@ -105,28 +105,7 @@ class App {
       try {
         const lastSeq = this.api.getLastSeq();
         const data = await this.api.getFrames(lastSeq);
-
-        if (data.frames && data.frames.length > 0) {
-          this.scopeView.update(data.frames, data.config || {});
-          const latestFrame = data.frames[data.frames.length - 1];
-          this.measurementPanel.displayMeasurements(latestFrame.measurements);
-        }
-
-        if (data.config) {
-          // Update current config ID if it's newer
-            if (data.config.cfg_id !== undefined &&
-                (this.currentCfgId === null || data.config.cfg_id >= this.currentCfgId)) {
-              this.currentCfgId = data.config.cfg_id;
-              this.controlPanel.updateControls(data.config);
-              this.statusBar.updateStatus(null, data.config);
-              // Update scope view trigger level
-              if (typeof data.config.trigger_level === 'number') {
-                if (!this.scopeView.isDraggingTrigger) {
-                  this.scopeView.setTriggerLevel(data.config.trigger_level);
-                }
-              }
-            }
-        }
+        this.handleFrameResponse(data);
       } catch (e) {
         console.error('Polling error:', e);
       } finally {
@@ -141,6 +120,68 @@ class App {
       this.pollInterval = null;
     }
     this.frameRequestInFlight = false; // Reset guard
+  }
+
+  async acquireSingleFrame() {
+    if (this.isRunning || this.frameRequestInFlight) {
+      console.warn('Single acquisition request ignored while busy');
+      return;
+    }
+
+    const startTimeSec = Date.now() / 1000;
+    let baselineSeq = this.api.getLastSeq();
+    this.frameRequestInFlight = true;
+    this.controlPanel.setSingleEnabled(false);
+    let didStart = false;
+
+    try {
+      await this.api.startAcquisition();
+      didStart = true;
+      this.isRunning = true;
+      this.controlPanel.setAcquisitionState('run');
+
+      let data = null;
+      for (let attempt = 0; attempt < 10; attempt++) {
+        if (attempt > 0) await this.delay(100);
+        const response = await this.api.getFrames(baselineSeq);
+
+        if (typeof response?.newest_seq !== 'undefined') {
+          baselineSeq = response.newest_seq;
+        }
+
+        const frames = response?.frames || [];
+        const freshFrames = frames.filter((fr) => {
+          if (typeof fr.time !== 'number') return true;
+          return fr.time >= startTimeSec;
+        });
+
+        if (freshFrames.length > 0) {
+          data = { ...response, frames: freshFrames };
+          break;
+        }
+
+        await this.delay(80);
+      }
+
+      if (data && data.frames.length > 0) {
+        this.handleFrameResponse(data);
+      } else {
+        console.warn('Single acquisition did not produce a fresh frame');
+      }
+    } catch (e) {
+      console.error('Single acquisition error:', e);
+    } finally {
+      if (didStart) {
+        try {
+          await this.api.stopAcquisition();
+        } catch (e) {
+          console.error('Stop acquisition error:', e);
+        }
+      }
+      this.isRunning = false;
+      this.controlPanel.setAcquisitionState('stop');
+      this.frameRequestInFlight = false;
+    }
   }
 
   startStatusPolling() {
@@ -222,7 +263,7 @@ class App {
       // Stop acquisition on server
       this.api.stopAcquisition().catch(e => console.error('Stop acquisition error:', e));
     } else if (action === 'single') {
-      // For single, we might need to implement single acquisition
+      this.acquireSingleFrame();
     }
   }
 
@@ -230,6 +271,34 @@ class App {
     // Stop acquisition when device disconnects
     this.isRunning = false;
     this.controlPanel.setAcquisitionState('stop');
+  }
+
+  handleFrameResponse(data) {
+    if (!data) return;
+
+    if (data.frames && data.frames.length > 0) {
+      this.scopeView.update(data.frames, data.config || {});
+      const latestFrame = data.frames[data.frames.length - 1];
+      this.measurementPanel.displayMeasurements(latestFrame.measurements);
+    }
+
+    if (data.config) {
+      if (data.config.cfg_id !== undefined &&
+          (this.currentCfgId === null || data.config.cfg_id >= this.currentCfgId)) {
+        this.currentCfgId = data.config.cfg_id;
+        this.controlPanel.updateControls(data.config);
+        this.statusBar.updateStatus(null, data.config);
+        if (typeof data.config.trigger_level === 'number') {
+          if (!this.scopeView.isDraggingTrigger) {
+            this.scopeView.setTriggerLevel(data.config.trigger_level);
+          }
+        }
+      }
+    }
+  }
+
+  delay(ms) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
   }
 }
 

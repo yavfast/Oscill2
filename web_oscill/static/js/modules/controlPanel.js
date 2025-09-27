@@ -15,6 +15,7 @@ export class ControlPanel {
     this.vPositionValue = 0; // in DIVS (-4..4)
     this.tPositionValue = 0;
     this.onTriggerLevelChange = null;
+    this._isAcquiring = false;
 
     this._ui = {}; // store Konva nodes
   }
@@ -89,11 +90,10 @@ export class ControlPanel {
     let y = 8;
 
     // Acquisition controls
-    this._ui.acqLabel = this._label(padX, y, 'Acquisition', 16, '#ccc');
-    y += 22;
-    this._ui.runStop = this._button(padX, y, colW * 0.55, 36, 'Run', () => this._toggleRunStop());
-    this._ui.single = this._button(padX + colW * 0.6, y, colW * 0.4, 36, 'Single', () => this.onAcquisitionChange('single'));
-    y += 48;
+  const buttonW = (colW - 12) / 2;
+  this._ui.runStop = this._button(padX, y, buttonW, 36, '▶ Run', () => this._toggleRunStop());
+  this._ui.single = this._button(padX + buttonW + 12, y, buttonW, 36, '⏺ Single', () => this.onAcquisitionChange('single'));
+  y += 46;
 
     // Vertical group
     this._ui.vertLabel = this._label(padX, y, 'Vertical', 16, '#ccc');
@@ -167,7 +167,6 @@ export class ControlPanel {
 
     // Add all to layer
     this.layer.add(
-      this._ui.acqLabel,
       this._ui.runStop.group,
       this._ui.single.group,
       this._ui.vertLabel,
@@ -198,6 +197,7 @@ export class ControlPanel {
     );
 
     this.layer.draw();
+    this.setSingleEnabled(true);
   }
 
   _layoutUI() {
@@ -219,13 +219,17 @@ export class ControlPanel {
   }
 
   _toggleRunStop() {
-    const isRun = this._ui.runStop.text.text() === 'Run' ? false : true;
-    if (isRun) {
-      this._ui.runStop.text.text('Run');
-      this.onAcquisitionChange('stop');
-    } else {
-      this._ui.runStop.text.text('Stop');
+    const willStart = !this._isAcquiring;
+    if (willStart) {
+      this._isAcquiring = true;
+      this._setRunButtonLabel();
+      this.setSingleEnabled(false);
       this.onAcquisitionChange('run');
+    } else {
+      this._isAcquiring = false;
+      this._setRunButtonLabel();
+      this.setSingleEnabled(true);
+      this.onAcquisitionChange('stop');
     }
     this.layer.batchDraw();
   }
@@ -331,9 +335,38 @@ export class ControlPanel {
 
   setAcquisitionState(state) {
     if (!this._ui.runStop) return;
-    if (state === 'run') this._ui.runStop.text.text('Stop');
-    else if (state === 'stop') this._ui.runStop.text.text('Run');
+    if (state === 'run') {
+      this._isAcquiring = true;
+      this.setSingleEnabled(false);
+    } else if (state === 'stop') {
+      this._isAcquiring = false;
+      this.setSingleEnabled(true);
+    }
+    this._setRunButtonLabel();
     this.layer.batchDraw();
+  }
+
+  setSingleEnabled(enabled) {
+    if (!this._ui.single) return;
+    this._ui.singleEnabled = enabled;
+    const { group, rect, text } = this._ui.single;
+    group.listening(enabled);
+    rect.listening(enabled);
+    text.listening(enabled);
+    const fill = enabled ? '#3c3c3c' : '#1f1f1f';
+    const stroke = enabled ? '#555' : '#2a2a2a';
+    const labelColor = enabled ? '#fff' : '#777';
+    rect.fill(fill);
+    rect.stroke(stroke);
+    text.fill(labelColor);
+    group.opacity(enabled ? 1 : 0.5);
+    this.layer && this.layer.batchDraw();
+  }
+
+  _setRunButtonLabel() {
+    if (!this._ui.runStop) return;
+    const iconLabel = this._isAcquiring ? '⏹ Stop' : '▶ Run';
+    this._ui.runStop.text.text(iconLabel);
   }
 
   setTriggerLevelChangeCallback(callback) { this.onTriggerLevelChange = callback; }
