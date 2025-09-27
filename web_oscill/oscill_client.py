@@ -185,14 +185,14 @@ class OscillClient:
             try:
                 # Estimated acquisition time ~ QS * sample_period
                 qs = self.get_reg_2('QS')
-                sample_s = self.get_sample_period_s()
+                sample_s = self.get_sample_period_ps() / 1e12
                 est = float(qs) * float(sample_s)
                 # Add a small margin and clamp to a reasonable cap
                 wait_s = min(max(est * 1.05, 0.0), 3.0)
             except Exception:
                 # Fallback heuristic
                 try:
-                    tdiv = self.get_time_div_s()
+                    tdiv = self.get_time_div_ms() / 1000
                     if tdiv >= 0.02:
                         wait_s = min(tdiv, 0.5)
                 except Exception:
@@ -408,23 +408,25 @@ class OscillClient:
     def set_ts_native(self, ts_native: int) -> int:
         return self.set_reg_4('TS', ts_native, signed=False)
 
-    def get_sample_period_s(self) -> float:
+    def get_sample_period_ps(self) -> float:
         ts = self.get_ts_native()
         cpu_10ps = self.get_cpu_tick_10ps()
         # ts is in MC*256; MC in 10ps; so sample_ps = ts * (cpu_10ps*10) / 256
         sample_ps = (ts * (cpu_10ps * 10.0)) / 256.0
-        return sample_ps * 1e-12
+        return sample_ps
 
-    def set_time_div_s(self, t_div_s: float) -> float:
-        # sample period = t_div_s / SAMPLES_PER_DIV
-        sample_s = max(1e-12, float(t_div_s) / self.SAMPLES_PER_DIV)
+    def set_time_div_ms(self, t_div_ms: float) -> float:
+        # sample period = t_div_ms / SAMPLES_PER_DIV
+        sample_ps = max(1, (float(t_div_ms) * 1e9) / self.SAMPLES_PER_DIV)
         cpu_ps = self.get_cpu_tick_10ps() * 10.0
-        ts_native = int(round((sample_s * 1e12) * 256.0 / cpu_ps))
+        ts_native = int(round(sample_ps * 256.0 / cpu_ps))
         self.set_ts_native(ts_native)
-        return self.get_time_div_s()
+        return self.get_time_div_ms()
 
-    def get_time_div_s(self) -> float:
-        return self.get_sample_period_s() * self.SAMPLES_PER_DIV
+    def get_time_div_ms(self) -> float:
+        return (self.get_sample_period_ps() * self.SAMPLES_PER_DIV) / 1e9
+
+
 
     def set_scan_delay(self, value: int) -> int:
         """
@@ -523,12 +525,12 @@ class OscillClient:
                 "VSW": (vsw.decode('ascii', 'ignore') if vsw else None),
             },
             "config": {
-                "v_div_mV": self.get_v_div_mV(),
-                "t_div_s": self.get_time_div_s(),
-                "offset_V": self.get_offset_volts(),
-                "trigger_level": self.get_trigger_level(),
-                "trigger_mode": self.get_trigger_mode(),
-                "rs_mode": self.get_rs_mode(),
+                "v_div": {"v": self.get_v_div_mV(), "u": "mV"},
+                "t_div": {"v": self.get_time_div_ms(), "u": "ms"},
+                "offset": {"v": self.get_offset_volts(), "u": "V"},
+                "trigger_level": {"v": self.get_trigger_level(), "u": "level"},
+                "trigger_mode": {"v": self.get_trigger_mode(), "u": "bits"},
+                "rs_mode": {"v": self.get_rs_mode(), "u": "bits"},
             },
         }
         return status

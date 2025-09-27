@@ -120,7 +120,7 @@ class App {
               this.controlPanel.updateControls(data.config);
               this.statusBar.updateStatus(null, data.config);
               // Update scope view trigger level
-              if (data.config.trigger_level !== undefined) {
+              if (typeof data.config.trigger_level === 'number') {
                 if (!this.scopeView.isDraggingTrigger) {
                   this.scopeView.setTriggerLevel(data.config.trigger_level);
                 }
@@ -157,24 +157,29 @@ class App {
 
   updateStatus(status) {
     const wasConnected = this.isDeviceConnected;
-    this.isDeviceConnected = (status && status.status === 'ok') || (status && status.status === 'error') || !!status?.config;
+    this.isDeviceConnected = status?.is_connected || false;
+    const wasRunning = this.isRunning;
+    this.isRunning = status?.is_acquiring || false;
 
-    console.log('Status update:', { status: status?.status, hasConfig: !!status?.config, wasConnected, isNowConnected: this.isDeviceConnected });
+    console.log('Status update:', { status: status?.status, is_connected: status?.is_connected, is_acquiring: status?.is_acquiring, wasConnected, isNowConnected: this.isDeviceConnected, wasRunning, isNowRunning: this.isRunning });
 
     this.statusBar.updateStatus(status, status?.config);
 
-    // Start/stop frame polling based on connection status
+    // Start/stop frame polling based on connection and acquisition status
     if (this.isDeviceConnected && !wasConnected) {
-      // Device just became connected - start frame polling and acquisition
-      console.log('Device connected - starting frame polling and acquisition');
-      this.isRunning = true; // Автоматично запускаємо збір даних
+      // Device just became connected - start frame polling
+      console.log('Device connected - starting frame polling');
       this.startPolling();
-      this.controlPanel.setAcquisitionState('run'); // Синхронізуємо кнопку
     } else if (!this.isDeviceConnected && wasConnected) {
-      // Device just disconnected - stop frame polling and acquisition
-      console.log('Device disconnected - stopping frame polling and acquisition');
+      // Device just disconnected - stop frame polling
+      console.log('Device disconnected - stopping frame polling');
       this.stopPolling();
       this.onDeviceDisconnected();
+    }
+
+    // Update acquisition state based on server status
+    if (this.isRunning !== wasRunning) {
+      this.controlPanel.setAcquisitionState(this.isRunning ? 'run' : 'stop');
     }
 
     if (status?.config) {
@@ -184,7 +189,7 @@ class App {
       }
       this.controlPanel.updateControls(status.config);
       // Update scope view trigger level
-      if (status.config.trigger_level !== undefined) {
+      if (typeof status.config.trigger_level === 'number') {
         if (!this.scopeView.isDraggingTrigger) {
           this.scopeView.setTriggerLevel(status.config.trigger_level);
         }
@@ -210,8 +215,12 @@ class App {
   onAcquisitionChange(action) {
     if (action === 'run') {
       this.isRunning = true;
+      // Start acquisition on server
+      this.api.startAcquisition().catch(e => console.error('Start acquisition error:', e));
     } else if (action === 'stop') {
       this.isRunning = false;
+      // Stop acquisition on server
+      this.api.stopAcquisition().catch(e => console.error('Stop acquisition error:', e));
     } else if (action === 'single') {
       // For single, we might need to implement single acquisition
     }

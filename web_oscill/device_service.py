@@ -9,6 +9,7 @@ import os
 sys.path.append(os.path.dirname(__file__))
 
 from oscill_client import OscillClient
+from converters import convert
 
 
 class DeviceService:
@@ -34,6 +35,8 @@ class DeviceService:
         self._acq_thread: Optional[threading.Thread] = None
         self._stop_event = threading.Event()
         self._cfg_id: int = 0  # Configuration ID for tracking config changes
+        self._is_connected = False
+        self._is_acquiring = False
 
     # ---------------- Device lifecycle ----------------
     def connect(self, port: Optional[str] = None, baud: int = 115200) -> Dict[str, Any]:
@@ -87,14 +90,16 @@ class DeviceService:
             # Ensure QS sane
             cli.ensure_qs()
             # Timebase 5 ms/div
-            cli.set_time_div_s(0.005)
+            cli.set_time_div_ms(5)
             # Sample offset (TC) center 0 and samples offset P (SamplesOffset) equivalent → use TC=0
             cli.set_samples_offset(0)
             # Calibrate at the end
             cli.calibrate()
             self._client = cli
-            # Start acquisition
+            self._is_connected = True
+            # Start acquisition automatically after successful connection
             self._start_acquisition_locked()
+            self._is_acquiring = True
             return {"status": "ok", "port": port, **self._safe_status_locked()}
 
     def disconnect(self) -> Dict[str, Any]:
@@ -106,6 +111,8 @@ class DeviceService:
                 except Exception:
                     pass
             self._client = None
+            self._is_connected = False
+            self._is_acquiring = False
         with self._frames_lock:
             self._frames.clear()
             self._seq = 0
@@ -123,19 +130,19 @@ class DeviceService:
                 except Exception:
                     pass
             if not self._client:
-                return {"status": "disconnected"}
+                return {"status": "disconnected", "is_connected": False, "is_acquiring": False}
             try:
-                status = self._client.get_current_status()
-                status["cfg_id"] = self._cfg_id  # Add config ID to status
-                return {"status": "ok", **status}
+                config = self._snapshot_config_locked()
+                return {"status": "ok", "config": config, "cfg_id": self._cfg_id, "is_connected": self._is_connected, "is_acquiring": self._is_acquiring}
             except Exception as e:
-                return {"status": "error", "message": str(e)}
+                return {"status": "error", "message": str(e), "is_connected": self._is_connected, "is_acquiring": self._is_acquiring}
 
     def apply_config(self, changes: Dict[str, Any]) -> Tuple[Dict[str, Any], List[str]]:
         """
         Apply requested config atomically and return new status plus warnings.
 
-        changes keys may include: v_div_mV, t_div_s, offset_V, trigger_level, trigger_mode, trigger_slope, coupling.
+        changes keys may include: v_div, t_div, v_offset, t_offset, trigger_level, trigger_mode, trigger_slope, coupling.
+        Values are dicts with 'v' and 'u' for units.
         """
         warnings: List[str] = []
         with self._dev_lock:
@@ -143,68 +150,51 @@ class DeviceService:
                 raise RuntimeError("Not connected")
             c = self._client
             try:
-                if changes.get("v_div_mV") is not None:
-                    c.set_v_div_mV(int(changes["v_div_mV"]))
-            except Exception as e:
-                warnings.append(f"set v_div_mV failed: {e}")
-            try:
-                if changes.get("offset_V") is not None:
-                    req_v = float(changes["offset_V"])
-                    self._log.info(f"Applying offset_V request: {req_v:.6f} V")
-                    c.set_offset_volts(req_v)
+                if changes.get("v_div") is not None:
+                    v_div = changes["v_div"]
+                    value_mv = int(convert(v_div["v"], v_div["u"], "mV"))
+                    c.set_v_div_mV(value_mv)
+                if changes.get("v_offset") is not None:
+                    v_offset = changes["v_offset"]
+                    value_v = float(convert(v_offset["v"], v_offset["u"], "V"))
+                    self._log.info(f"Applying offset_V request: {value_v:.6f} V")
+                    c.set_offset_volts(value_v)
                     try:
                         rb_v = c.get_offset_volts()
-                        self._log.info(f"Offset_V applied, readback: {rb_v:.6f} V (delta {rb_v-req_v:+.6f} V)")
+                        self._log.info(f"Offset_V applied, readback: {rb_v:.6f} V (delta {rb_v-value_v:+.6f} V)")
                     except Exception as e:
                         self._log.warning(f"Offset_V readback failed: {e}")
-            except Exception as e:
-                warnings.append(f"set offset_V failed: {e}")
-            try:
-                if changes.get("t_div_s") is not None:
-                    c.set_time_div_s(float(changes["t_div_s"]))
-            except Exception as e:
-                warnings.append(f"set t_div_s failed: {e}")
-            try:
-                if changes.get("t_offset_samples") is not None:
-                    c.set_samples_offset(int(changes["t_offset_samples"]))
-            except Exception as e:
-                warnings.append(f"set t_offset_samples failed: {e}")
-            try:
+                if changes.get("t_div") is not None:
+                    t_div = changes["t_div"]
+                    value_ms = float(convert(t_div["v"], t_div["u"], "ms"))
+                    c.set_time_div_ms(value_ms)
+                if changes.get("t_offset") is not None:
+                    t_offset = changes["t_offset"]
+                    if t_offset["u"] == "samples":
+                        value_samples = int(t_offset["v"])
+                    else:
+                        raise ValueError(f"Unsupported unit for t_offset: {t_offset['u']}")
+                    c.set_samples_offset(value_samples)
                 if changes.get("trigger_level") is not None:
                     c.set_trigger_level(int(changes["trigger_level"]))
-            except Exception as e:
-                warnings.append(f"set trigger_level failed: {e}")
-            try:
                 if changes.get("trigger_mode") is not None:
                     c.set_trigger_mode(int(changes["trigger_mode"]))
-            except Exception as e:
-                warnings.append(f"set trigger_mode failed: {e}")
-            try:
                 if changes.get("trigger_slope") is not None:
                     # For now, trigger slope is part of trigger_mode
                     # This might need more complex logic depending on device
                     pass
-            except Exception as e:
-                warnings.append(f"set trigger_slope failed: {e}")
-            try:
                 if changes.get("coupling") is not None:
                     # Set channel coupling mode
                     coupling_map = {"AC": 0x01, "DC": 0x00, "GND": 0x02}
                     mode = coupling_map.get(changes["coupling"], 0x00)
                     c.set_channel_hw_mode(mode)
-            except Exception as e:
-                warnings.append(f"set coupling failed: {e}")
-            try:
                 c.ensure_qs()
-            except Exception as e:
-                warnings.append(f"ensure_qs failed: {e}")
-            try:
                 status = c.get_current_status()
                 # Increment config ID on any config change
                 self._cfg_id += 1
                 status["cfg_id"] = self._cfg_id
             except Exception as e:
-                warnings.append(f"get_current_status failed: {e}")
+                warnings.append(f"config update failed: {e}")
                 status = {}
         return status, warnings
 
@@ -270,34 +260,37 @@ class DeviceService:
         if not c:
             return cfg
         try:
-            cfg["v_div_mV"] = c.get_v_div_mV()
+            v_div_mv = c.get_v_div_mV()
+            cfg["v_div"] = {"v": v_div_mv, "u": "mV"}
         except Exception:
-            cfg["v_div_mV"] = None
+            cfg["v_div"] = {"v": 200, "u": "mV"}  # Default
         try:
-            cfg["t_div_s"] = c.get_time_div_s()
+            t_div_ms = c.get_time_div_ms()
+            cfg["t_div"] = {"v": round(t_div_ms, 6), "u": "ms"}
         except Exception:
-            cfg["t_div_s"] = None
+            cfg["t_div"] = {"v": 5, "u": "ms"}  # Default
         try:
-            cfg["offset_V"] = c.get_offset_volts()
+            offset_v = c.get_offset_volts()
+            cfg["v_offset"] = {"v": round(offset_v, 6), "u": "V"}
         except Exception:
-            cfg["offset_V"] = None
+            cfg["v_offset"] = {"v": 0.0, "u": "V"}  # Default
         try:
             cfg["trigger_level"] = c.get_trigger_level()
         except Exception:
-            cfg["trigger_level"] = None
+            cfg["trigger_level"] = 128
         try:
             cfg["trigger_mode"] = c.get_trigger_mode()
         except Exception:
-            cfg["trigger_mode"] = None
+            cfg["trigger_mode"] = 0x2C
         try:
             cfg["rs_mode"] = c.get_rs_mode()
         except Exception:
-            cfg["rs_mode"] = None
+            cfg["rs_mode"] = 0x00
         # Time offset (TC, samples) and optional delay (TD)
         try:
-            cfg["t_offset_samples"] = c.get_reg_2('TC', signed=False)
+            cfg["t_offset"] = {"v": c.get_reg_2('TC', signed=False), "u": "samples"}
         except Exception:
-            cfg["t_offset_samples"] = 0
+            cfg["t_offset"] = {"v": 0, "u": "samples"}
         try:
             cfg["t_delay"] = c.get_reg_4('TD', signed=False)
         except Exception:
@@ -323,6 +316,8 @@ class DeviceService:
     def _acq_loop(self):
         # Soft loop with opportunistic device access
         backoff_s = 0.02
+        consecutive_errors = 0
+        max_consecutive_errors = 5  # Disconnect if 5 consecutive errors
         while not self._stop_event.is_set():
             # Try to acquire device without blocking for too long
             got = self._dev_lock.acquire(timeout=0.1)
@@ -352,7 +347,16 @@ class DeviceService:
                     "samples": fr.get("samples", []),
                 }
                 self._record_frame(payload)
-            except Exception:
+                consecutive_errors = 0  # Reset on success
+            except Exception as e:
+                consecutive_errors += 1
+                if consecutive_errors >= max_consecutive_errors:
+                    self._log.warning(f"Device appears disconnected after {consecutive_errors} consecutive errors, disconnecting")
+                    try:
+                        self.disconnect()
+                    except Exception:
+                        pass
+                    break
                 # Swallow and keep trying
                 time.sleep(backoff_s)
             finally:
@@ -362,3 +366,17 @@ class DeviceService:
                     pass
             # Pace the loop lightly to avoid hogging CPU/USB
             time.sleep(backoff_s)
+
+    def start_acquisition(self) -> Dict[str, Any]:
+        with self._dev_lock:
+            if not self._client:
+                raise RuntimeError("Not connected")
+            self._start_acquisition_locked()
+            self._is_acquiring = True
+            return {"status": "ok"}
+
+    def stop_acquisition(self) -> Dict[str, Any]:
+        with self._dev_lock:
+            self._stop_acquisition_locked()
+            self._is_acquiring = False
+            return {"status": "ok"}

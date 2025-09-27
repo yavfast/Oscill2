@@ -50,6 +50,22 @@ export class ApiService {
     return await response.json();
   }
 
+  async startAcquisition() {
+    const response = await fetch(`${API_BASE}/acquisition/start`, {
+      method: 'POST'
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return await response.json();
+  }
+
+  async stopAcquisition() {
+    const response = await fetch(`${API_BASE}/acquisition/stop`, {
+      method: 'POST'
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return await response.json();
+  }
+
   getLastSeq() {
     return this.lastSeq;
   }

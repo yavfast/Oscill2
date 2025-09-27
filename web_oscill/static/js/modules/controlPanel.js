@@ -5,7 +5,7 @@ export class ControlPanel {
     this.onConfigChange = onConfigChange;
     this.onAcquisitionChange = onAcquisitionChange;
     this.vDivValues = [20, 50, 100, 200, 500, 1000, 2000, 5000, 10000]; // mV
-    this.tDivValues = [0.0001, 0.0002, 0.0005, 0.001, 0.002, 0.005, 0.01, 0.02, 0.05, 0.1, 0.2, 0.5]; // s
+    this.tDivValues = [0.1, 0.2, 0.5, 1, 2, 5, 10, 20, 50, 100, 200, 500]; // ms
     this.currentVIndex = 3; // 200 mV
     this.currentTIndex = 5; // 5 ms
     this.coupling = 'DC';
@@ -132,7 +132,7 @@ export class ControlPanel {
     this._ui.tdivValue = this._label(
       padX + 44,
       y + 6,
-      formatUniversal(this.tDivValues[this.currentTIndex], '_', 'auto', Quantity.s, FormatType.std),
+      formatUniversal(this.tDivValues[this.currentTIndex], 'm', 'auto', Quantity.s, FormatType.std),
       14,
       '#fff'
     );
@@ -236,23 +236,23 @@ export class ControlPanel {
       formatUniversal(this.vDivValues[this.currentVIndex], 'm', 'auto', Quantity.V, FormatType.std)
     );
     this.layer.batchDraw();
-    this.onConfigChange({ v_div_mV: this.vDivValues[this.currentVIndex] });
+    this.onConfigChange({ v_div: { v: this.vDivValues[this.currentVIndex], u: "mV" } });
   }
 
   changeTDiv(delta) {
     this.currentTIndex = Math.max(0, Math.min(this.tDivValues.length - 1, this.currentTIndex + delta));
     this._ui.tdivValue.text(
-      formatUniversal(this.tDivValues[this.currentTIndex], '_', 'auto', Quantity.s, FormatType.std)
+      formatUniversal(this.tDivValues[this.currentTIndex], 'm', 'auto', Quantity.s, FormatType.std)
     );
     this.layer.batchDraw();
-    this.onConfigChange({ t_div_s: this.tDivValues[this.currentTIndex] });
+    this.onConfigChange({ t_div: { v: this.tDivValues[this.currentTIndex], u: "ms" } });
   }
 
   changeVPosition(value) {
     this.vPositionValue = value;
     const vDivV = (this.vDivValues[this.currentVIndex] || 200) / 1000.0;
     const volts = value * vDivV;
-    this.onConfigChange({ offset_V: volts });
+    this.onConfigChange({ v_offset: { v: volts, u: "V" } });
   }
 
   changeTPosition(value) {
@@ -307,18 +307,19 @@ export class ControlPanel {
 
   updateControls(config) {
     if (config.v_div) {
-      const vValue = config.v_div.v;
+      let vValue = config.v_div.v;
+      if (config.v_div.u === 'V') vValue *= 1000; // Convert to mV for comparison
       const idx = this.vDivValues.indexOf(vValue);
       this.currentVIndex = idx !== -1 ? idx : this.currentVIndex;
       if (this._ui.vdivValue) this._ui.vdivValue.text(this.formatVoltage(this.vDivValues[this.currentVIndex]));
     }
     if (config.t_div) {
-      const tValue = config.t_div.v;
+      let tValue = config.t_div.v;
       const idx = this.tDivValues.indexOf(tValue);
       this.currentTIndex = idx !== -1 ? idx : this.currentTIndex;
       if (this._ui.tdivValue) this._ui.tdivValue.text(this.formatTime(this.tDivValues[this.currentTIndex]));
     }
-    if (config.trigger_level !== undefined && this._ui.levelSlider) {
+    if (typeof config.trigger_level === 'number' && this._ui.levelSlider) {
       this.triggerLevel = config.trigger_level;
       const x = this._ui.levelSlider.toX(this.triggerLevel);
       this._ui.levelSlider.handle.x(x);
@@ -336,6 +337,14 @@ export class ControlPanel {
   }
 
   setTriggerLevelChangeCallback(callback) { this.onTriggerLevelChange = callback; }
+
+  formatVoltage(valueMV) {
+    return formatUniversal(valueMV, 'm', 'auto', Quantity.V, FormatType.std);
+  }
+
+  formatTime(valueMS) {
+    return formatUniversal(valueMS, 'm', 'auto', Quantity.s, FormatType.std);
+  }
 
   // Formatting delegated to format.js (formatUniversal)
 }

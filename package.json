@@ -1,0 +1,5 @@
+{
+  "dependencies": {
+    "lighthouse": "^12.8.2"
+  }
+}

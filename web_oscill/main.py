@@ -11,6 +11,7 @@ sys.path.append(os.path.dirname(__file__))
 
 from oscill_client import OscillClient
 from device_service import DeviceService
+from converters import get_voltage_mv, get_time_ms, get_offset_v
 
 app = FastAPI(title="Oscill2 Web App")
 
@@ -62,8 +63,8 @@ def api_acquire_single():
             raise HTTPException(status_code=502, detail="No data")
         # compute scaled mV values from raw samples given current V/div in frame's config
         cfg = (frame or {}).get("config", {})
-        v_div_mv = cfg.get("v_div_mV")
-        t_div_s = cfg.get("t_div_s")
+        v_div_mv = get_voltage_mv(cfg)
+        t_div_ms = get_time_ms(cfg)
         samples = frame.get("samples", [])
         samples_mv = None
         min_mv = None
@@ -82,12 +83,12 @@ def api_acquire_single():
                 max_mv = None
         return {
             "status": "ok",
-            "v_div_mV": v_div_mv,
-            "t_div_s": t_div_s,
+            "v_div": {"v": v_div_mv, "u": "mV"},
+            "t_div": {"v": t_div_ms, "u": "ms"},
             "samples": samples,
-            "samples_mV": samples_mv,
-            "min_mV": min_mv,
-            "max_mV": max_mv,
+            "samples_voltage": {"values": samples_mv, "u": "mV"} if samples_mv else None,
+            "min_voltage": {"v": min_mv, "u": "mV"} if min_mv is not None else None,
+            "max_voltage": {"v": max_mv, "u": "mV"} if max_mv is not None else None,
             "channels": frame.get("channels", 1),
             "time": frame.get("time"),
             "time_iso": frame.get("time_iso"),
@@ -104,35 +105,24 @@ def api_status():
     if st.get("status") == "ok":
         # Convert config to new format with units
         config = st.get("config", {})
-        new_config = {}
-        if "v_div_mV" in config and config["v_div_mV"] is not None:
-            new_config["v_div"] = {"v": config["v_div_mV"], "u": "mV"}
-        if "t_div_s" in config and config["t_div_s"] is not None:
-            new_config["t_div"] = {"v": config["t_div_s"], "u": "s"}
-        if "offset_V" in config and config["offset_V"] is not None:
-            new_config["v_offset"] = {"v": config["offset_V"], "u": "V"}
-        if "t_offset_samples" in config:
-            new_config["t_offset"] = {"v": config["t_offset_samples"], "u": "samples"}
-        if "trigger_level" in config:
-            new_config["trigger_level"] = config["trigger_level"]
-        if "trigger_mode" in config:
-            new_config["trigger_mode"] = config["trigger_mode"]
-        if "samples_per_div" in config:
-            new_config["samples_per_div"] = config["samples_per_div"]
-        if "cfg_id" in config:
-            new_config["cfg_id"] = config["cfg_id"]
+        new_config = config  # Already in correct format
         st["config"] = new_config
     return st
 
 class ConfigReq(BaseModel):
-    v_div_mV: Optional[int] = None
-    t_div_s: Optional[float] = None
-    offset_V: Optional[float] = None
-    t_offset_samples: Optional[int] = None
+    v_div: Optional[Dict[str, Any]] = None
+    t_div: Optional[Dict[str, Any]] = None
+    v_offset: Optional[Dict[str, Any]] = None
+    t_offset: Optional[Dict[str, Any]] = None
     trigger_level: Optional[int] = None
     trigger_mode: Optional[str] = None  # "Auto", "Normal", "Single"
     trigger_slope: Optional[str] = None  # "Rising", "Falling"
     coupling: Optional[str] = None  # "AC", "DC", "GND"
+    # Legacy support
+    v_div_mV: Optional[int] = None
+    t_div_s: Optional[float] = None
+    offset_V: Optional[float] = None
+    t_offset_samples: Optional[int] = None
 
 @app.post("/api/config")
 def api_config(req: ConfigReq):
@@ -141,14 +131,22 @@ def api_config(req: ConfigReq):
     try:
         # Convert string values to appropriate formats
         changes = {}
-        if req.v_div_mV is not None:
-            changes["v_div_mV"] = req.v_div_mV
-        if req.t_div_s is not None:
-            changes["t_div_s"] = req.t_div_s
-        if req.offset_V is not None:
-            changes["offset_V"] = req.offset_V
-        if req.t_offset_samples is not None:
-            changes["t_offset_samples"] = req.t_offset_samples
+        if req.v_div is not None:
+            changes["v_div"] = req.v_div
+        elif req.v_div_mV is not None:  # Legacy
+            changes["v_div"] = {"v": req.v_div_mV, "u": "mV"}
+        if req.t_div is not None:
+            changes["t_div"] = req.t_div
+        elif req.t_div_s is not None:  # Legacy
+            changes["t_div"] = {"v": req.t_div_s * 1000, "u": "ms"}
+        if req.v_offset is not None:
+            changes["v_offset"] = req.v_offset
+        elif req.offset_V is not None:  # Legacy
+            changes["v_offset"] = {"v": req.offset_V, "u": "V"}
+        if req.t_offset is not None:
+            changes["t_offset"] = req.t_offset
+        elif req.t_offset_samples is not None:  # Legacy
+            changes["t_offset"] = {"v": req.t_offset_samples, "u": "samples"}
         if req.trigger_level is not None:
             changes["trigger_level"] = req.trigger_level
         if req.trigger_mode is not None:
@@ -165,23 +163,7 @@ def api_config(req: ConfigReq):
         status, warnings = service.apply_config(changes)
         # Convert embedded config to UI format for consistency
         raw_cfg = status.get("config", {}) if isinstance(status, dict) else {}
-        new_config: Dict[str, Any] = {}
-        if "v_div_mV" in raw_cfg and raw_cfg["v_div_mV"] is not None:
-            new_config["v_div"] = {"v": raw_cfg["v_div_mV"], "u": "mV"}
-        if "t_div_s" in raw_cfg and raw_cfg["t_div_s"] is not None:
-            new_config["t_div"] = {"v": raw_cfg["t_div_s"], "u": "s"}
-        if "offset_V" in raw_cfg and raw_cfg["offset_V"] is not None:
-            new_config["v_offset"] = {"v": raw_cfg["offset_V"], "u": "V"}
-        if "t_offset_samples" in raw_cfg:
-            new_config["t_offset"] = {"v": raw_cfg["t_offset_samples"], "u": "samples"}
-        if "trigger_level" in raw_cfg:
-            new_config["trigger_level"] = raw_cfg["trigger_level"]
-        if "trigger_mode" in raw_cfg:
-            new_config["trigger_mode"] = raw_cfg["trigger_mode"]
-        if "samples_per_div" in raw_cfg:
-            new_config["samples_per_div"] = raw_cfg["samples_per_div"]
-        if "cfg_id" in raw_cfg:
-            new_config["cfg_id"] = raw_cfg["cfg_id"]
+        new_config = raw_cfg  # Already in correct format
         return {"status": "ok", "config": new_config, "warnings": warnings}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -196,23 +178,7 @@ def api_frames(since: Optional[int] = None, limit: int = 64):
         
         # Convert config to new format
         current_config = service.get_status().get("config", {})
-        new_config = {}
-        if "v_div_mV" in current_config and current_config["v_div_mV"] is not None:
-            new_config["v_div"] = {"v": current_config["v_div_mV"], "u": "mV"}
-        if "t_div_s" in current_config and current_config["t_div_s"] is not None:
-            new_config["t_div"] = {"v": current_config["t_div_s"], "u": "s"}
-        if "offset_V" in current_config and current_config["offset_V"] is not None:
-            new_config["v_offset"] = {"v": current_config["offset_V"], "u": "V"}
-        if "t_offset_samples" in current_config:
-            new_config["t_offset"] = {"v": current_config["t_offset_samples"], "u": "samples"}
-        if "trigger_level" in current_config:
-            new_config["trigger_level"] = current_config["trigger_level"]
-        if "trigger_mode" in current_config:
-            new_config["trigger_mode"] = current_config["trigger_mode"]
-        if "samples_per_div" in current_config:
-            new_config["samples_per_div"] = current_config["samples_per_div"]
-        if "cfg_id" in current_config:
-            new_config["cfg_id"] = current_config["cfg_id"]
+        new_config = current_config  # Already in correct format
         
         # Process frames and add measurements
         processed_frames = []
@@ -229,6 +195,24 @@ def api_frames(since: Optional[int] = None, limit: int = 64):
             "frames": processed_frames,
             "newest_seq": data.get("newest_seq", 0)
         }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/acquisition/start")
+def api_acquisition_start():
+    if not service._client:
+        raise HTTPException(status_code=400, detail="Not connected")
+    try:
+        res = service.start_acquisition()
+        return res
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/acquisition/stop")
+def api_acquisition_stop():
+    try:
+        res = service.stop_acquisition()
+        return res
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -252,8 +236,9 @@ def calculate_measurements(samples: List[int], config: Dict[str, Any]) -> Dict[s
         return {}
     
     # Convert raw samples to voltage values
-    v_div_mv = config.get("v_div_mV", 200)
-    offset_v = config.get("offset_V", 0.0)
+    v_div_mv = get_voltage_mv(config)
+    offset_v = get_offset_v(config)
+    t_div_ms = get_time_ms(config)
     
     # Full scale is 8 divisions * v_div
     full_scale_mv = v_div_mv * 8.0
@@ -300,12 +285,12 @@ def calculate_measurements(samples: List[int], config: Dict[str, Any]) -> Dict[s
                 avg_period_samples = sum(periods) / len(periods)
                 
                 # Convert to time units
-                t_div_s = config.get("t_div_s", 0.005)
+                t_div_ms = get_time_ms(config)
                 samples_per_div = config.get("samples_per_div", 32)
                 total_samples_per_div = samples_per_div  # Assuming 10 horizontal divs
                 
                 # Time per sample
-                time_per_sample = t_div_s / total_samples_per_div
+                time_per_sample = (t_div_ms / 1000) / total_samples_per_div
                 
                 period_s = avg_period_samples * time_per_sample
                 freq_hz = 1.0 / period_s if period_s > 0 else None

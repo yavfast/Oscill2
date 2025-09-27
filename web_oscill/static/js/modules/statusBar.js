@@ -38,11 +38,19 @@ export class StatusBar {
     this.connText.text(isConnected ? 'Connected' : 'Disconnected');
 
     if (config) {
-  if (config.t_div) this.timeText.text(`${formatSecondsStd(config.t_div.v)}/div`);
-  // v_div.v comes from backend in millivolts; format with currentDim 'm'
-  if (config.v_div) this.voltText.text(`${formatUniversal(config.v_div.v, 'm', 'auto', Quantity.V, FormatType.std)}/div`);
-      const mode = config.trigger_mode || '—';
-      const slope = config.trigger_slope || '';
+      // Time division
+      if (config.t_div) {
+        const tCurrentDim = config.t_div.u === 's' ? '_' : 'm';
+        this.timeText.text(`${formatUniversal(config.t_div.v, tCurrentDim, 'auto', Quantity.s, FormatType.std)}/div`);
+      }
+      // Voltage division
+      if (config.v_div) {
+        const vCurrentDim = config.v_div.u === 'V' ? '_' : 'm';
+        this.voltText.text(`${formatUniversal(config.v_div.v, vCurrentDim, 'auto', Quantity.V, FormatType.std)}/div`);
+      }
+      // Trigger
+      const mode = config.trigger_mode?.v || '—';
+      const slope = config.trigger_slope?.v || '';
       this.trigText.text(`${mode}${slope ? ', ' + slope : ''}`);
     }
     this.layer.batchDraw();

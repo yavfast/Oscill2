@@ -89,8 +89,14 @@ export class ScopeView {
     }
 
     // Scale
-    const vDiv = config.v_div ? config.v_div.v / 1000 : 0.2;
-    const tDiv = config.t_div ? config.t_div.v : 0.005;
+    let vDiv = 0.2;
+    if (config.v_div) {
+      vDiv = config.v_div.u === 'mV' ? config.v_div.v / 1000 : config.v_div.v;
+    }
+    let tDiv = 0.005;
+    if (config.t_div) {
+      tDiv = config.t_div.u === 'ms' ? config.t_div.v / 1000 : config.t_div.v;
+    }
     const totalTime = tDiv * this.totalDivsX;
     const totalVoltage = vDiv * this.totalDivsY;
     this.xRange = [-totalTime / 2, totalTime / 2];

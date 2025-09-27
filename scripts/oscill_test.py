@@ -53,7 +53,7 @@ T_DIV_S_VALUES = [
 
 # Базові параметри (див. MainActivity.onOscillConnected)
 BASE_V_DIV_MV = 200           # 200 mV/div
-BASE_T_DIV_S = 5e-3           # 5 ms/div
+BASE_T_DIV_MS = 5             # 5 ms/div
 BASE_OFFSET_V = 0.0           # 0 В
 BASE_TRIGGER_LEVEL = 128      # 0..255
 # Режим тригера (T1) з Java: фронт + гістерезис фронту, без спаду, без LFSync
@@ -89,20 +89,20 @@ def acquire_once(client: OscillClient, note: str = "", settle_ms: int = 80, opti
             time.sleep(settle_ms / 1000.0)
         frame = client.get_frame()
         v_div_mv = client.get_v_div_mV()
-        t_div_s = client.get_time_div_s()
+        t_div_ms = client.get_time_div_ms()
         if frame is None:
             msg = f"даних немає (frame=None)" if optional else f"Немає даних (frame=None)"
-            print(f"  → [{note}] {msg}; V/div={v_div_mv} mV, T/div={t_div_s:.9f} s")
+            print(f"  → [{note}] {msg}; V/div={v_div_mv} mV, T/div={t_div_ms:.9f} ms")
             return
         samples = frame.get("samples", [])
         ch = frame.get("channels", 1)
         mn, mx = scale_samples_to_mv(samples, v_div_mv)
         if mn is not None and mx is not None:
             print(f"  → [{note}] OK: канали={ch}, семплів={len(samples)}, "
-                  f"V/div={v_div_mv} mV, T/div={t_div_s:.9f} s, min={mn:.2f} mV, max={mx:.2f} mV")
+                  f"V/div={v_div_mv} mV, T/div={t_div_ms:.9f} ms, min={mn:.2f} mV, max={mx:.2f} mV")
         else:
             print(f"  → [{note}] OK: канали={ch}, семплів={len(samples)}, "
-                  f"V/div={v_div_mv} mV, T/div={t_div_s:.9f} s")
+                  f"V/div={v_div_mv} mV, T/div={t_div_ms:.9f} ms")
     except Exception as e:
         if optional:
             print(f"  → [{note}] Зчитування пропущено (параметр перевірено): {e}")
@@ -126,8 +126,8 @@ def apply_base_config(client: OscillClient) -> None:
     client.set_trigger_level(BASE_TRIGGER_LEVEL)
     _verify_trigger_level(client, BASE_TRIGGER_LEVEL)
 
-    client.set_time_div_s(BASE_T_DIV_S)
-    _verify_t_div(client, BASE_T_DIV_S)
+    client.set_time_div_ms(BASE_T_DIV_MS)
+    _verify_t_div_ms(client, BASE_T_DIV_MS)
 
     # Нормальний режим передачі/оцифровки
     try:
@@ -157,8 +157,9 @@ def test_all_v_div(client: OscillClient) -> None:
 def test_all_t_div(client: OscillClient) -> None:
     print("\n[ТЕСТ T/div]")
     for t_s in T_DIV_S_VALUES:
+        t_ms = t_s * 1000
         try:
-            client.set_time_div_s(t_s)
+            client.set_time_div_ms(t_ms)
             # Для повільних розгорток скоротимо обсяг даних та увімкнемо паралельну передачу
             # щоб уникнути таймаутів відповіді.
             qs = 254
@@ -178,8 +179,8 @@ def test_all_t_div(client: OscillClient) -> None:
                     client.set_rs_mode(rs)
                 except Exception:
                     pass
-            _verify_t_div(client, t_s)
-            acquire_once(client, note=f"T/div={t_s:g} s")
+            _verify_t_div_ms(client, t_ms)
+            acquire_once(client, note=f"T/div={t_ms:g} ms")
         except Exception as e:
             print(f"  → [T/div={t_s:g} s] ПОМИЛКА встановлення: {e}")
     # Повернути RS у звичайний режим після тестів часу/діл
@@ -250,7 +251,7 @@ def reset_to_base(client: OscillClient) -> None:
     print("\n[СКИДАННЯ ДО БАЗОВИХ ПАРАМЕТРІВ]")
     try:
         client.set_v_div_mV(BASE_V_DIV_MV); _verify_v_div(client, BASE_V_DIV_MV)
-        client.set_time_div_s(BASE_T_DIV_S); _verify_t_div(client, BASE_T_DIV_S)
+        client.set_time_div_ms(BASE_T_DIV_MS); _verify_t_div_ms(client, BASE_T_DIV_MS)
         client.set_offset_volts(BASE_OFFSET_V); _verify_offset(client, BASE_OFFSET_V)
         client.set_trigger_mode(BASE_TRIGGER_MODE); _verify_trigger_mode(client, BASE_TRIGGER_MODE)
         client.set_trigger_level(BASE_TRIGGER_LEVEL); _verify_trigger_level(client, BASE_TRIGGER_LEVEL)
@@ -277,14 +278,14 @@ def _verify_v_div(client: OscillClient, expected_mv: int) -> None:
         print(f"  ✗ Перевірка V/div: помилка читання — {e}")
 
 
-def _verify_t_div(client: OscillClient, expected_s: float, rel_tol: float = 0.02, abs_tol: float = 1e-6) -> None:
+def _verify_t_div_ms(client: OscillClient, expected_ms: float, rel_tol: float = 0.02, abs_tol: float = 1e-6) -> None:
     """Перевірка T/div з допусками (квантування по тактам)."""
     try:
-        got = float(client.get_time_div_s())
-        if _is_close(got, expected_s, rel_tol, abs_tol):
-            print(f"  ✓ Перевірка T/div: встановлено ~{expected_s:g} s — OK (прочитано {got:g} s)")
+        got = float(client.get_time_div_ms())
+        if _is_close(got, expected_ms, rel_tol, abs_tol):
+            print(f"  ✓ Перевірка T/div: встановлено ~{expected_ms:g} ms — OK (прочитано {got:g} ms)")
         else:
-            print(f"  ✗ Перевірка T/div: очікувалось ~{expected_s:g} s, отримано {got:g} s — FAIL")
+            print(f"  ✗ Перевірка T/div: очікувалось ~{expected_ms:g} ms, отримано {got:g} ms — FAIL")
     except Exception as e:
         print(f"  ✗ Перевірка T/div: помилка читання — {e}")
 
