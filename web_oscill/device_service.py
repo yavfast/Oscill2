@@ -506,15 +506,13 @@ class DeviceService:
                 if not fr or not fr.get("samples"):
                     time.sleep(backoff_s)
                     continue
-                # Snapshot config while holding the lock to keep it consistent
-                cfg = self._snapshot_config_locked()
                 # Timestamp
                 ts = time.time()
-                iso = time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime(ts)) + f".{int((ts%1)*1000):03d}Z"
+                # Snapshot config while holding the lock to keep it consistent
+                cfg = self._snapshot_config_locked()
                 # Store compact payload; keep raw samples only
                 payload = {
                     "time": ts,
-                    "time_iso": iso,
                     "cfg_id": cfg.get("cfg_id"),
                     "channels": fr.get("channels", 1),
                     "samples": fr.get("samples", []),

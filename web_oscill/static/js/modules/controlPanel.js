@@ -104,11 +104,17 @@ export class ControlPanel {
   const modeGap = 12;
   this._ui.procLabel = this._label(padX, y, 'Processing', 16, '#ccc');
   y += 22;
-  const modeBtnW = (colW - modeGap * 3) / 4;
-  this._ui.modeNormal = this._button(padX, y, modeBtnW, 32, 'Normal', () => this.setSwMode('NORMAL'), { active: this.swMode === 'NORMAL' });
-  this._ui.modePeak = this._button(padX + (modeBtnW + modeGap), y, modeBtnW, 32, 'Peak', () => this.setSwMode('PEAK'), { active: this.swMode === 'PEAK' || this.swMode === 'PEAK_HI' });
-  this._ui.modeAvg = this._button(padX + 2 * (modeBtnW + modeGap), y, modeBtnW, 32, 'Avg', () => this.setSwMode('AVG'), { active: this.swMode === 'AVG' });
-  this._ui.modeAvgHi = this._button(padX + 3 * (modeBtnW + modeGap), y, modeBtnW, 32, 'Avg Hi-Res', () => this.setSwMode('AVG_HIRES'), { active: this.swMode === 'AVG_HIRES' });
+  const modeRow1Count = 3;
+  const modeBtnW1 = (colW - modeGap * (modeRow1Count - 1)) / modeRow1Count;
+  this._ui.modeNormal = this._button(padX, y, modeBtnW1, 32, 'Normal', () => this.setSwMode('NORMAL'), { active: this.swMode === 'NORMAL' });
+  this._ui.modePeak = this._button(padX + (modeBtnW1 + modeGap), y, modeBtnW1, 32, 'Peak', () => this.setSwMode('PEAK'), { active: this.swMode === 'PEAK' });
+  this._ui.modePeakHi = this._button(padX + 2 * (modeBtnW1 + modeGap), y, modeBtnW1, 32, 'Peak Hi', () => this.setSwMode('PEAK_HI'), { active: this.swMode === 'PEAK_HI' });
+  y += 40;
+
+  const modeRow2Count = 2;
+  const modeBtnW2 = (colW - modeGap * (modeRow2Count - 1)) / modeRow2Count;
+  this._ui.modeAvg = this._button(padX, y, modeBtnW2, 32, 'Avg', () => this.setSwMode('AVG'), { active: this.swMode === 'AVG' });
+  this._ui.modeAvgHi = this._button(padX + (modeBtnW2 + modeGap), y, modeBtnW2, 32, 'Avg Hi-Res', () => this.setSwMode('AVG_HIRES'), { active: this.swMode === 'AVG_HIRES' });
   y += 40;
 
   // Hardware filters
@@ -200,6 +206,7 @@ export class ControlPanel {
   this._ui.procLabel,
   this._ui.modeNormal.group,
   this._ui.modePeak.group,
+  this._ui.modePeakHi.group,
   this._ui.modeAvg.group,
   this._ui.modeAvgHi.group,
   this._ui.filterLabel,
@@ -316,13 +323,13 @@ export class ControlPanel {
   }
 
   _applySwModeState(mode) {
-    const normalized = (mode || 'NORMAL').toUpperCase();
-    this.swMode = normalized;
-    const isPeak = normalized.startsWith('PEAK');
-    this._setButtonActive(this._ui.modeNormal, normalized === 'NORMAL');
-    this._setButtonActive(this._ui.modePeak, isPeak);
-    this._setButtonActive(this._ui.modeAvg, normalized === 'AVG');
-    this._setButtonActive(this._ui.modeAvgHi, normalized === 'AVG_HIRES');
+  const normalized = (mode || 'NORMAL').toUpperCase();
+  this.swMode = normalized;
+  this._setButtonActive(this._ui.modeNormal, normalized === 'NORMAL');
+  this._setButtonActive(this._ui.modePeak, normalized === 'PEAK');
+  if (this._ui.modePeakHi) this._setButtonActive(this._ui.modePeakHi, normalized === 'PEAK_HI');
+  this._setButtonActive(this._ui.modeAvg, normalized === 'AVG');
+  this._setButtonActive(this._ui.modeAvgHi, normalized === 'AVG_HIRES');
   }
 
   setSwMode(mode) {

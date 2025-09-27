@@ -70,19 +70,36 @@ def api_acquire_single():
             cfg["cfg_id"] = frame_cfg_id
         v_div_mv = get_voltage_mv(cfg)
         t_div_ms = get_time_ms(cfg)
-        samples = frame.get("samples", [])
+        samples = list(frame.get("samples", []) or [])
+        sample_bits = int(frame.get("sample_bits") or 8)
+        peak_min = list(frame.get("samples_peak_min", []) or [])
+        peak_max = list(frame.get("samples_peak_max", []) or [])
+
+        if peak_min and peak_max and (not samples or len(samples) != min(len(peak_min), len(peak_max))):
+            count = min(len(peak_min), len(peak_max))
+            samples = [ (peak_min[i] + peak_max[i]) // 2 for i in range(count) ]
+
         samples_mv = None
+        peak_min_mv = None
+        peak_max_mv = None
         min_mv = None
         max_mv = None
-        if v_div_mv is not None and samples:
-            full_scale_mv = v_div_mv * 8.0
-            center = 127.5
-            # The offset is applied on the device, so raw samples are already shifted.
-            # We just need to scale them to the voltage range.
-            samples_mv = [ ((s - center) / 128.0) * (full_scale_mv / 2.0) for s in samples ]
+
+        if v_div_mv is not None:
+            if samples:
+                samples_mv = _samples_to_millivolts(samples, sample_bits, cfg)
+            if peak_min:
+                peak_min_mv = _samples_to_millivolts(peak_min, sample_bits, cfg)
+            if peak_max:
+                peak_max_mv = _samples_to_millivolts(peak_max, sample_bits, cfg)
+
             try:
-                min_mv = min(samples_mv)
-                max_mv = max(samples_mv)
+                if peak_min_mv and peak_max_mv:
+                    min_mv = min(peak_min_mv)
+                    max_mv = max(peak_max_mv)
+                elif samples_mv:
+                    min_mv = min(samples_mv)
+                    max_mv = max(samples_mv)
             except Exception:
                 min_mv = None
                 max_mv = None
@@ -91,7 +108,11 @@ def api_acquire_single():
             "v_div": {"v": v_div_mv, "u": "mV"},
             "t_div": {"v": t_div_ms, "u": "ms"},
             "samples": samples,
+            "samples_peak_min": peak_min,
+            "samples_peak_max": peak_max,
             "samples_voltage": {"values": samples_mv, "u": "mV"} if samples_mv else None,
+            "samples_peak_min_voltage": {"values": peak_min_mv, "u": "mV"} if peak_min_mv else None,
+            "samples_peak_max_voltage": {"values": peak_max_mv, "u": "mV"} if peak_max_mv else None,
             "min_voltage": {"v": min_mv, "u": "mV"} if min_mv is not None else None,
             "max_voltage": {"v": max_mv, "u": "mV"} if max_mv is not None else None,
             "channels": frame.get("channels", 1),

@@ -542,7 +542,23 @@ class OscillClient:
         peak_max: Optional[List[int]] = None
 
         limit = len(raw_data) - (len(raw_data) % total_bytes_per_sample)
-        if components == 1:
+        if sample_format == 0x02:
+            # Peak interlaced: alternating min/max values in the data stream
+            peak_min = []
+            peak_max = []
+            stride = value_bytes * 2
+            limit = len(raw_data) - (len(raw_data) % stride)
+            for i in range(0, limit, stride):
+                lo_bytes = raw_data[i:i + value_bytes]
+                hi_bytes = raw_data[i + value_bytes:i + stride]
+                if len(lo_bytes) < value_bytes or len(hi_bytes) < value_bytes:
+                    break
+                lo_val = int.from_bytes(lo_bytes, 'big')
+                hi_val = int.from_bytes(hi_bytes, 'big')
+                peak_min.append(lo_val)
+                peak_max.append(hi_val)
+                samples.append((lo_val + hi_val) // 2)
+        elif components == 1:
             if value_bytes == 2:
                 samples = [
                     int.from_bytes(raw_data[i:i + value_bytes], 'big')
@@ -554,8 +570,12 @@ class OscillClient:
             peak_min = []
             peak_max = []
             for i in range(0, limit, total_bytes_per_sample):
-                first_val = int.from_bytes(raw_data[i:i + value_bytes], 'big')
-                second_val = int.from_bytes(raw_data[i + value_bytes:i + 2 * value_bytes], 'big')
+                first_chunk = raw_data[i:i + value_bytes]
+                second_chunk = raw_data[i + value_bytes:i + 2 * value_bytes]
+                if len(first_chunk) < value_bytes or len(second_chunk) < value_bytes:
+                    break
+                first_val = int.from_bytes(first_chunk, 'big')
+                second_val = int.from_bytes(second_chunk, 'big')
                 peak_min.append(first_val)
                 peak_max.append(second_val)
                 samples.append((first_val + second_val) // 2)
