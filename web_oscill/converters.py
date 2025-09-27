@@ -76,11 +76,3 @@ def get_time_ms(config: dict) -> float:
     """
     value, unit = _extract_structured_entry(config, "t_div")
     return convert(value, unit, "ms")
-
-def get_offset_v(config: dict) -> float:
-    """
-    Extract voltage offset value in volts from config.
-    Requires structured format {v, u} under the 'v_offset' key.
-    """
-    value, unit = _extract_structured_entry(config, "v_offset")
-    return convert(value, unit, "V")

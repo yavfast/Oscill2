@@ -2,7 +2,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, FileResponse, JSONResponse
 from pydantic import BaseModel
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any, List, Union
 import os
 
 import sys
@@ -11,7 +11,7 @@ sys.path.append(os.path.dirname(__file__))
 
 from oscill_client import OscillClient
 from device_service import DeviceService
-from converters import get_voltage_mv, get_time_ms, get_offset_v
+from converters import get_voltage_mv, get_time_ms
 
 app = FastAPI(title="Oscill2 Web App")
 
@@ -139,8 +139,8 @@ def api_status():
 class ConfigReq(BaseModel):
     v_div: Optional[Dict[str, Any]] = None
     t_div: Optional[Dict[str, Any]] = None
-    v_offset: Optional[Dict[str, Any]] = None
-    t_offset: Optional[Dict[str, Any]] = None
+    v_offset: Optional[Union[int, float, Dict[str, Any]]] = None
+    t_offset: Optional[Union[int, float, Dict[str, Any]]] = None
     trigger_level: Optional[int] = None
     trigger_mode: Optional[str] = None  # "Auto", "Normal", "Single"
     trigger_slope: Optional[str] = None  # "Rising", "Falling"
@@ -151,11 +151,6 @@ class ConfigReq(BaseModel):
     sync_type: Optional[str] = None
     sync_front: Optional[bool] = None
     sync_back: Optional[bool] = None
-    # Legacy support
-    v_div_mV: Optional[int] = None
-    t_div_s: Optional[float] = None
-    offset_V: Optional[float] = None
-    t_offset_samples: Optional[int] = None
 
 @app.post("/api/config")
 def api_config(req: ConfigReq):
@@ -166,20 +161,12 @@ def api_config(req: ConfigReq):
         changes = {}
         if req.v_div is not None:
             changes["v_div"] = req.v_div
-        elif req.v_div_mV is not None:  # Legacy
-            changes["v_div"] = {"v": req.v_div_mV, "u": "mV"}
         if req.t_div is not None:
             changes["t_div"] = req.t_div
-        elif req.t_div_s is not None:  # Legacy
-            changes["t_div"] = {"v": req.t_div_s * 1000, "u": "ms"}
         if req.v_offset is not None:
             changes["v_offset"] = req.v_offset
-        elif req.offset_V is not None:  # Legacy
-            changes["v_offset"] = {"v": req.offset_V, "u": "V"}
         if req.t_offset is not None:
             changes["t_offset"] = req.t_offset
-        elif req.t_offset_samples is not None:  # Legacy
-            changes["t_offset"] = {"v": req.t_offset_samples, "u": "samples"}
         if req.trigger_level is not None:
             changes["trigger_level"] = req.trigger_level
         if req.trigger_mode is not None:

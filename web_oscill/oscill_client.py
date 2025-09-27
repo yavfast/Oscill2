@@ -373,6 +373,18 @@ class OscillClient:
         self.set_reg_2('P1', native, signed=True)
         return self.get_offset_volts()
 
+    def get_offset_raw(self) -> int:
+        """Returns the offset as a raw 0..255 UI value mapped from signed P1 register."""
+        native = self.get_reg_2('P1', signed=True)
+        return max(0, min(0xFF, native + 128))
+
+    def set_offset_raw(self, value: int) -> int:
+        """Applies a UI raw 0..255 offset by mapping to the signed P1 register (doc §2.3)."""
+        raw = max(0, min(0xFF, int(value)))
+        native = raw - 128
+        self.set_reg_2('P1', native, signed=True)
+        return self.get_offset_raw()
+
     def get_trigger_level(self) -> int:
         return self.get_reg_1('S1')
 
@@ -500,7 +512,9 @@ class OscillClient:
         :param value: 2-byte unsigned integer for the offset.
         :return: The actual value set in the register.
         """
-        return self.set_reg_2('TC', value, signed=False)
+        clamped = max(0, min(0xFFFF, int(value)))
+        self.set_reg_2('TC', clamped, signed=False)
+        return self.get_reg_2('TC', signed=False)
 
     def ensure_qs(self, total_samples: Optional[int] = None) -> int:
         total = total_samples or (self.SAMPLES_PER_DIV * self.H_DIVS)
@@ -624,7 +638,7 @@ class OscillClient:
             "config": {
                 "v_div": {"v": self.get_v_div_mV(), "u": "mV"},
                 "t_div": {"v": self.get_time_div_ms(), "u": "ms"},
-                "offset": {"v": self.get_offset_volts(), "u": "V"},
+                "v_offset": self.get_offset_raw(),
                 "trigger_level": {"v": self.get_trigger_level(), "u": "level"},
                 "trigger_mode": {"v": self.get_trigger_mode(), "u": "bits"},
                 "rs_mode": {"v": self.get_rs_mode(), "u": "bits"},

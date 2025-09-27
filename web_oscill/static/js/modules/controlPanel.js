@@ -12,8 +12,8 @@ export class ControlPanel {
     this.triggerMode = 'Auto';
     this.triggerSlope = 'Rising';
     this.triggerLevel = 128;
-    this.vPositionValue = 0; // in DIVS (-4..4)
-    this.tPositionValue = 0;
+    this.vOffsetRaw = 128;
+    this.tOffsetRaw = 0;
     this.onTriggerLevelChange = null;
     this._isAcquiring = false;
     this.swMode = 'NORMAL';
@@ -21,6 +21,9 @@ export class ControlPanel {
     this.syncType = 'AUTO';
     this.syncFront = true;
     this.syncBack = false;
+    this.samplesPerDiv = 32;
+    this.currentConfig = null;
+    this.currentVDivMV = this.vDivValues[this.currentVIndex];
 
     this._ui = {}; // store Konva nodes
   }
@@ -86,7 +89,7 @@ export class ControlPanel {
       onCommit && onCommit(val);
     });
     group.add(track, handle, valueText);
-    return { group, handle, valueText, toX, toVal };
+    return { group, handle, valueText, toX, toVal, min, max, formatFn: opts.format };
   }
 
   _buildUI() {
@@ -139,14 +142,10 @@ export class ControlPanel {
     this._ui.vdivPlus = this._button(padX + 180, y, 36, 28, '+', () => this.changeVDiv(1));
     y += 36;
     this._ui.vposLabel = this._label(padX, y, 'Position');
-    this._ui.vposSlider = this._slider(padX + 80, y - 6, colW - 160, -4, 4, this.vPositionValue,
-      (val) => { // onChange preview
-        this.previewVPosition(val);
-      },
-      (val) => { // onCommit
-        this.changeVPosition(val);
-      },
-      { format: (v) => `${v.toFixed(1)} div` }
+    this._ui.vposSlider = this._slider(padX + 80, y - 6, colW - 160, 0, 255, this.vOffsetRaw,
+      (val) => { this.previewVPosition(val); },
+      (val) => { this.changeVPosition(val); },
+      { format: (v) => `${Math.round(v)}` }
     );
     y += 40;
     this._ui.cplLabel = this._label(padX, y, 'Coupling');
@@ -169,10 +168,10 @@ export class ControlPanel {
     this._ui.tdivPlus = this._button(padX + 180, y, 36, 28, '+', () => this.changeTDiv(1));
     y += 36;
     this._ui.hposLabel = this._label(padX, y, 'Position');
-    this._ui.hposSlider = this._slider(padX + 80, y - 6, colW - 160, -5, 5, this.tPositionValue,
+    this._ui.hposSlider = this._slider(padX + 80, y - 6, colW - 160, 0, 255, this.tOffsetRaw,
       (val) => { this.previewTPosition(val); },
       (val) => { this.changeTPosition(val); },
-      { format: (v) => `${v.toFixed(1)} div` }
+      { format: (v) => `${Math.round(v)}` }
     );
     y += 46;
 
@@ -255,6 +254,9 @@ export class ControlPanel {
       slider.group.findOne('Rect').width(w);
       const val = slider.toVal(slider.handle.x());
       slider.group.findOne('Text').x(w + 8);
+      if (slider.formatFn) {
+        slider.valueText.text(slider.formatFn(val));
+      }
     };
     setSliderWidth(this._ui.vposSlider, colW - 160);
     setSliderWidth(this._ui.hposSlider, colW - 160);
@@ -280,37 +282,51 @@ export class ControlPanel {
 
   changeVDiv(delta) {
     this.currentVIndex = Math.max(0, Math.min(this.vDivValues.length - 1, this.currentVIndex + delta));
-    this._ui.vdivValue.text(
-      formatUniversal(this.vDivValues[this.currentVIndex], 'm', 'auto', Quantity.V, FormatType.std)
-    );
+    this.currentVDivMV = this.vDivValues[this.currentVIndex];
+    this._ui.vdivValue.text(this.formatVoltage(this.currentVDivMV));
     this.layer.batchDraw();
     this.onConfigChange({ v_div: { v: this.vDivValues[this.currentVIndex], u: "mV" } });
   }
 
   changeTDiv(delta) {
     this.currentTIndex = Math.max(0, Math.min(this.tDivValues.length - 1, this.currentTIndex + delta));
-    this._ui.tdivValue.text(
-      formatUniversal(this.tDivValues[this.currentTIndex], 'm', 'auto', Quantity.s, FormatType.std)
-    );
+    this._ui.tdivValue.text(this.formatTime(this.tDivValues[this.currentTIndex]));
     this.layer.batchDraw();
     this.onConfigChange({ t_div: { v: this.tDivValues[this.currentTIndex], u: "ms" } });
   }
 
   changeVPosition(value) {
-    this.vPositionValue = value;
-    const vDivV = (this.vDivValues[this.currentVIndex] || 200) / 1000.0;
-    const volts = value * vDivV;
-    this.onConfigChange({ v_offset: { v: volts, u: "V" } });
+    const raw = Math.round(value);
+    const slider = this._ui.vposSlider;
+    this.vOffsetRaw = slider ? Math.max(slider.min, Math.min(slider.max, raw)) : raw;
+    if (slider) {
+      const clampedX = slider.toX(this.vOffsetRaw);
+      slider.handle.x(clampedX);
+      slider.valueText.text(`${this.vOffsetRaw}`);
+    }
+    this.onConfigChange({ v_offset: this.vOffsetRaw });
+    this.layer.batchDraw();
+  }
+
+  previewVPosition(value) {
+    this.vOffsetRaw = Math.max(0, Math.min(255, Math.round(value)));
   }
 
   changeTPosition(value) {
-    this.tPositionValue = value;
-    // Optional: backend currently expects t_offset_samples; this UI preview is informational only
-    this.onConfigChange({ t_offset: value });
+    const raw = Math.round(value);
+    const slider = this._ui.hposSlider;
+    this.tOffsetRaw = slider ? Math.max(slider.min, Math.min(slider.max, raw)) : raw;
+    if (slider) {
+      const clampedX = slider.toX(this.tOffsetRaw);
+      slider.handle.x(clampedX);
+      slider.valueText.text(`${this.tOffsetRaw}`);
+    }
+    this.onConfigChange({ t_offset: this.tOffsetRaw });
+    this.layer.batchDraw();
   }
 
   previewTPosition(value) {
-    this.tPositionValue = value;
+    this.tOffsetRaw = Math.max(0, Math.min(255, Math.round(value)));
   }
 
   changeCoupling(coupling) {
@@ -404,18 +420,25 @@ export class ControlPanel {
   }
 
   updateControls(config) {
+    this.currentConfig = config || {};
     if (config.v_div) {
       let vValue = config.v_div.v;
       if (config.v_div.u === 'V') vValue *= 1000; // Convert to mV for comparison
       const idx = this.vDivValues.indexOf(vValue);
       this.currentVIndex = idx !== -1 ? idx : this.currentVIndex;
-      if (this._ui.vdivValue) this._ui.vdivValue.text(this.formatVoltage(this.vDivValues[this.currentVIndex]));
+      this.currentVDivMV = typeof config.v_div.v === 'number'
+        ? (config.v_div.u === 'V' ? config.v_div.v * 1000 : config.v_div.v)
+        : this.currentVDivMV;
+      if (this._ui.vdivValue) this._ui.vdivValue.text(this.formatVoltage(this.currentVDivMV));
     }
     if (config.t_div) {
       let tValue = config.t_div.v;
       const idx = this.tDivValues.indexOf(tValue);
       this.currentTIndex = idx !== -1 ? idx : this.currentTIndex;
       if (this._ui.tdivValue) this._ui.tdivValue.text(this.formatTime(this.tDivValues[this.currentTIndex]));
+    }
+    if (typeof config.samples_per_div === 'number') {
+      this.samplesPerDiv = config.samples_per_div;
     }
     if (typeof config.trigger_level === 'number' && this._ui.levelSlider) {
       this.triggerLevel = config.trigger_level;
@@ -428,6 +451,30 @@ export class ControlPanel {
       this._setButtonActive(this._ui.cplAc, this.coupling === 'AC');
       this._setButtonActive(this._ui.cplDc, this.coupling === 'DC');
       this._setButtonActive(this._ui.cplGnd, this.coupling === 'GND');
+    }
+    const vOffsetEntry = config.v_offset;
+    if (typeof vOffsetEntry === 'number' || (vOffsetEntry && typeof vOffsetEntry.v === 'number')) {
+      const raw = typeof vOffsetEntry === 'number' ? vOffsetEntry : vOffsetEntry.v;
+      this.vOffsetRaw = raw;
+      if (this._ui.vposSlider) {
+        const clamped = Math.max(this._ui.vposSlider.min, Math.min(this._ui.vposSlider.max, raw));
+        this.vOffsetRaw = clamped;
+        const x = this._ui.vposSlider.toX(clamped);
+        this._ui.vposSlider.handle.x(x);
+        this._ui.vposSlider.valueText.text(`${Math.round(clamped)}`);
+      }
+    }
+    const tOffsetEntry = config.t_offset;
+    if (typeof tOffsetEntry === 'number' || (tOffsetEntry && typeof tOffsetEntry.v === 'number')) {
+      const raw = typeof tOffsetEntry === 'number' ? tOffsetEntry : tOffsetEntry.v;
+      this.tOffsetRaw = raw;
+      if (this._ui.hposSlider) {
+        const clamped = Math.max(this._ui.hposSlider.min, Math.min(this._ui.hposSlider.max, raw));
+        this.tOffsetRaw = clamped;
+        const x = this._ui.hposSlider.toX(clamped);
+        this._ui.hposSlider.handle.x(x);
+        this._ui.hposSlider.valueText.text(`${Math.round(clamped)}`);
+      }
     }
     if (config.filters) {
       this.filters.high = !!config.filters.high;
@@ -445,7 +492,7 @@ export class ControlPanel {
       const back = typeof config.sync_back === 'boolean' ? config.sync_back : this.syncBack;
       this._applySyncEdgesState(front, back);
     }
-    // t_offset is represented in samples in config; the UI slider is in divs; keep as-is for now.
+  // t_offset and v_offset are raw register values (0..255).
     this.layer && this.layer.batchDraw();
   }
 

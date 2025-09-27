@@ -109,9 +109,9 @@ class DeviceService:
             cli.set_channel_hw_mode(0x00)  # O1: Channel ON, DC input
             # SW Mode normal (M1 = 4)
             cli.set_channel_sw_mode(0x04) # M1: Normal mode
-            # Sensitivity 200 mV/div and offset 0 V
+            # Sensitivity 200 mV/div and center offset
             cli.set_v_div_mV(200)
-            cli.set_offset_volts(0.0)
+            cli.set_offset_raw(128)
             # Trigger mode: front with hysteresis on front; level 128; type AUTO
             # T1 bit composition is device-specific; reuse Android defaults: 0x2C
             cli.set_trigger_mode(0x2C)
@@ -173,7 +173,7 @@ class DeviceService:
 
                 Supported keys include:
                     - v_div, t_div: structured {v, u} values for vertical/time divisions
-                    - v_offset, t_offset: structured offsets
+                    - v_offset, t_offset: raw 0..255 offsets
                     - trigger_level: integer 0..255
                     - trigger_mode: legacy raw register value (optional)
                     - trigger_slope: "rising", "falling", "both", "none"
@@ -194,26 +194,29 @@ class DeviceService:
                     value_mv = int(convert(v_div["v"], v_div["u"], "mV"))
                     c.set_v_div_mV(value_mv)
                 if changes.get("v_offset") is not None:
-                    v_offset = changes["v_offset"]
-                    value_v = float(convert(v_offset["v"], v_offset["u"], "V"))
-                    self._log.info(f"Applying offset_V request: {value_v:.6f} V")
-                    c.set_offset_volts(value_v)
-                    try:
-                        rb_v = c.get_offset_volts()
-                        self._log.info(f"Offset_V applied, readback: {rb_v:.6f} V (delta {rb_v-value_v:+.6f} V)")
-                    except Exception as e:
-                        self._log.warning(f"Offset_V readback failed: {e}")
+                    v_offset_raw = changes["v_offset"]
+                    if isinstance(v_offset_raw, dict):
+                        v_offset_raw = v_offset_raw.get("v")
+                    if v_offset_raw is None:
+                        raise ValueError("v_offset requires a value")
+                    raw_value = max(0, min(0xFF, int(float(v_offset_raw))))
+                    self._log.info(f"Applying raw v_offset request: {raw_value}")
+                    c.set_offset_raw(raw_value)
                 if changes.get("t_div") is not None:
                     t_div = changes["t_div"]
                     value_ms = float(convert(t_div["v"], t_div["u"], "ms"))
                     c.set_time_div_ms(value_ms)
                 if changes.get("t_offset") is not None:
-                    t_offset = changes["t_offset"]
-                    if t_offset["u"] == "samples":
-                        value_samples = int(t_offset["v"])
-                    else:
-                        raise ValueError(f"Unsupported unit for t_offset: {t_offset['u']}")
-                    c.set_samples_offset(value_samples)
+                    t_offset_raw = changes["t_offset"]
+                    if isinstance(t_offset_raw, dict):
+                        unit = t_offset_raw.get("u")
+                        if unit and unit != "samples":
+                            raise ValueError(f"Unsupported unit for t_offset: {unit}")
+                        t_offset_raw = t_offset_raw.get("v")
+                    if t_offset_raw is None:
+                        raise ValueError("t_offset requires a value")
+                    raw_samples = max(0, min(0xFF, int(float(t_offset_raw))))
+                    c.set_samples_offset(raw_samples)
                 if changes.get("trigger_level") is not None:
                     c.set_trigger_level(int(changes["trigger_level"]))
                 hw_mode_value: Optional[int] = None
@@ -396,10 +399,9 @@ class DeviceService:
         except Exception:
             cfg["t_div"] = {"v": 5, "u": "ms"}  # Default
         try:
-            offset_v = c.get_offset_volts()
-            cfg["v_offset"] = {"v": round(offset_v, 6), "u": "V"}
+            cfg["v_offset"] = c.get_offset_raw()
         except Exception:
-            cfg["v_offset"] = {"v": 0.0, "u": "V"}  # Default
+            cfg["v_offset"] = 128
         try:
             cfg["trigger_level"] = c.get_trigger_level()
         except Exception:
@@ -415,9 +417,9 @@ class DeviceService:
             cfg["rs_mode"] = 0x00
         # Time offset (TC, samples) and optional delay (TD)
         try:
-            cfg["t_offset"] = {"v": c.get_reg_2('TC', signed=False), "u": "samples"}
+            cfg["t_offset"] = c.get_reg_2('TC', signed=False)
         except Exception:
-            cfg["t_offset"] = {"v": 0, "u": "samples"}
+            cfg["t_offset"] = 0
         try:
             cfg["t_delay"] = c.get_reg_4('TD', signed=False)
         except Exception:
