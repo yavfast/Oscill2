@@ -213,19 +213,22 @@ export class ScopeView {
     
     // Маркер "0" показує де знаходиться 0V - це завжди центр екрану мінус vOffset
     this.vAxisValueVolts = 0; // Маркер завжди на 0V
-    const count = samples.length;
+    
+    // Розраховуємо позицію маркера t_offset на сигналі
+    // t_offset визначає яка точка сигналу відповідає нульовому часу
     const nominalSamples = (config && typeof config.samples_total === 'number' && config.samples_total > 1)
       ? Math.round(config.samples_total)
-      : Math.max(count, 2);
+      : Math.max(samples.length, 2);
     const denom = Math.max(1, nominalSamples - 1);
     const rawOffset = Number.isFinite(this.currentTOffsetRaw) ? this.currentTOffsetRaw : 0;
     const clampedTOffset = Math.max(0, Math.min(rawOffset, denom));
     const fraction = denom > 0 ? clampedTOffset / denom : 0;
-    const syncCoordSeconds = this.xRange[0] + fraction * totalTime;
-    const offsetSeconds = fraction * totalTime;
-    this.tAxisPositionSeconds = Number.isFinite(syncCoordSeconds) ? syncCoordSeconds : this.xRange[0];
-    this.tAxisLabelSeconds = Number.isFinite(offsetSeconds) ? offsetSeconds : 0;
-
+    
+    // Позиція маркера на сигналі: fraction * totalTime від початку (лівого краю)
+    // Якщо fraction = 0, маркер зліва; якщо fraction = 1, маркер справа; якщо fraction = 0.5, маркер в центрі
+    const tOffsetPositionSeconds = this.xRange[0] + fraction * totalTime;
+    this.tAxisPositionSeconds = Number.isFinite(tOffsetPositionSeconds) ? tOffsetPositionSeconds : 0;
+    this.tAxisLabelSeconds = 0; // Маркер завжди показує 0 секунд
 
     // Grid
     this.drawGrid();
@@ -233,18 +236,21 @@ export class ScopeView {
     // Inner plot rect and mappers
     const inner = this.getInnerRect();
     const toX = (time) => {
-      const [xmin, xmax] = this.xRange; const w = inner.width;
-      return inner.left + ((time - xmin) / (xmax - xmin)) * w;
+      const [xmin, xmax] = this.xRange;
+      const width = inner.width;
+      return inner.left + ((time - xmin) / (xmax - xmin)) * width;
     };
     const toY = (volt) => {
-      const [ymin, ymax] = this.yRange; const h = inner.height;
-      return inner.top + (1 - (volt - ymin) / (ymax - ymin)) * h;
+      const [ymin, ymax] = this.yRange;
+      const height = inner.height;
+      return inner.top + (1 - (volt - ymin) / (ymax - ymin)) * height;
     };
 
     // Waveform
+    const count = samples.length;
     const points = [];
     for (let i = 0; i < count; i++) {
-      const time = (i / count) * totalTime - totalTime / 2; // do not apply tOffset visually
+      const time = (i / count) * totalTime - totalTime / 2;
       const voltage = this.sampleToVoltage(samples[i], sampleBits, totalVoltage, vOffsetVolts);
       points.push(toX(time), toY(voltage));
     }
@@ -399,13 +405,16 @@ export class ScopeView {
   }
 
   xPixelToTOffset(xPix) {
-    // Конвертує X-координату в значення t_offset
+    // Конвертує X-координату маркера в значення t_offset
+    // Маркер показує 0 секунд, тому позиція маркера визначає яка точка сигналу відповідає 0 секунд
     if (!this.xRange || !this.stage || !this.lastConfig) return 128;
     const [xmin, xmax] = this.xRange;
     const r = this.getInnerRect();
     const clamped = Math.max(r.left, Math.min(r.left + r.width, xPix));
-    // Знаходимо час в цій точці
+    
+    // Знаходимо час в цій точці (від -totalTime/2 до +totalTime/2)
     const timeAtMarker = xmin + ((clamped - r.left) / Math.max(1, r.width)) * (xmax - xmin);
+    
     // Конвертуємо в raw значення t_offset
     const totalTime = xmax - xmin;
     const samples = this.lastFrames?.[this.lastFrames.length - 1]?.samples || [];
@@ -413,8 +422,13 @@ export class ScopeView {
       ? Math.round(this.lastConfig.samples_total)
       : Math.max(samples.length, 2);
     const denom = Math.max(1, nominalSamples - 1);
+    
+    // Якщо маркер в центрі (timeAtMarker=0), то t_offset має бути в центрі діапазону
+    // Якщо маркер зліва (timeAtMarker=-totalTime/2), то t_offset=0
+    // Якщо маркер справа (timeAtMarker=+totalTime/2), то t_offset=denom
     const fraction = (timeAtMarker - xmin) / totalTime;
     const raw = Math.round(fraction * denom);
+    
     return Math.max(0, Math.min(denom, raw));
   }
 
@@ -551,7 +565,9 @@ export class ScopeView {
     // Zero axes
     if (this.xRange && this.yRange) {
       const yZero = this.dataToYPixel(0);
-      const xZero = this.dataToXPixel(0);
+      // Вісь часу (вертикальна біла лінія) показує позицію маркера t_offset
+      // Це точка на сигналі, яка відповідає нульовому часу
+      const xZero = this.dataToXPixel(this.tAxisPositionSeconds || 0);
       this.gridLayer.add(new Konva.Line({ points: [inner.left, yZero, inner.left + inner.width, yZero], stroke: zeroColor, strokeWidth: 2 }));
       this.gridLayer.add(new Konva.Line({ points: [xZero, inner.top, xZero, inner.top + inner.height], stroke: zeroColor, strokeWidth: 2 }));
     }
@@ -565,14 +581,18 @@ export class ScopeView {
       const labelColor = '#aaaaaa';
 
       // X labels at major divisions
+      // Підписи показують час відносно позиції маркера t_offset (нульової осі)
+      const tOffsetPos = this.tAxisPositionSeconds || 0;
       for (let i = 0; i <= this.totalDivsX; i++) {
         const frac = i / this.totalDivsX;
         const x = inner.left + frac * inner.width;
-        const t = xmin + frac * (xmax - xmin);
+        const tAbsolute = xmin + frac * (xmax - xmin);
+        // Час відносно нульової осі (маркера t_offset)
+        const tRelative = tAbsolute - tOffsetPos;
         const txt = new Konva.Text({
           x: x,
           y: inner.top + inner.height + 4,
-          text: formatSecondsAxis(t),
+          text: formatSecondsAxis(tRelative),
           fontSize: 10,
           fill: labelColor,
           fontFamily,
