@@ -171,7 +171,8 @@ export class VerticalControl {
     }
 
     const vOffsetEntry = config.v_offset;
-    if (typeof vOffsetEntry === 'number' || (vOffsetEntry && typeof vOffsetEntry.v === 'number')) {
+    // Only update if slider is not being dragged
+    if (!this.ui.vposSlider?.isDragging && (typeof vOffsetEntry === 'number' || (vOffsetEntry && typeof vOffsetEntry.v === 'number'))) {
       const raw = typeof vOffsetEntry === 'number' ? vOffsetEntry : vOffsetEntry.v;
       this.vOffsetRaw = Math.max(VPOS_MIN, Math.min(VPOS_MAX, raw));
       if (this.ui.vposSlider) {

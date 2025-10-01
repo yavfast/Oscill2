@@ -163,4 +163,12 @@ export class ControlPanel {
   formatTime(valueMS) {
     return formatUniversal(valueMS, 'm', 'auto', Quantity.s, FormatType.std);
   }
+
+  isVOffsetDragging() {
+    return this.controls.vertical?.ui?.vposSlider?.isDragging || false;
+  }
+
+  isTOffsetDragging() {
+    return this.controls.horizontal?.ui?.hposSlider?.isDragging || false;
+  }
 }

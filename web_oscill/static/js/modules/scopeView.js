@@ -24,6 +24,8 @@ export class ScopeView {
     this.onTriggerLevelChange = null;
 
     this.isDraggingTrigger = false;
+    this.isDraggingVOffset = false;
+    this.isDraggingTOffset = false;
 
     this.xRange = null; // [min,max] seconds
     this.yRange = null; // [min,max] volts
@@ -137,7 +139,6 @@ export class ScopeView {
     this._positionTriggerGroup(toY(trigYVolt));
     this._positionCenterYGroup(toY(this.vAxisValueVolts));
     this._positionCenterXGroup(toX(this.tAxisPositionSeconds));
-  this._updateAxisMarkersText();
   }
 
   triggerLevelToVoltage(level, totalVoltage) { return ((level - 128) / 128) * (totalVoltage / 2); }
@@ -167,7 +168,8 @@ export class ScopeView {
     const sampleBits = Math.max(1, latestFrame.sample_bits || 8);
 
     if (config) {
-      if (config.v_offset !== undefined) {
+      // Only update v_offset if not currently being dragged
+      if (config.v_offset !== undefined && !this.isDraggingVOffset) {
         const entry = config.v_offset;
         let raw = this.currentVOffsetRaw;
         if (typeof entry === 'number') {
@@ -178,7 +180,8 @@ export class ScopeView {
         }
         this.currentVOffsetRaw = Math.max(0, Math.min(0xFF, Math.round(raw)));
       }
-      if (config.t_offset !== undefined) {
+      // Only update t_offset if not currently being dragged
+      if (config.t_offset !== undefined && !this.isDraggingTOffset) {
         const entry = config.t_offset;
         let raw = this.currentTOffsetRaw;
         if (typeof entry === 'number') {
@@ -212,7 +215,11 @@ export class ScopeView {
     const totalVoltage = vDiv * this.totalDivsY;
     this.xRange = [-totalTime / 2, totalTime / 2];
     this.yRange = [-totalVoltage / 2, totalVoltage / 2];
-    const vAxisVolt = ((this.currentVOffsetRaw - 128) / 128) * (totalVoltage / 2);
+    // P1 (v_offset) - зміщення діапазону АЦП відносно 0
+    // Коли P1 > 0 (зсув АЦП вгору), нульова точка 0V зміщується вниз на екрані (негативна напруга)
+    // Коли P1 < 0 (зсув АЦП вниз), нульова точка 0V зміщується вгору на екрані (позитивна напруга)
+    // Тому маркер "0" рухається в протилежному напрямку від offset
+    const vAxisVolt = -((this.currentVOffsetRaw - 128) / 128) * (totalVoltage / 2);
     this.vAxisValueVolts = Number.isFinite(vAxisVolt) ? vAxisVolt : 0;
     const count = samples.length;
     const nominalSamples = (config && typeof config.samples_total === 'number' && config.samples_total > 1)
@@ -258,9 +265,8 @@ export class ScopeView {
     const currentTriggerLevel = this.isDraggingTrigger ? this.tempTriggerLevel : this.triggerLevel;
     const trigYVolt = this.triggerLevelToVoltage(currentTriggerLevel, totalVoltage);
     this._positionTriggerGroup(toY(trigYVolt));
-  this._positionCenterYGroup(toY(this.vAxisValueVolts));
-  this._positionCenterXGroup(toX(this.tAxisPositionSeconds));
-    this._updateAxisMarkersText();
+    this._positionCenterYGroup(toY(this.vAxisValueVolts));
+    this._positionCenterXGroup(toX(this.tAxisPositionSeconds));
   }
 
   _updatePeakArea(peakMin, peakMax, sampleBits, totalTime, totalVoltage, toX, toY) {
@@ -347,11 +353,10 @@ export class ScopeView {
       const totalVoltage = this.yRange[1] - this.yRange[0];
       const trigYVolt = this.triggerLevelToVoltage(this.isDraggingTrigger ? this.tempTriggerLevel : this.triggerLevel, totalVoltage);
       this._positionTriggerGroup(this.dataToYPixel(trigYVolt));
-  const axisVolt = Number.isFinite(this.vAxisValueVolts) ? this.vAxisValueVolts : 0;
-  const axisTime = Number.isFinite(this.tAxisPositionSeconds) ? this.tAxisPositionSeconds : 0;
+      const axisVolt = Number.isFinite(this.vAxisValueVolts) ? this.vAxisValueVolts : 0;
+      const axisTime = Number.isFinite(this.tAxisPositionSeconds) ? this.tAxisPositionSeconds : 0;
       this._positionCenterYGroup(this.dataToYPixel(axisVolt));
       this._positionCenterXGroup(this.dataToXPixel(axisTime));
-      this._updateAxisMarkersText();
     }
     this.redrawWave();
   }
@@ -401,7 +406,6 @@ export class ScopeView {
     this._positionTriggerGroup(toY(trigYVolt));
     this._positionCenterYGroup(toY(this.vAxisValueVolts));
     this._positionCenterXGroup(toX(this.tAxisPositionSeconds));
-    this._updateAxisMarkersText();
   }
 
   triggerLevelToVoltage(level, totalVoltage) { return ((level - 128) / 128) * (totalVoltage / 2); }
@@ -547,108 +551,53 @@ export class ScopeView {
   _positionTriggerGroup(yPix) { if (!this.triggerGroup) return; const r = this.getInnerRect(); this.triggerGroup.position({ x: r.left, y: yPix }); this.overlayLayer.batchDraw(); }
 
   _createCenterYGroup() {
-    const group = new Konva.Group({ x: 0, y: 0 });
+    const group = new Konva.Group({ x: 0, y: 0, draggable: true });
     const inner = () => this.getInnerRect();
-    const color = '#00bcd4';
-    const tri = new Konva.RegularPolygon({ name: 'triCY', x: inner().width * 0.9, y: 0, sides: 3, radius: Math.max(6, inner().height * 0.012), fill: color, listening: false });
-    tri.rotation(90);
-    const rect = new Konva.Rect({ name: 'rectCY', x: tri.x() + 10, y: -10, width: 70, height: 20, cornerRadius: 4, fill: color, opacity: 0.85, listening: false });
-    const text = new Konva.Text({
-      name: 'textCY',
-      x: rect.x(),
-      y: rect.y() + 3,
-      width: rect.width(),
-      align: 'center',
-      text: 'Voff 0',
-      fontSize: 11,
-      fill: '#0d0d0d',
-      fontFamily: 'system-ui, -apple-system, Segoe UI, Roboto, Arial',
-      listening: false,
-    });
-    group.add(tri, rect, text);
-    group.on('draw', () => {
-      const r = inner();
-      const triRadius = Math.max(6, r.height * 0.012);
-      tri.radius(triRadius);
-      const triX = r.width - triRadius - 12;
-      tri.x(triX);
-      const rectNode = rect;
-      rectNode.y(-rectNode.height() / 2);
-      rectNode.x(triX + triRadius + 8);
-      text.x(rectNode.x());
-      text.y(rectNode.y() + 3);
-      text.width(rectNode.width());
+    const color = '#ffd700'; // Yellow color like trigger marker
+    const markerX = inner().width;
+    const line = new Konva.Line({ name: 'lineVOff', points: [0, 0, markerX, 0], stroke: color, strokeWidth: 1, dash: [6, 4] });
+    const tri = new Konva.RegularPolygon({ name: 'triCY', x: markerX + 3, y: 0, sides: 3, radius: 6, fill: color });
+    tri.rotation(270);
+    const rect = new Konva.Rect({ name: 'rectCY', x: markerX + 6, y: -5, width: 10, height: 10, fill: color, stroke: color, strokeWidth: 1 });
+    const text = new Konva.Text({ name: 'textCY', x: markerX + 7, y: -4, text: '0', fontSize: 10, fill: '#000000', fontFamily: 'system-ui, -apple-system, Segoe UI, Roboto, Arial' });
+    group.add(line, tri, rect, text);
+    group.on('draw', () => { const r = inner(); const mx = r.width - 30; line.points([0, 0, mx, 0]); tri.x(mx); rect.x(mx + 6); text.x(mx + 8); });
+    group.dragBoundFunc((pos) => { const r = inner(); const y = Math.max(r.top, Math.min(r.top + r.height, pos.y)); return { x: r.left, y }; });
+    group.on('mouseenter', () => { this.stage.container().style.cursor = 'ns-resize'; });
+    group.on('mouseleave', () => { this.stage.container().style.cursor = 'default'; });
+    group.on('dragstart', () => { this.isDraggingVOffset = true; });
+    group.on('dragmove', () => { /* User is dragging, update will be sent on dragend */ });
+    group.on('dragend', () => {
+      this.isDraggingVOffset = false;
+      // Calculate new v_offset value and send to server
+      // TODO: Implement actual calculation and callback
     });
     return group;
   }
 
   _positionCenterYGroup(yPix) { if (!this.centerYGroup) return; const r = this.getInnerRect(); this.centerYGroup.position({ x: r.left, y: yPix }); this.overlayLayer.batchDraw(); }
 
-  _updateAxisMarkersText() {
-    if (this.centerYGroup) {
-      const textNode = this.centerYGroup.findOne('.textCY');
-      const rectNode = this.centerYGroup.findOne('.rectCY');
-      if (textNode) {
-        const raw = Number.isFinite(this.currentVOffsetRaw) ? this.currentVOffsetRaw : 0;
-        const displayVolt = Number.isFinite(this.vAxisValueVolts) ? this.vAxisValueVolts : 0;
-        textNode.text(`Voff ${raw} (${formatVoltsAxis(displayVolt)})`);
-        if (rectNode) {
-          const desiredWidth = Math.max(70, textNode.getTextWidth() + 16);
-          rectNode.width(desiredWidth);
-          textNode.width(desiredWidth);
-        }
-      }
-    }
-    if (this.centerXGroup) {
-      const textNode = this.centerXGroup.findOne('.textCX');
-      const rectNode = this.centerXGroup.findOne('.rectCX');
-      if (textNode) {
-        const raw = Number.isFinite(this.currentTOffsetRaw) ? this.currentTOffsetRaw : 0;
-        const displayTime = Number.isFinite(this.tAxisLabelSeconds) ? this.tAxisLabelSeconds : 0;
-        textNode.text(`Toff ${raw} (${formatSecondsAxis(displayTime)})`);
-        if (rectNode) {
-          const desiredWidth = Math.max(70, textNode.getTextWidth() + 16);
-          rectNode.width(desiredWidth);
-          textNode.width(desiredWidth);
-        }
-      }
-    }
-    if (this.overlayLayer) this.overlayLayer.batchDraw();
-  }
+
 
   _createCenterXGroup() {
-    const group = new Konva.Group({ x: 0, y: 0 });
+    const group = new Konva.Group({ x: 0, y: 0, draggable: true });
     const inner = () => this.getInnerRect();
-    const color = '#e91e63';
-    const tri = new Konva.RegularPolygon({ name: 'triCX', x: 0, y: Math.max(12, inner().height * 0.08), sides: 3, radius: Math.max(6, inner().height * 0.012), fill: color, listening: false });
+    const color = '#ffffff'; // White color
+    const markerY = inner().height;
+    const line = new Konva.Line({ name: 'lineTOff', points: [0, 0, 0, markerY], stroke: color, strokeWidth: 1, dash: [6, 4] });
+    const tri = new Konva.RegularPolygon({ name: 'triCX', x: 0, y: markerY + 3, sides: 3, radius: 6, fill: color });
     tri.rotation(180);
-    const rect = new Konva.Rect({ name: 'rectCX', x: -35, y: tri.y() - tri.radius() - 24, width: 70, height: 20, cornerRadius: 4, fill: color, opacity: 0.85, listening: false });
-    const text = new Konva.Text({
-      name: 'textCX',
-      x: rect.x(),
-      y: rect.y() + 3,
-      width: rect.width(),
-      align: 'center',
-      text: 'Toff 0',
-      fontSize: 11,
-      fill: '#0d0d0d',
-      fontFamily: 'system-ui, -apple-system, Segoe UI, Roboto, Arial',
-      listening: false,
-    });
-    group.add(tri, rect, text);
-    group.on('draw', () => {
-      const r = inner();
-      const triRadius = Math.max(6, r.height * 0.012);
-      tri.radius(triRadius);
-      const triY = Math.max(triRadius + 8, Math.min(r.height - triRadius - 8, triRadius + 24));
-      tri.y(triY);
-      const rectNode = rect;
-      rectNode.width(rectNode.width());
-      rectNode.x(-rectNode.width() / 2);
-      rectNode.y(triY - triRadius - rectNode.height() - 6);
-      text.x(rectNode.x());
-      text.y(rectNode.y() + 3);
-      text.width(rectNode.width());
+    group.add(line, tri);
+    group.on('draw', () => { const r = inner(); const my = r.height - 30; line.points([0, 0, 0, my]); tri.y(my); });
+    group.dragBoundFunc((pos) => { const r = inner(); const x = Math.max(r.left, Math.min(r.left + r.width, pos.x)); return { x, y: r.top }; });
+    group.on('mouseenter', () => { this.stage.container().style.cursor = 'ew-resize'; });
+    group.on('mouseleave', () => { this.stage.container().style.cursor = 'default'; });
+    group.on('dragstart', () => { this.isDraggingTOffset = true; });
+    group.on('dragmove', () => { /* User is dragging, update will be sent on dragend */ });
+    group.on('dragend', () => {
+      this.isDraggingTOffset = false;
+      // Calculate new t_offset value and send to server
+      // TODO: Implement actual calculation and callback
     });
     return group;
   }

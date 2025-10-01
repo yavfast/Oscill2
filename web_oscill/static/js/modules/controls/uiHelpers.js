@@ -67,6 +67,7 @@ export function createSlider(layer, { x, y, width, min, max, value, onChange, on
     max: Number(max),
     width: Math.max(0, width),
     currentValue: Number(value),
+    isDragging: false,
   };
 
   const clampValue = (val) => {
@@ -128,6 +129,9 @@ export function createSlider(layer, { x, y, width, min, max, value, onChange, on
   slider.render(value);
   handle.x(slider.toX(slider.currentValue));
 
+  handle.on('dragstart', () => {
+    slider.isDragging = true;
+  });
   handle.on('dragmove', () => {
     const nx = Math.max(0, Math.min(slider.width, handle.x()));
     handle.x(nx);
@@ -138,6 +142,7 @@ export function createSlider(layer, { x, y, width, min, max, value, onChange, on
     layer.batchDraw();
   });
   handle.on('dragend', () => {
+    slider.isDragging = false;
     onCommit && onCommit(slider.currentValue);
   });
 

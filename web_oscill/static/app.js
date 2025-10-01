@@ -239,6 +239,12 @@ class App {
   }
 
   onConfigChange(changes) {
+    // Stop frame polling during config change
+    const wasPolling = !!this.pollInterval;
+    if (wasPolling) {
+      this.stopPolling();
+    }
+    
     this.api.applyConfig(changes).then(response => {
       if (response.config) {
         // Update current config ID
@@ -248,8 +254,18 @@ class App {
         this.controlPanel.updateControls(response.config);
         this.statusBar.updateStatus(null, response.config);
       }
+      
+      // Resume frame polling if it was running and device is still connected
+      if (wasPolling && this.isDeviceConnected && this.isRunning) {
+        this.startPolling();
+      }
     }).catch(e => {
       console.error('Config change error:', e);
+      
+      // Resume frame polling even on error if it was running
+      if (wasPolling && this.isDeviceConnected && this.isRunning) {
+        this.startPolling();
+      }
     });
   }
 
@@ -277,6 +293,23 @@ class App {
     if (!data) return;
 
     if (data.frames && data.frames.length > 0) {
+      // Pass control panel dragging state to scope view
+      const isDraggingVOffsetControl = this.controlPanel.isVOffsetDragging();
+      const isDraggingTOffsetControl = this.controlPanel.isTOffsetDragging();
+      
+      // Update dragging state in scopeView based on control sliders
+      if (isDraggingVOffsetControl && !this.scopeView.isDraggingVOffset) {
+        this.scopeView.isDraggingVOffset = true;
+      } else if (!isDraggingVOffsetControl && this.scopeView.isDraggingVOffset && !this.scopeView.centerYGroup?.isDragging()) {
+        this.scopeView.isDraggingVOffset = false;
+      }
+      
+      if (isDraggingTOffsetControl && !this.scopeView.isDraggingTOffset) {
+        this.scopeView.isDraggingTOffset = true;
+      } else if (!isDraggingTOffsetControl && this.scopeView.isDraggingTOffset && !this.scopeView.centerXGroup?.isDragging()) {
+        this.scopeView.isDraggingTOffset = false;
+      }
+      
       this.scopeView.update(data.frames, data.config || {});
       const latestFrame = data.frames[data.frames.length - 1];
       this.measurementPanel.displayMeasurements(latestFrame.measurements);

@@ -138,7 +138,8 @@ export class HorizontalControl {
     }
 
     const tOffsetEntry = config.t_offset;
-    if (typeof tOffsetEntry === 'number' || (tOffsetEntry && typeof tOffsetEntry.v === 'number')) {
+    // Only update if slider is not being dragged
+    if (!this.ui.hposSlider?.isDragging && (typeof tOffsetEntry === 'number' || (tOffsetEntry && typeof tOffsetEntry.v === 'number'))) {
       const raw = typeof tOffsetEntry === 'number' ? tOffsetEntry : tOffsetEntry.v;
       const slider = this.ui.hposSlider;
       const clamped = slider ? slider.clamp(raw) : Math.max(0, raw);
