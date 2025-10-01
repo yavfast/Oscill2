@@ -373,26 +373,27 @@ export class ScopeView {
   triggerLevelToYPixel(level) {
     // Конвертує trigger_level (0-255) в Y-координату на екрані
     // trigger_level - абсолютне значення, не залежить від діапазону напруги
-    // 0 = top екрану, 255 = bottom екрану, 128 = center
+    // 0 = низ екрану (bottom), 255 = верх екрану (top), 128 = center
     if (!this.stage) return 0;
     const r = this.getInnerRect();
     
-    // level = 0 -> top, level = 255 -> bottom
+    // ІНВЕРТОВАНА ЛОГІКА: level = 0 -> bottom, level = 255 -> top
     const normalized = level / 255;
-    const yPix = r.top + normalized * r.height;
+    const yPix = r.top + (1 - normalized) * r.height;
     
     return yPix;
   }
 
   yPixelToTriggerLevel(yPix) {
     // Конвертує Y-координату в trigger_level (0-255)
-    // Аналогічно до yPixelToVOffset
+    // ІНВЕРТОВАНА ЛОГІКА: top екрану -> 255, bottom екрану -> 0
     if (!this.stage) return 128;
     const r = this.getInnerRect();
     const clamped = Math.max(r.top, Math.min(r.top + r.height, yPix));
     
     const screenPosNormalized = (clamped - r.top) / Math.max(1, r.height);
-    const raw = Math.round(screenPosNormalized * 255);
+    // Інвертуємо: top (screenPos=0) -> level=255, bottom (screenPos=1) -> level=0
+    const raw = Math.round((1 - screenPosNormalized) * 255);
     
     return Math.max(0, Math.min(255, raw));
   }
