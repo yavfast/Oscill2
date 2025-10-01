@@ -22,6 +22,8 @@ export class ScopeView {
     this.tempTriggerLevel = 128;
     this.currentCfgId = null;
     this.onTriggerLevelChange = null;
+    this.onVOffsetChange = null;
+    this.onTOffsetChange = null;
 
     this.isDraggingTrigger = false;
     this.isDraggingVOffset = false;
@@ -143,16 +145,6 @@ export class ScopeView {
 
   triggerLevelToVoltage(level, totalVoltage) { return ((level - 128) / 128) * (totalVoltage / 2); }
 
-  sampleToVoltage(sample, sampleBits, totalVoltage) {
-    const bits = Math.max(1, sampleBits || 8);
-    if (bits === 1) {
-      const normalized = sample ? 1 : -1;
-      return normalized * (totalVoltage / 2);
-    }
-    const center = 2 ** (bits - 1);
-    const normalized = (sample - center) / center;
-    return normalized * (totalVoltage / 2);
-  }
   update(frames, config) {
     if (!frames || frames.length === 0) return;
     this.lastFrames = frames;
@@ -213,14 +205,16 @@ export class ScopeView {
     }
     const totalTime = tDiv * this.totalDivsX;
     const totalVoltage = vDiv * this.totalDivsY;
+    
+    // Розраховуємо vOffset в вольтах (як в OscillData.java)
+    const vOffsetVolts = ((this.currentVOffsetRaw - 128) / 128) * (totalVoltage / 2);
+    
+    // Зміщуємо діапазон напруги на vOffset (як в OscillData.java: vMin = range.lower + vOffset)
     this.xRange = [-totalTime / 2, totalTime / 2];
-    this.yRange = [-totalVoltage / 2, totalVoltage / 2];
-    // P1 (v_offset) - зміщення діапазону АЦП відносно 0
-    // Коли P1 > 0 (зсув АЦП вгору), нульова точка 0V зміщується вниз на екрані (негативна напруга)
-    // Коли P1 < 0 (зсув АЦП вниз), нульова точка 0V зміщується вгору на екрані (позитивна напруга)
-    // Тому маркер "0" рухається в протилежному напрямку від offset
-    const vAxisVolt = -((this.currentVOffsetRaw - 128) / 128) * (totalVoltage / 2);
-    this.vAxisValueVolts = Number.isFinite(vAxisVolt) ? vAxisVolt : 0;
+    this.yRange = [-totalVoltage / 2 + vOffsetVolts, totalVoltage / 2 + vOffsetVolts];
+    
+    // Маркер "0" показує де знаходиться 0V - це завжди центр екрану мінус vOffset
+    this.vAxisValueVolts = 0; // Маркер завжди на 0V
     const count = samples.length;
     const nominalSamples = (config && typeof config.samples_total === 'number' && config.samples_total > 1)
       ? Math.round(config.samples_total)
@@ -253,23 +247,31 @@ export class ScopeView {
     const points = [];
     for (let i = 0; i < count; i++) {
       const time = (i / count) * totalTime - totalTime / 2; // do not apply tOffset visually
-      const voltage = this.sampleToVoltage(samples[i], sampleBits, totalVoltage);
+      const voltage = this.sampleToVoltage(samples[i], sampleBits, totalVoltage, vOffsetVolts);
       points.push(toX(time), toY(voltage));
     }
 
-    this._updatePeakArea(peakMin, peakMax, sampleBits, totalTime, totalVoltage, toX, toY);
+    this._updatePeakArea(peakMin, peakMax, sampleBits, totalTime, totalVoltage, toX, toY, vOffsetVolts);
     this.waveLine.points(points);
     this.waveLayer.batchDraw();
 
-    // Overlays
+    // Overlays - update positions only if not dragging
     const currentTriggerLevel = this.isDraggingTrigger ? this.tempTriggerLevel : this.triggerLevel;
     const trigYVolt = this.triggerLevelToVoltage(currentTriggerLevel, totalVoltage);
     this._positionTriggerGroup(toY(trigYVolt));
-    this._positionCenterYGroup(toY(this.vAxisValueVolts));
-    this._positionCenterXGroup(toX(this.tAxisPositionSeconds));
+    
+    // Don't reposition v_offset marker if user is dragging it
+    if (!this.isDraggingVOffset) {
+      this._positionCenterYGroup(toY(this.vAxisValueVolts));
+    }
+    
+    // Don't reposition t_offset marker if user is dragging it
+    if (!this.isDraggingTOffset) {
+      this._positionCenterXGroup(toX(this.tAxisPositionSeconds));
+    }
   }
 
-  _updatePeakArea(peakMin, peakMax, sampleBits, totalTime, totalVoltage, toX, toY) {
+  _updatePeakArea(peakMin, peakMax, sampleBits, totalTime, totalVoltage, toX, toY, vOffsetVolts) {
     if (!this.peakArea) return;
     const count = Math.min(peakMin.length || 0, peakMax.length || 0);
     if (!count) {
@@ -284,8 +286,8 @@ export class ScopeView {
     const denom = Math.max(1, count);
     for (let i = 0; i < count; i++) {
       const time = (i / denom) * totalTime - totalTime / 2;
-      const vMax = this.sampleToVoltage(peakMax[i], sampleBits, totalVoltage);
-      const vMin = this.sampleToVoltage(peakMin[i], sampleBits, totalVoltage);
+      const vMax = this.sampleToVoltage(peakMax[i], sampleBits, totalVoltage, vOffsetVolts);
+      const vMin = this.sampleToVoltage(peakMin[i], sampleBits, totalVoltage, vOffsetVolts);
       const x = toX(time);
       const yMax = toY(vMax);
       const yMin = toY(vMin);
@@ -321,6 +323,8 @@ export class ScopeView {
   }
 
   setTriggerLevelChangeCallback(callback) { this.onTriggerLevelChange = callback; }
+  setVOffsetChangeCallback(callback) { this.onVOffsetChange = callback; }
+  setTOffsetChangeCallback(callback) { this.onTOffsetChange = callback; }
 
   // Helpers
   dataToXPixel(xVal) {
@@ -340,6 +344,54 @@ export class ScopeView {
     const yData = ymin + (1 - ((clamped - r.top) / Math.max(1, r.height))) * (ymax - ymin);
     const ratio = (yData - ymin) / (ymax - ymin);
     return Math.max(0, Math.min(255, Math.round(ratio * 255)));
+  }
+
+  yPixelToVOffset(yPix) {
+    // Конвертує Y-координату в значення v_offset (0-255)
+    // В Python API: "raw 0..255 offsets" - просте нативне значення без прив'язки до вольтажу
+    // 0 = top екрану, 255 = bottom екрану, 128 = center
+    if (!this.stage) return 128;
+    const r = this.getInnerRect();
+    const clamped = Math.max(r.top, Math.min(r.top + r.height, yPix));
+    
+    // Позиція маркера на екрані (0 = top, 1 = bottom)
+    const screenPosNormalized = (clamped - r.top) / Math.max(1, r.height);
+    
+    // Конвертуємо в 0-255
+    // Але інвертуємо: top екрану (мінімальна Y-координата) = мінімальне значення offset = 0
+    // bottom екрану (максимальна Y-координата) = максимальне значення offset = 255
+    const raw = Math.round(screenPosNormalized * 255);
+    
+    console.log('yPixelToVOffset:', {
+      yPix,
+      clamped,
+      heightRange: `${r.top} - ${r.top + r.height}`,
+      screenPosNormalized,
+      raw,
+      currentVOffsetRaw: this.currentVOffsetRaw
+    });
+    
+    return Math.max(0, Math.min(255, raw));
+  }
+
+  xPixelToTOffset(xPix) {
+    // Конвертує X-координату в значення t_offset
+    if (!this.xRange || !this.stage || !this.lastConfig) return 128;
+    const [xmin, xmax] = this.xRange;
+    const r = this.getInnerRect();
+    const clamped = Math.max(r.left, Math.min(r.left + r.width, xPix));
+    // Знаходимо час в цій точці
+    const timeAtMarker = xmin + ((clamped - r.left) / Math.max(1, r.width)) * (xmax - xmin);
+    // Конвертуємо в raw значення t_offset
+    const totalTime = xmax - xmin;
+    const samples = this.lastFrames?.[this.lastFrames.length - 1]?.samples || [];
+    const nominalSamples = (this.lastConfig && typeof this.lastConfig.samples_total === 'number' && this.lastConfig.samples_total > 1)
+      ? Math.round(this.lastConfig.samples_total)
+      : Math.max(samples.length, 2);
+    const denom = Math.max(1, nominalSamples - 1);
+    const fraction = (timeAtMarker - xmin) / totalTime;
+    const raw = Math.round(fraction * denom);
+    return Math.max(0, Math.min(denom, raw));
   }
 
   handleResize() {
@@ -379,6 +431,10 @@ export class ScopeView {
     const peakMax = latestFrame.samples_peak_max || [];
     const totalTime = this.xRange[1] - this.xRange[0];
     const totalVoltage = this.yRange[1] - this.yRange[0];
+    
+    // Розраховуємо vOffsetVolts для передачі в sampleToVoltage
+    const vOffsetVolts = ((this.currentVOffsetRaw - 128) / 128) * (totalVoltage / 2);
+    
     const inner = this.getInnerRect();
     const toX = (time) => {
       const [xmin, xmax] = this.xRange;
@@ -394,31 +450,42 @@ export class ScopeView {
     const count = samples.length;
     for (let i = 0; i < count; i++) {
       const time = (i / count) * totalTime + this.xRange[0];
-      const voltage = this.sampleToVoltage(samples[i], sampleBits, totalVoltage);
+      const voltage = this.sampleToVoltage(samples[i], sampleBits, totalVoltage, vOffsetVolts);
       points.push(toX(time), toY(voltage));
     }
-    this._updatePeakArea(peakMin, peakMax, sampleBits, totalTime, totalVoltage, toX, toY);
+    this._updatePeakArea(peakMin, peakMax, sampleBits, totalTime, totalVoltage, toX, toY, vOffsetVolts);
     this.waveLine.points(points);
     this.waveLayer.batchDraw();
 
     const currentTriggerLevel = this.isDraggingTrigger ? this.tempTriggerLevel : this.triggerLevel;
     const trigYVolt = this.triggerLevelToVoltage(currentTriggerLevel, totalVoltage);
     this._positionTriggerGroup(toY(trigYVolt));
-    this._positionCenterYGroup(toY(this.vAxisValueVolts));
-    this._positionCenterXGroup(toX(this.tAxisPositionSeconds));
+    
+    // Don't reposition v_offset marker if user is dragging it
+    if (!this.isDraggingVOffset) {
+      this._positionCenterYGroup(toY(this.vAxisValueVolts));
+    }
+    
+    // Don't reposition t_offset marker if user is dragging it
+    if (!this.isDraggingTOffset) {
+      this._positionCenterXGroup(toX(this.tAxisPositionSeconds));
+    }
   }
 
   triggerLevelToVoltage(level, totalVoltage) { return ((level - 128) / 128) * (totalVoltage / 2); }
 
-  sampleToVoltage(sample, sampleBits, totalVoltage) {
+  sampleToVoltage(sample, sampleBits, totalVoltage, vOffsetVolts = 0) {
+    // Як в OscillData.java: vData[idx] = vMin + (data[idx] * vStep)
+    // де vMin вже містить vOffset
     const bits = Math.max(1, sampleBits || 8);
     if (bits === 1) {
       const normalized = sample ? 1 : -1;
-      return normalized * (totalVoltage / 2);
+      return normalized * (totalVoltage / 2) + vOffsetVolts;
     }
-    const center = 2 ** (bits - 1);
-    const normalized = (sample - center) / center;
-    return normalized * (totalVoltage / 2);
+    const maxValue = (2 ** bits) - 1;
+    const vStep = totalVoltage / (maxValue + 1);
+    const vMin = -totalVoltage / 2 + vOffsetVolts;
+    return vMin + (sample * vStep);
   }
 
   drawGrid() {
@@ -570,7 +637,11 @@ export class ScopeView {
     group.on('dragend', () => {
       this.isDraggingVOffset = false;
       // Calculate new v_offset value and send to server
-      // TODO: Implement actual calculation and callback
+      const yPix = group.y();
+      const newVOffset = this.yPixelToVOffset(yPix);
+      if (this.onVOffsetChange) {
+        this.onVOffsetChange(newVOffset);
+      }
     });
     return group;
   }
@@ -597,7 +668,11 @@ export class ScopeView {
     group.on('dragend', () => {
       this.isDraggingTOffset = false;
       // Calculate new t_offset value and send to server
-      // TODO: Implement actual calculation and callback
+      const xPix = group.x();
+      const newTOffset = this.xPixelToTOffset(xPix);
+      if (this.onTOffsetChange) {
+        this.onTOffsetChange(newTOffset);
+      }
     });
     return group;
   }

@@ -19,4 +19,4 @@ temp
 /.idea/
 /.venv/
 node_modules
-web_oscill.log
+/web_oscill.log

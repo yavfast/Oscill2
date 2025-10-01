@@ -34,6 +34,16 @@ class App {
       this.onConfigChange({ trigger_level: level });
     });
 
+    // Connect scope view v_offset changes: callback fires on mouseup (end of drag)
+    this.scopeView.setVOffsetChangeCallback((vOffset) => {
+      this.onConfigChange({ v_offset: vOffset });
+    });
+
+    // Connect scope view t_offset changes: callback fires on mouseup (end of drag)
+    this.scopeView.setTOffsetChangeCallback((tOffset) => {
+      this.onConfigChange({ t_offset: tOffset });
+    });
+
     // Connect control panel trigger level changes to scope view
     this.controlPanel.setTriggerLevelChangeCallback((level) => {
       this.scopeView.setTriggerLevel(level);
@@ -43,12 +53,14 @@ class App {
     try {
       const status = await this.api.getStatus();
       this.updateStatus(status);
+      
+      // Start frame polling if device is connected and acquiring
+      if (status?.is_connected && status?.is_acquiring) {
+        this.startPolling();
+      }
     } catch (e) {
       console.log('Initial status check failed:', e);
     }
-
-    // Start status polling only (frame polling will start when device connects)
-    this.startStatusPolling();
   }
 
   applyAbsoluteLayout() {
@@ -184,18 +196,6 @@ class App {
     }
   }
 
-  startStatusPolling() {
-    if (this.statusInterval) clearInterval(this.statusInterval);
-    this.statusInterval = setInterval(async () => {
-      try {
-        const status = await this.api.getStatus();
-        this.updateStatus(status);
-      } catch (e) {
-        console.log('Status check failed:', e);
-      }
-    }, 5000); // Check status every 5 seconds
-  }
-
   updateStatus(status) {
     const wasConnected = this.isDeviceConnected;
     this.isDeviceConnected = status?.is_connected || false;
@@ -238,14 +238,16 @@ class App {
     }
   }
 
-  onConfigChange(changes) {
+  async onConfigChange(changes) {
     // Stop frame polling during config change
     const wasPolling = !!this.pollInterval;
     if (wasPolling) {
       this.stopPolling();
     }
     
-    this.api.applyConfig(changes).then(response => {
+    try {
+      const response = await this.api.applyConfig(changes);
+      
       if (response.config) {
         // Update current config ID
         if (response.config.cfg_id !== undefined) {
@@ -255,18 +257,29 @@ class App {
         this.statusBar.updateStatus(null, response.config);
       }
       
+      // Request one frame to update interface
+      if (!wasPolling && this.isDeviceConnected) {
+        try {
+          const lastSeq = this.api.getLastSeq();
+          const data = await this.api.getFrames(lastSeq);
+          this.handleFrameResponse(data);
+        } catch (e) {
+          console.error('Frame request after config change failed:', e);
+        }
+      }
+      
       // Resume frame polling if it was running and device is still connected
       if (wasPolling && this.isDeviceConnected && this.isRunning) {
         this.startPolling();
       }
-    }).catch(e => {
+    } catch (e) {
       console.error('Config change error:', e);
       
       // Resume frame polling even on error if it was running
       if (wasPolling && this.isDeviceConnected && this.isRunning) {
         this.startPolling();
       }
-    });
+    }
   }
 
   onAcquisitionChange(action) {
@@ -293,7 +306,7 @@ class App {
     if (!data) return;
 
     if (data.frames && data.frames.length > 0) {
-      // Pass control panel dragging state to scope view
+      // Sync dragging state between control sliders and scope markers
       const isDraggingVOffsetControl = this.controlPanel.isVOffsetDragging();
       const isDraggingTOffsetControl = this.controlPanel.isTOffsetDragging();
       
@@ -319,8 +332,17 @@ class App {
       if (data.config.cfg_id !== undefined &&
           (this.currentCfgId === null || data.config.cfg_id >= this.currentCfgId)) {
         this.currentCfgId = data.config.cfg_id;
-        this.controlPanel.updateControls(data.config);
+        
+        // Don't update controls if user is dragging
+        if (!this.controlPanel.isVOffsetDragging() && 
+            !this.controlPanel.isTOffsetDragging() &&
+            !this.scopeView.isDraggingVOffset &&
+            !this.scopeView.isDraggingTOffset) {
+          this.controlPanel.updateControls(data.config);
+        }
+        
         this.statusBar.updateStatus(null, data.config);
+        
         if (typeof data.config.trigger_level === 'number') {
           if (!this.scopeView.isDraggingTrigger) {
             this.scopeView.setTriggerLevel(data.config.trigger_level);
