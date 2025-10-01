@@ -499,7 +499,7 @@ class DeviceService:
 
     def _acq_loop(self):
         # Soft loop with opportunistic device access
-        backoff_s = 0.02
+        backoff_s = 0.005  # Reduced from 0.02 to 0.005 (5ms) for lower latency
         consecutive_errors = 0
         max_consecutive_errors = 5  # Disconnect if 5 consecutive errors
         while not self._stop_event.is_set():

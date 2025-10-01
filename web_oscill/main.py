@@ -1,9 +1,11 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import HTMLResponse, FileResponse, JSONResponse
 from pydantic import BaseModel
 from typing import Optional, Dict, Any, List, Union
 import os
+import orjson
 
 import sys
 import os
@@ -13,7 +15,19 @@ from oscill_client import OscillClient
 from device_service import DeviceService
 from converters import get_voltage_mv, get_time_ms
 
-app = FastAPI(title="Oscill2 Web App")
+
+class ORJSONResponse(JSONResponse):
+    """Fast JSON response using orjson for serialization."""
+    media_type = "application/json"
+
+    def render(self, content: Any) -> bytes:
+        return orjson.dumps(content, option=orjson.OPT_SERIALIZE_NUMPY)
+
+
+app = FastAPI(title="Oscill2 Web App", default_response_class=ORJSONResponse)
+
+# Add GZip compression middleware (applies to responses >= 1KB)
+app.add_middleware(GZipMiddleware, minimum_size=500)
 
 app.add_middleware(
     CORSMiddleware,
@@ -21,6 +35,7 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    max_age=3600,  # Cache preflight requests for 1 hour
 )
 
 # In-memory singleton service instance
@@ -204,7 +219,15 @@ def api_config(req: ConfigReq):
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/frames")
-def api_frames(since: Optional[int] = None, limit: int = 64):
+def api_frames(since: Optional[int] = None, limit: int = 128, format: str = "hex"):
+    """
+    Get frames from buffer.
+    
+    Args:
+        since: Get frames with seq > since
+        limit: Maximum number of frames to return
+        format: "hex" (compact hex strings) or "array" (JSON arrays)
+    """
     try:
         if not service._client:
             return {"status": "disconnected", "frames": []}
@@ -217,9 +240,25 @@ def api_frames(since: Optional[int] = None, limit: int = 64):
         
         # Process frames and add measurements
         processed_frames = []
+        use_hex = format.lower() == "hex"
+        
         for frame in frames:
             processed_frame = dict(frame)
             processed_frame.pop("config", None)
+            
+            # Convert samples to hex format if requested
+            if use_hex:
+                sample_bytes = frame.get("sample_bytes", 1)
+                if "samples" in processed_frame and processed_frame["samples"]:
+                    processed_frame["samples_hex"] = _samples_to_hex(processed_frame["samples"], sample_bytes)
+                    del processed_frame["samples"]
+                if "samples_peak_min" in processed_frame and processed_frame["samples_peak_min"]:
+                    processed_frame["samples_peak_min_hex"] = _samples_to_hex(processed_frame["samples_peak_min"], sample_bytes)
+                    del processed_frame["samples_peak_min"]
+                if "samples_peak_max" in processed_frame and processed_frame["samples_peak_max"]:
+                    processed_frame["samples_peak_max_hex"] = _samples_to_hex(processed_frame["samples_peak_max"], sample_bytes)
+                    del processed_frame["samples_peak_max"]
+            
             measurements = calculate_measurements(frame, current_config)
             if measurements:
                 processed_frame["measurements"] = measurements
@@ -228,7 +267,8 @@ def api_frames(since: Optional[int] = None, limit: int = 64):
         return {
             "config": new_config,
             "frames": processed_frames,
-            "newest_seq": data.get("newest_seq", 0)
+            "newest_seq": data.get("newest_seq", 0),
+            "format": "hex" if use_hex else "array"
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -264,6 +304,27 @@ def static_files(path: str):
     if not os.path.isfile(fp):
         raise HTTPException(status_code=404)
     return FileResponse(fp)
+
+def _samples_to_hex(samples: List[int], sample_bytes: int = 1) -> str:
+    """Convert samples list to hex string for compact transmission."""
+    if not samples:
+        return ""
+    if sample_bytes == 1:
+        return ''.join(f'{s:02x}' for s in samples)
+    elif sample_bytes == 2:
+        return ''.join(f'{s:04x}' for s in samples)
+    else:
+        return ''.join(f'{s:02x}' for s in samples)
+
+
+def _samples_from_hex(hex_str: str, sample_bytes: int = 1) -> List[int]:
+    """Decode hex string back to samples list."""
+    if not hex_str:
+        return []
+    chars_per_sample = sample_bytes * 2
+    return [int(hex_str[i:i+chars_per_sample], 16) 
+            for i in range(0, len(hex_str), chars_per_sample)]
+
 
 def _samples_to_millivolts(samples: List[int], sample_bits: int, config: Dict[str, Any]) -> List[float]:
     if not samples:

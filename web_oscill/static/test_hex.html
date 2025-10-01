@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Hex Decoding Test</title>
+  <style>
+    body {
+      font-family: monospace;
+      padding: 20px;
+      background: #1e1e1e;
+      color: #d4d4d4;
+    }
+    .test-result {
+      padding: 10px;
+      margin: 10px 0;
+      border-radius: 4px;
+    }
+    .success { background: #1e5f1e; }
+    .error { background: #5f1e1e; }
+    pre {
+      background: #2d2d2d;
+      padding: 10px;
+      border-radius: 4px;
+      overflow-x: auto;
+    }
+  </style>
+</head>
+<body>
+  <h1>🧪 Hex Decoding Test</h1>
+  <div id="results"></div>
+
+  <script type="module">
+    import { hexToSamples, decodeFrameSamples } from './js/modules/hexUtils.js';
+    
+    const results = document.getElementById('results');
+    
+    function addResult(title, passed, details) {
+      const div = document.createElement('div');
+      div.className = `test-result ${passed ? 'success' : 'error'}`;
+      div.innerHTML = `
+        <strong>${passed ? '✅' : '❌'} ${title}</strong>
+        <pre>${details}</pre>
+      `;
+      results.appendChild(div);
+    }
+    
+    // Test 1: Basic hex decoding
+    try {
+      const hex = "80827d7f81";
+      const samples = hexToSamples(hex, 1);
+      const expected = [128, 130, 125, 127, 129];
+      const passed = JSON.stringify(samples) === JSON.stringify(expected);
+      addResult('Basic hex decoding', passed, 
+        `Input: "${hex}"\nOutput: ${JSON.stringify(samples)}\nExpected: ${JSON.stringify(expected)}`);
+    } catch (e) {
+      addResult('Basic hex decoding', false, `Error: ${e.message}\n${e.stack}`);
+    }
+    
+    // Test 2: Frame decoding
+    try {
+      const frame = {
+        seq: 1,
+        sample_bytes: 1,
+        samples_hex: "80827d7f81"
+      };
+      const decoded = decodeFrameSamples(frame);
+      const passed = decoded.samples && decoded.samples.length === 5 && !decoded.samples_hex;
+      addResult('Frame decoding', passed,
+        `Input: ${JSON.stringify(frame)}\nOutput: ${JSON.stringify(decoded)}`);
+    } catch (e) {
+      addResult('Frame decoding', false, `Error: ${e.message}\n${e.stack}`);
+    }
+    
+    // Test 3: API fetch
+    try {
+      const response = await fetch('/api/frames?format=hex&limit=1');
+      const data = await response.json();
+      
+      if (data.frames && data.frames.length > 0) {
+        const frame = data.frames[0];
+        const hasHex = !!frame.samples_hex;
+        const decoded = decodeFrameSamples(frame);
+        const hasSamples = !!decoded.samples && decoded.samples.length > 0;
+        const passed = hasHex && hasSamples;
+        
+        addResult('API fetch and decode', passed,
+          `Format: ${data.format}\nHas samples_hex: ${hasHex}\nDecoded samples count: ${decoded.samples ? decoded.samples.length : 0}\nFirst 10 samples: ${decoded.samples ? JSON.stringify(decoded.samples.slice(0, 10)) : 'N/A'}`);
+      } else {
+        addResult('API fetch and decode', false, 'No frames received');
+      }
+    } catch (e) {
+      addResult('API fetch and decode', false, `Error: ${e.message}\n${e.stack}`);
+    }
+    
+    // Test 4: Full ApiService integration
+    try {
+      const { ApiService } = await import('./js/modules/api.js');
+      const api = new ApiService();
+      const data = await api.getFrames();
+      
+      if (data.frames && data.frames.length > 0) {
+        const frame = data.frames[0];
+        const hasSamples = !!frame.samples && frame.samples.length > 0;
+        const noHex = !frame.samples_hex;
+        const passed = hasSamples && noHex;
+        
+        addResult('ApiService integration', passed,
+          `Frames count: ${data.frames.length}\nHas samples: ${hasSamples}\nSamples count: ${frame.samples ? frame.samples.length : 0}\nNo hex field: ${noHex}\nFirst 10 samples: ${frame.samples ? JSON.stringify(frame.samples.slice(0, 10)) : 'N/A'}`);
+      } else {
+        addResult('ApiService integration', false, 'No frames received from ApiService');
+      }
+    } catch (e) {
+      addResult('ApiService integration', false, `Error: ${e.message}\n${e.stack}`);
+    }
+  </script>
+</body>
+</html>

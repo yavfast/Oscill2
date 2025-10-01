@@ -1,8 +1,11 @@
+import { decodeFrameSamples } from './hexUtils.js';
+
 const API_BASE = '/api';
 
 export class ApiService {
   constructor() {
     this.lastSeq = null;
+    this.useHexFormat = true; // Use hex encoding for better performance
   }
 
   async getStatus() {
@@ -46,10 +49,29 @@ export class ApiService {
   }
 
   async getFrames(since = null) {
-    const params = since ? `?since=${since}` : '';
-    const response = await fetch(`${API_BASE}/frames${params}`);
+    const params = new URLSearchParams();
+    if (since !== null) params.set('since', since);
+    if (this.useHexFormat) params.set('format', 'hex');
+    
+    const queryString = params.toString();
+    const url = queryString ? `${API_BASE}/frames?${queryString}` : `${API_BASE}/frames`;
+    
+    const response = await fetch(url);
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const data = await response.json();
+    
+    // Decode hex-encoded samples back to arrays
+    if (data.format === 'hex' && data.frames) {
+      console.log('[API] Decoding', data.frames.length, 'hex frames');
+      data.frames = data.frames.map(frame => {
+        const decoded = decodeFrameSamples(frame);
+        if (!decoded.samples && frame.samples_hex) {
+          console.error('[API] Failed to decode frame:', frame);
+        }
+        return decoded;
+      });
+    }
+    
     if (data.frames && data.frames.length > 0) {
       this.lastSeq = data.newest_seq;
     }
