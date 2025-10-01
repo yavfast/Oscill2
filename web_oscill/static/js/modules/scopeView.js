@@ -621,14 +621,14 @@ export class ScopeView {
     const group = new Konva.Group({ x: 0, y: 0, draggable: true });
     const inner = () => this.getInnerRect();
     const color = '#ffd700'; // Yellow color like trigger marker
-    const markerX = inner().width;
-    const line = new Konva.Line({ name: 'lineVOff', points: [0, 0, markerX, 0], stroke: color, strokeWidth: 1, dash: [6, 4] });
-    const tri = new Konva.RegularPolygon({ name: 'triCY', x: markerX + 3, y: 0, sides: 3, radius: 6, fill: color });
-    tri.rotation(270);
-    const rect = new Konva.Rect({ name: 'rectCY', x: markerX + 6, y: -5, width: 10, height: 10, fill: color, stroke: color, strokeWidth: 1 });
-    const text = new Konva.Text({ name: 'textCY', x: markerX + 7, y: -4, text: '0', fontSize: 10, fill: '#000000', fontFamily: 'system-ui, -apple-system, Segoe UI, Roboto, Arial' });
+    const markerX = 0; // Start from left side
+    const line = new Konva.Line({ name: 'lineVOff', points: [0, 0, inner().width, 0], stroke: color, strokeWidth: 1, dash: [6, 4] });
+    const tri = new Konva.RegularPolygon({ name: 'triCY', x: -3, y: 0, sides: 3, radius: 6, fill: color });
+    tri.rotation(90); // Point to the left
+    const rect = new Konva.Rect({ name: 'rectCY', x: -16, y: -5, width: 10, height: 10, fill: color, stroke: color, strokeWidth: 1 });
+    const text = new Konva.Text({ name: 'textCY', x: -15, y: -4, text: '0', fontSize: 10, fill: '#000000', fontFamily: 'system-ui, -apple-system, Segoe UI, Roboto, Arial' });
     group.add(line, tri, rect, text);
-    group.on('draw', () => { const r = inner(); const mx = r.width - 30; line.points([0, 0, mx, 0]); tri.x(mx); rect.x(mx + 6); text.x(mx + 8); });
+    group.on('draw', () => { const r = inner(); line.points([0, 0, r.width, 0]); });
     group.dragBoundFunc((pos) => { const r = inner(); const y = Math.max(r.top, Math.min(r.top + r.height, pos.y)); return { x: r.left, y }; });
     group.on('mouseenter', () => { this.stage.container().style.cursor = 'ns-resize'; });
     group.on('mouseleave', () => { this.stage.container().style.cursor = 'default'; });
