@@ -33,6 +33,11 @@ export class ScopeView {
 
     this.lastFrames = null;
     this.lastConfig = null;
+    this.currentVOffsetRaw = 128;
+    this.currentTOffsetRaw = 128;
+    this.vAxisValueVolts = 0;
+  this.tAxisPositionSeconds = 0;
+  this.tAxisLabelSeconds = 0;
 
     this.totalDivsX = 10;
     this.totalDivsY = 8;
@@ -126,6 +131,13 @@ export class ScopeView {
     this._updatePeakArea(peakMin, peakMax, sampleBits, totalTime, totalVoltage, toX, toY);
     this.waveLine.points(points);
     this.waveLayer.batchDraw();
+
+    const currentTriggerLevel = this.isDraggingTrigger ? this.tempTriggerLevel : this.triggerLevel;
+    const trigYVolt = this.triggerLevelToVoltage(currentTriggerLevel, totalVoltage);
+    this._positionTriggerGroup(toY(trigYVolt));
+    this._positionCenterYGroup(toY(this.vAxisValueVolts));
+    this._positionCenterXGroup(toX(this.tAxisPositionSeconds));
+  this._updateAxisMarkersText();
   }
 
   triggerLevelToVoltage(level, totalVoltage) { return ((level - 128) / 128) * (totalVoltage / 2); }
@@ -154,6 +166,31 @@ export class ScopeView {
 
     const sampleBits = Math.max(1, latestFrame.sample_bits || 8);
 
+    if (config) {
+      if (config.v_offset !== undefined) {
+        const entry = config.v_offset;
+        let raw = this.currentVOffsetRaw;
+        if (typeof entry === 'number') {
+          raw = entry;
+        } else if (entry && typeof entry === 'object') {
+          if (typeof entry.v === 'number') raw = entry.v;
+          else if (typeof entry.raw === 'number') raw = entry.raw;
+        }
+        this.currentVOffsetRaw = Math.max(0, Math.min(0xFF, Math.round(raw)));
+      }
+      if (config.t_offset !== undefined) {
+        const entry = config.t_offset;
+        let raw = this.currentTOffsetRaw;
+        if (typeof entry === 'number') {
+          raw = entry;
+        } else if (entry && typeof entry === 'object') {
+          if (typeof entry.v === 'number') raw = entry.v;
+          else if (typeof entry.raw === 'number') raw = entry.raw;
+        }
+        this.currentTOffsetRaw = Math.max(0, Math.min(0xFFFF, Math.round(raw)));
+      }
+    }
+
     const frameCfgId = latestFrame.cfg_id;
     if (
       frameCfgId !== undefined && frameCfgId !== null &&
@@ -175,6 +212,21 @@ export class ScopeView {
     const totalVoltage = vDiv * this.totalDivsY;
     this.xRange = [-totalTime / 2, totalTime / 2];
     this.yRange = [-totalVoltage / 2, totalVoltage / 2];
+    const vAxisVolt = ((this.currentVOffsetRaw - 128) / 128) * (totalVoltage / 2);
+    this.vAxisValueVolts = Number.isFinite(vAxisVolt) ? vAxisVolt : 0;
+    const count = samples.length;
+    const nominalSamples = (config && typeof config.samples_total === 'number' && config.samples_total > 1)
+      ? Math.round(config.samples_total)
+      : Math.max(count, 2);
+    const denom = Math.max(1, nominalSamples - 1);
+    const rawOffset = Number.isFinite(this.currentTOffsetRaw) ? this.currentTOffsetRaw : 0;
+    const clampedTOffset = Math.max(0, Math.min(rawOffset, denom));
+    const fraction = denom > 0 ? clampedTOffset / denom : 0;
+    const syncCoordSeconds = this.xRange[0] + fraction * totalTime;
+    const offsetSeconds = fraction * totalTime;
+    this.tAxisPositionSeconds = Number.isFinite(syncCoordSeconds) ? syncCoordSeconds : this.xRange[0];
+    this.tAxisLabelSeconds = Number.isFinite(offsetSeconds) ? offsetSeconds : 0;
+
 
     // Grid
     this.drawGrid();
@@ -192,8 +244,8 @@ export class ScopeView {
 
     // Waveform
     const points = [];
-    for (let i = 0; i < samples.length; i++) {
-      const time = (i / samples.length) * totalTime - totalTime / 2; // do not apply tOffset visually
+    for (let i = 0; i < count; i++) {
+      const time = (i / count) * totalTime - totalTime / 2; // do not apply tOffset visually
       const voltage = this.sampleToVoltage(samples[i], sampleBits, totalVoltage);
       points.push(toX(time), toY(voltage));
     }
@@ -206,8 +258,9 @@ export class ScopeView {
     const currentTriggerLevel = this.isDraggingTrigger ? this.tempTriggerLevel : this.triggerLevel;
     const trigYVolt = this.triggerLevelToVoltage(currentTriggerLevel, totalVoltage);
     this._positionTriggerGroup(toY(trigYVolt));
-    this._positionCenterYGroup(toY(0));
-    this._positionCenterXGroup(toX(0));
+  this._positionCenterYGroup(toY(this.vAxisValueVolts));
+  this._positionCenterXGroup(toX(this.tAxisPositionSeconds));
+    this._updateAxisMarkersText();
   }
 
   _updatePeakArea(peakMin, peakMax, sampleBits, totalTime, totalVoltage, toX, toY) {
@@ -294,8 +347,11 @@ export class ScopeView {
       const totalVoltage = this.yRange[1] - this.yRange[0];
       const trigYVolt = this.triggerLevelToVoltage(this.isDraggingTrigger ? this.tempTriggerLevel : this.triggerLevel, totalVoltage);
       this._positionTriggerGroup(this.dataToYPixel(trigYVolt));
-      this._positionCenterYGroup(this.dataToYPixel(0));
-      this._positionCenterXGroup(this.dataToXPixel(0));
+  const axisVolt = Number.isFinite(this.vAxisValueVolts) ? this.vAxisValueVolts : 0;
+  const axisTime = Number.isFinite(this.tAxisPositionSeconds) ? this.tAxisPositionSeconds : 0;
+      this._positionCenterYGroup(this.dataToYPixel(axisVolt));
+      this._positionCenterXGroup(this.dataToXPixel(axisTime));
+      this._updateAxisMarkersText();
     }
     this.redrawWave();
   }
@@ -339,6 +395,13 @@ export class ScopeView {
     this._updatePeakArea(peakMin, peakMax, sampleBits, totalTime, totalVoltage, toX, toY);
     this.waveLine.points(points);
     this.waveLayer.batchDraw();
+
+    const currentTriggerLevel = this.isDraggingTrigger ? this.tempTriggerLevel : this.triggerLevel;
+    const trigYVolt = this.triggerLevelToVoltage(currentTriggerLevel, totalVoltage);
+    this._positionTriggerGroup(toY(trigYVolt));
+    this._positionCenterYGroup(toY(this.vAxisValueVolts));
+    this._positionCenterXGroup(toX(this.tAxisPositionSeconds));
+    this._updateAxisMarkersText();
   }
 
   triggerLevelToVoltage(level, totalVoltage) { return ((level - 128) / 128) * (totalVoltage / 2); }
@@ -486,24 +549,107 @@ export class ScopeView {
   _createCenterYGroup() {
     const group = new Konva.Group({ x: 0, y: 0 });
     const inner = () => this.getInnerRect();
-    const line = new Konva.Line({ name: 'lineCY', points: [0, 0, inner().width, 0], stroke: '#00bcd4', strokeWidth: 1, dash: [4, 4] });
-    const tri = new Konva.RegularPolygon({ name: 'triCY', x: inner().width - Math.max(8, inner().width * 0.02), y: 0, sides: 3, radius: Math.max(5, inner().height * 0.011), fill: '#00bcd4' });
+    const color = '#00bcd4';
+    const tri = new Konva.RegularPolygon({ name: 'triCY', x: inner().width * 0.9, y: 0, sides: 3, radius: Math.max(6, inner().height * 0.012), fill: color, listening: false });
     tri.rotation(90);
-    group.add(line, tri);
-    group.on('draw', () => { const r = inner(); line.points([0, 0, r.width, 0]); tri.x(r.width - Math.max(8, r.width * 0.02)); tri.radius(Math.max(5, r.height * 0.011)); });
+    const rect = new Konva.Rect({ name: 'rectCY', x: tri.x() + 10, y: -10, width: 70, height: 20, cornerRadius: 4, fill: color, opacity: 0.85, listening: false });
+    const text = new Konva.Text({
+      name: 'textCY',
+      x: rect.x(),
+      y: rect.y() + 3,
+      width: rect.width(),
+      align: 'center',
+      text: 'Voff 0',
+      fontSize: 11,
+      fill: '#0d0d0d',
+      fontFamily: 'system-ui, -apple-system, Segoe UI, Roboto, Arial',
+      listening: false,
+    });
+    group.add(tri, rect, text);
+    group.on('draw', () => {
+      const r = inner();
+      const triRadius = Math.max(6, r.height * 0.012);
+      tri.radius(triRadius);
+      const triX = r.width - triRadius - 12;
+      tri.x(triX);
+      const rectNode = rect;
+      rectNode.y(-rectNode.height() / 2);
+      rectNode.x(triX + triRadius + 8);
+      text.x(rectNode.x());
+      text.y(rectNode.y() + 3);
+      text.width(rectNode.width());
+    });
     return group;
   }
 
   _positionCenterYGroup(yPix) { if (!this.centerYGroup) return; const r = this.getInnerRect(); this.centerYGroup.position({ x: r.left, y: yPix }); this.overlayLayer.batchDraw(); }
 
+  _updateAxisMarkersText() {
+    if (this.centerYGroup) {
+      const textNode = this.centerYGroup.findOne('.textCY');
+      const rectNode = this.centerYGroup.findOne('.rectCY');
+      if (textNode) {
+        const raw = Number.isFinite(this.currentVOffsetRaw) ? this.currentVOffsetRaw : 0;
+        const displayVolt = Number.isFinite(this.vAxisValueVolts) ? this.vAxisValueVolts : 0;
+        textNode.text(`Voff ${raw} (${formatVoltsAxis(displayVolt)})`);
+        if (rectNode) {
+          const desiredWidth = Math.max(70, textNode.getTextWidth() + 16);
+          rectNode.width(desiredWidth);
+          textNode.width(desiredWidth);
+        }
+      }
+    }
+    if (this.centerXGroup) {
+      const textNode = this.centerXGroup.findOne('.textCX');
+      const rectNode = this.centerXGroup.findOne('.rectCX');
+      if (textNode) {
+        const raw = Number.isFinite(this.currentTOffsetRaw) ? this.currentTOffsetRaw : 0;
+        const displayTime = Number.isFinite(this.tAxisLabelSeconds) ? this.tAxisLabelSeconds : 0;
+        textNode.text(`Toff ${raw} (${formatSecondsAxis(displayTime)})`);
+        if (rectNode) {
+          const desiredWidth = Math.max(70, textNode.getTextWidth() + 16);
+          rectNode.width(desiredWidth);
+          textNode.width(desiredWidth);
+        }
+      }
+    }
+    if (this.overlayLayer) this.overlayLayer.batchDraw();
+  }
+
   _createCenterXGroup() {
     const group = new Konva.Group({ x: 0, y: 0 });
     const inner = () => this.getInnerRect();
-    const line = new Konva.Line({ name: 'lineCX', points: [0, 0, 0, inner().height], stroke: '#e91e63', strokeWidth: 1, dash: [4, 4] });
-    const tri = new Konva.RegularPolygon({ name: 'triCX', x: 0, y: Math.max(10, inner().height * 0.05), sides: 3, radius: Math.max(5, inner().height * 0.011), fill: '#e91e63' });
+    const color = '#e91e63';
+    const tri = new Konva.RegularPolygon({ name: 'triCX', x: 0, y: Math.max(12, inner().height * 0.08), sides: 3, radius: Math.max(6, inner().height * 0.012), fill: color, listening: false });
     tri.rotation(180);
-    group.add(line, tri);
-    group.on('draw', () => { const r = inner(); line.points([0, 0, 0, r.height]); tri.y(Math.max(10, r.height * 0.05)); tri.radius(Math.max(5, r.height * 0.011)); });
+    const rect = new Konva.Rect({ name: 'rectCX', x: -35, y: tri.y() - tri.radius() - 24, width: 70, height: 20, cornerRadius: 4, fill: color, opacity: 0.85, listening: false });
+    const text = new Konva.Text({
+      name: 'textCX',
+      x: rect.x(),
+      y: rect.y() + 3,
+      width: rect.width(),
+      align: 'center',
+      text: 'Toff 0',
+      fontSize: 11,
+      fill: '#0d0d0d',
+      fontFamily: 'system-ui, -apple-system, Segoe UI, Roboto, Arial',
+      listening: false,
+    });
+    group.add(tri, rect, text);
+    group.on('draw', () => {
+      const r = inner();
+      const triRadius = Math.max(6, r.height * 0.012);
+      tri.radius(triRadius);
+      const triY = Math.max(triRadius + 8, Math.min(r.height - triRadius - 8, triRadius + 24));
+      tri.y(triY);
+      const rectNode = rect;
+      rectNode.width(rectNode.width());
+      rectNode.x(-rectNode.width() / 2);
+      rectNode.y(triY - triRadius - rectNode.height() - 6);
+      text.x(rectNode.x());
+      text.y(rectNode.y() + 3);
+      text.width(rectNode.width());
+    });
     return group;
   }
 

@@ -118,11 +118,13 @@ class DeviceService:
             cli.set_trigger_level(128)
             # Samples per div and total QS; choose 10 divs * min(64, QSh/10)
             # Ensure QS sane
-            cli.ensure_qs()
+            total_samples = cli.ensure_qs()
             # Timebase 5 ms/div
             cli.set_time_div_ms(5)
-            # Sample offset (TC) center 0 and samples offset P (SamplesOffset) equivalent → use TC=0
-            cli.set_samples_offset(0)
+            # Center the sweep offset so the trigger is in the middle of the displayed window.
+            center_offset = total_samples // 2 if isinstance(total_samples, int) and total_samples > 0 else 0
+            center_offset = max(0, min(0xFFFF, center_offset))
+            cli.set_samples_offset(center_offset)
             # Calibrate at the end
             cli.calibrate()
             self._client = cli
@@ -424,6 +426,13 @@ class DeviceService:
             cfg["t_delay"] = c.get_reg_4('TD', signed=False)
         except Exception:
             cfg["t_delay"] = 0
+        try:
+            total_samples = c.get_reg_2('QS', signed=False)
+        except Exception:
+            samples_per_div = cfg.get("samples_per_div", 32)
+            horiz_divs = getattr(c, 'H_DIVS', 10)
+            total_samples = samples_per_div * horiz_divs
+        cfg["samples_total"] = max(0, int(total_samples))
         # Static geometry info for UI
         try:
             cfg["samples_per_div"] = getattr(c, 'SAMPLES_PER_DIV', 32)
