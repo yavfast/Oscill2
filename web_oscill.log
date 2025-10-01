@@ -1,0 +1,31 @@
+INFO:     Started server process [45283]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:8000 (Press CTRL+C to quit)
+INFO:     127.0.0.1:41936 - "GET /api/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41936 - "GET /api/frames HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41936 - "GET /api/frames HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41936 - "GET /api/frames?since=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41936 - "GET /api/frames?since=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41936 - "GET /api/frames?since=6 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41936 - "GET /api/frames?since=7 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41936 - "GET /api/frames?since=8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41936 - "GET /api/frames?since=9 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41936 - "GET /api/frames?since=10 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41936 - "GET /api/frames?since=11 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41936 - "GET /api/frames?since=12 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41936 - "GET /api/frames?since=13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41936 - "GET /api/frames?since=14 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41936 - "GET /api/frames?since=15 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41936 - "GET /api/frames?since=16 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41936 - "GET /api/frames?since=17 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41936 - "GET /api/frames?since=18 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41936 - "GET /api/frames?since=19 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:43734 - "GET /api/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:43734 - "GET /api/frames?since=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:43734 - "GET /api/frames?since=21 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:43734 - "GET /api/frames?since=22 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:43734 - "GET /api/frames?since=23 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:43734 - "GET /api/frames?since=24 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41936 - "POST /api/acquisition/stop HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41936 - "GET /api/status HTTP/1.1" 200 OK
