@@ -137,13 +137,11 @@ export class ScopeView {
     this.waveLayer.batchDraw();
 
     const currentTriggerLevel = this.isDraggingTrigger ? this.tempTriggerLevel : this.triggerLevel;
-    const trigYVolt = this.triggerLevelToVoltage(currentTriggerLevel, totalVoltage);
-    this._positionTriggerGroup(toY(trigYVolt));
+    const trigYPix = this.triggerLevelToYPixel(currentTriggerLevel);
+    this._positionTriggerGroup(trigYPix);
     this._positionCenterYGroup(toY(this.vAxisValueVolts));
     this._positionCenterXGroup(toX(this.tAxisPositionSeconds));
   }
-
-  triggerLevelToVoltage(level, totalVoltage) { return ((level - 128) / 128) * (totalVoltage / 2); }
 
   update(frames, config) {
     if (!frames || frames.length === 0) return;
@@ -257,8 +255,8 @@ export class ScopeView {
 
     // Overlays - update positions only if not dragging
     const currentTriggerLevel = this.isDraggingTrigger ? this.tempTriggerLevel : this.triggerLevel;
-    const trigYVolt = this.triggerLevelToVoltage(currentTriggerLevel, totalVoltage);
-    this._positionTriggerGroup(toY(trigYVolt));
+    const trigYPix = this.triggerLevelToYPixel(currentTriggerLevel);
+    this._positionTriggerGroup(trigYPix);
     
     // Don't reposition v_offset marker if user is dragging it
     if (!this.isDraggingVOffset) {
@@ -315,11 +313,9 @@ export class ScopeView {
   setTriggerLevel(level) {
     if (this.isDraggingTrigger) { this.pendingApply = level; return; }
     this.triggerLevel = level; this.tempTriggerLevel = level;
-    if (this.yRange) {
-      const totalVoltage = this.yRange[1] - this.yRange[0];
-      const yVolt = this.triggerLevelToVoltage(level, totalVoltage);
-      this._positionTriggerGroup(this.dataToYPixel(yVolt));
-    }
+    // trigger_level - абсолютне значення 0-255, конвертуємо безпосередньо в Y-координату
+    const yPix = this.triggerLevelToYPixel(level);
+    this._positionTriggerGroup(yPix);
   }
 
   setTriggerLevelChangeCallback(callback) { this.onTriggerLevelChange = callback; }
@@ -374,6 +370,33 @@ export class ScopeView {
     return Math.max(0, Math.min(255, raw));
   }
 
+  triggerLevelToYPixel(level) {
+    // Конвертує trigger_level (0-255) в Y-координату на екрані
+    // trigger_level - абсолютне значення, не залежить від діапазону напруги
+    // 0 = top екрану, 255 = bottom екрану, 128 = center
+    if (!this.stage) return 0;
+    const r = this.getInnerRect();
+    
+    // level = 0 -> top, level = 255 -> bottom
+    const normalized = level / 255;
+    const yPix = r.top + normalized * r.height;
+    
+    return yPix;
+  }
+
+  yPixelToTriggerLevel(yPix) {
+    // Конвертує Y-координату в trigger_level (0-255)
+    // Аналогічно до yPixelToVOffset
+    if (!this.stage) return 128;
+    const r = this.getInnerRect();
+    const clamped = Math.max(r.top, Math.min(r.top + r.height, yPix));
+    
+    const screenPosNormalized = (clamped - r.top) / Math.max(1, r.height);
+    const raw = Math.round(screenPosNormalized * 255);
+    
+    return Math.max(0, Math.min(255, raw));
+  }
+
   xPixelToTOffset(xPix) {
     // Конвертує X-координату в значення t_offset
     if (!this.xRange || !this.stage || !this.lastConfig) return 128;
@@ -402,9 +425,9 @@ export class ScopeView {
     this.stage.size({ width, height });
     this.drawGrid();
     if (this.xRange && this.yRange) {
-      const totalVoltage = this.yRange[1] - this.yRange[0];
-      const trigYVolt = this.triggerLevelToVoltage(this.isDraggingTrigger ? this.tempTriggerLevel : this.triggerLevel, totalVoltage);
-      this._positionTriggerGroup(this.dataToYPixel(trigYVolt));
+      const currentTriggerLevel = this.isDraggingTrigger ? this.tempTriggerLevel : this.triggerLevel;
+      const trigYPix = this.triggerLevelToYPixel(currentTriggerLevel);
+      this._positionTriggerGroup(trigYPix);
       const axisVolt = Number.isFinite(this.vAxisValueVolts) ? this.vAxisValueVolts : 0;
       const axisTime = Number.isFinite(this.tAxisPositionSeconds) ? this.tAxisPositionSeconds : 0;
       this._positionCenterYGroup(this.dataToYPixel(axisVolt));
@@ -457,9 +480,11 @@ export class ScopeView {
     this.waveLine.points(points);
     this.waveLayer.batchDraw();
 
-    const currentTriggerLevel = this.isDraggingTrigger ? this.tempTriggerLevel : this.triggerLevel;
-    const trigYVolt = this.triggerLevelToVoltage(currentTriggerLevel, totalVoltage);
-    this._positionTriggerGroup(toY(trigYVolt));
+    // Don't reposition trigger marker if user is dragging it
+    if (!this.isDraggingTrigger) {
+      const trigYPix = this.triggerLevelToYPixel(this.triggerLevel);
+      this._positionTriggerGroup(trigYPix);
+    }
     
     // Don't reposition v_offset marker if user is dragging it
     if (!this.isDraggingVOffset) {
@@ -471,8 +496,6 @@ export class ScopeView {
       this._positionCenterXGroup(toX(this.tAxisPositionSeconds));
     }
   }
-
-  triggerLevelToVoltage(level, totalVoltage) { return ((level - 128) / 128) * (totalVoltage / 2); }
 
   sampleToVoltage(sample, sampleBits, totalVoltage, vOffsetVolts = 0) {
     // Як в OscillData.java: vData[idx] = vMin + (data[idx] * vStep)
@@ -606,10 +629,13 @@ export class ScopeView {
     group.on('mouseenter', () => { this.stage.container().style.cursor = 'ns-resize'; });
     group.on('mouseleave', () => { this.stage.container().style.cursor = 'default'; });
     group.on('dragstart', () => { this.isDraggingTrigger = true; this.tempTriggerLevel = this.triggerLevel; });
-    group.on('dragmove', () => { const yPix = group.y(); this.tempTriggerLevel = this.yPixelToLevel(yPix); });
+    group.on('dragmove', () => { const yPix = group.y(); this.tempTriggerLevel = this.yPixelToTriggerLevel(yPix); });
     group.on('dragend', () => {
-      this.isDraggingTrigger = false; this.triggerLevel = this.tempTriggerLevel;
-      if (this.onTriggerLevelChange) this.onTriggerLevelChange(this.triggerLevel);
+      this.isDraggingTrigger = false; 
+      const yPix = group.y();
+      const newTriggerLevel = this.yPixelToTriggerLevel(yPix);
+      this.triggerLevel = newTriggerLevel;
+      if (this.onTriggerLevelChange) this.onTriggerLevelChange(newTriggerLevel);
       if (this.pendingApply !== null) { this.setTriggerLevel(this.pendingApply); this.pendingApply = null; }
     });
     return group;
