@@ -47,10 +47,21 @@ class ConnectReq(BaseModel):
     baud: int = 115200
 
 @app.post("/api/connect")
-def api_connect(req: ConnectReq):
+def api_connect(req: Optional[ConnectReq] = None):
+    """
+    Connect to device or ensure connection.
+    If port is specified, explicitly connect to that port.
+    If port is None/not specified, use ensure_connected (auto-detect).
+    """
     global client
     try:
-        res = service.connect(req.port, req.baud)
+        if req and req.port:
+            # Explicit connection to specified port
+            res = service.connect(req.port, req.baud)
+        else:
+            # Auto-connect if needed
+            baud = req.baud if req else 115200
+            res = service.ensure_connected(port=None, baud=baud)
         # expose client for legacy handlers during migration
         client = service._client
         return res
@@ -273,20 +284,22 @@ def api_frames(since: Optional[int] = None, limit: int = 128, format: str = "hex
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.post("/api/acquisition/start")
-def api_acquisition_start():
+@app.post("/api/start")
+def api_start():
+    """Start data acquisition."""
     if not service._client:
         raise HTTPException(status_code=400, detail="Not connected")
     try:
-        res = service.start_acquisition()
+        res = service.start()
         return res
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.post("/api/acquisition/stop")
-def api_acquisition_stop():
+@app.post("/api/stop")
+def api_stop():
+    """Stop data acquisition."""
     try:
-        res = service.stop_acquisition()
+        res = service.stop()
         return res
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

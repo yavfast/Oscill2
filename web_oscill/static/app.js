@@ -49,17 +49,90 @@ class App {
       this.scopeView.setTriggerLevel(level);
     });
     
-    // Try to get initial status
+    // Auto-connect and initialize on page load
+    await this.autoConnectAndStart();
+  }
+
+  async autoConnectAndStart() {
+    console.log('[App] Auto-connecting on page load...');
+    
     try {
-      const status = await this.api.getStatus();
-      this.updateStatus(status);
+      // 1. Try to connect (will auto-detect device or return current status if already connected)
+      const connectResult = await this.api.connect();
+      console.log('[App] Connect result:', connectResult);
       
-      // Start frame polling if device is connected and acquiring
-      if (status?.is_connected && status?.is_acquiring) {
+      if (connectResult.status === 'ok' && connectResult.is_connected) {
+        this.isDeviceConnected = true;
+        
+        // 2. Apply saved configuration (if any)
+        const savedConfig = this.loadSavedConfig();
+        if (savedConfig && Object.keys(savedConfig).length > 0) {
+          console.log('[App] Applying saved config:', savedConfig);
+          try {
+            await this.api.applyConfig(savedConfig);
+          } catch (e) {
+            console.warn('[App] Failed to apply saved config:', e);
+          }
+        }
+        
+        // 3. Get current status to update UI
+        const status = await this.api.getStatus();
+        this.updateStatus(status);
+        
+        // 4. Automatically start acquisition
+        console.log('[App] Starting acquisition...');
+        await this.api.start();
+        this.isRunning = true;
+        this.controlPanel.setAcquisitionState('run');
+        
+        // 5. Start polling for frames
         this.startPolling();
+        
+        console.log('[App] Auto-connect and start complete');
+      } else {
+        console.log('[App] Device not connected, manual connection required');
+        // Try to get status anyway
+        try {
+          const status = await this.api.getStatus();
+          this.updateStatus(status);
+        } catch (e) {
+          console.log('[App] Status check failed:', e);
+        }
       }
     } catch (e) {
-      console.log('Initial status check failed:', e);
+      console.error('[App] Auto-connect failed:', e);
+      // Still try to get status
+      try {
+        const status = await this.api.getStatus();
+        this.updateStatus(status);
+      } catch (statusErr) {
+        console.log('[App] Status check failed:', statusErr);
+      }
+    }
+  }
+
+  loadSavedConfig() {
+    // Load configuration from localStorage
+    try {
+      const saved = localStorage.getItem('oscill_config');
+      if (saved) {
+        const config = JSON.parse(saved);
+        console.log('[App] Loaded saved config from localStorage');
+        return config;
+      }
+    } catch (e) {
+      console.warn('[App] Failed to load saved config:', e);
+    }
+    return null;
+  }
+
+  saveConfig(config) {
+    // Save configuration to localStorage
+    try {
+      localStorage.setItem('oscill_config', JSON.stringify(config));
+      console.log('[App] Saved config to localStorage');
+    } catch (e) {
+      console.warn('[App] Failed to save config:', e);
     }
   }
 
@@ -147,7 +220,7 @@ class App {
     let didStart = false;
 
     try {
-      await this.api.startAcquisition();
+      await this.api.start();
       didStart = true;
       this.isRunning = true;
       this.controlPanel.setAcquisitionState('run');
@@ -185,7 +258,7 @@ class App {
     } finally {
       if (didStart) {
         try {
-          await this.api.stopAcquisition();
+          await this.api.stop();
         } catch (e) {
           console.error('Stop acquisition error:', e);
         }
@@ -255,6 +328,9 @@ class App {
         }
         this.controlPanel.updateControls(response.config);
         this.statusBar.updateStatus(null, response.config);
+        
+        // Save the updated configuration to localStorage
+        this.saveConfig(changes);
       }
       
       // Request one frame to update interface
@@ -286,11 +362,11 @@ class App {
     if (action === 'run') {
       this.isRunning = true;
       // Start acquisition on server
-      this.api.startAcquisition().catch(e => console.error('Start acquisition error:', e));
+      this.api.start().catch(e => console.error('Start acquisition error:', e));
     } else if (action === 'stop') {
       this.isRunning = false;
       // Stop acquisition on server
-      this.api.stopAcquisition().catch(e => console.error('Stop acquisition error:', e));
+      this.api.stop().catch(e => console.error('Stop acquisition error:', e));
     } else if (action === 'single') {
       this.acquireSingleFrame();
     }

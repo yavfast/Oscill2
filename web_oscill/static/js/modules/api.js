@@ -78,14 +78,20 @@ export class ApiService {
     return data;
   }
 
-  async connect(port = 'auto', baud = 115200) {
+  async connect(port = null, baud = 115200) {
+    const body = port ? { port, baud } : {};
     const response = await fetch(`${API_BASE}/connect`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ port, baud })
+      body: JSON.stringify(body)
     });
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     return await response.json();
+  }
+
+  async ensureConnected() {
+    // Alias for connect() without parameters - auto-connects if needed
+    return this.connect();
   }
 
   async disconnect() {
@@ -96,16 +102,16 @@ export class ApiService {
     return await response.json();
   }
 
-  async startAcquisition() {
-    const response = await fetch(`${API_BASE}/acquisition/start`, {
+  async start() {
+    const response = await fetch(`${API_BASE}/start`, {
       method: 'POST'
     });
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     return await response.json();
   }
 
-  async stopAcquisition() {
-    const response = await fetch(`${API_BASE}/acquisition/stop`, {
+  async stop() {
+    const response = await fetch(`${API_BASE}/stop`, {
       method: 'POST'
     });
     if (!response.ok) throw new Error(`HTTP ${response.status}`);

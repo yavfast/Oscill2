@@ -3,6 +3,7 @@ import logging
 import time
 from collections import deque
 from typing import Any, Deque, Dict, List, Optional, Tuple
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeoutError
 
 import sys
 import os
@@ -67,9 +68,16 @@ class DeviceService:
         self._cfg_id: int = 0  # Configuration ID for tracking config changes
         self._is_connected = False
         self._is_acquiring = False
+        # Cached configuration to avoid querying device on every status request
+        self._cached_config: Dict[str, Any] = {}
+        self._config_lock = threading.Lock()
+        # Single-threaded executor for serializing all device commands with timeout
+        self._device_executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="device-cmd")
+        self._device_timeout = 5.0  # 5 seconds timeout for device operations
 
     # ---------------- Device lifecycle ----------------
-    def connect(self, port: Optional[str] = None, baud: int = 115200) -> Dict[str, Any]:
+    def _connect_internal(self, port: Optional[str], baud: int) -> Dict[str, Any]:
+        """Internal connect method that runs in executor."""
         with self._dev_lock:
             # Close any existing connection
             self._stop_acquisition_locked()
@@ -132,9 +140,23 @@ class DeviceService:
             # Start acquisition automatically after successful connection
             self._start_acquisition_locked()
             self._is_acquiring = True
-            return {"status": "ok", "port": port, **self._safe_status_locked()}
+            # Snapshot config after connect
+            cfg = self._snapshot_config_locked()
+            return {"status": "ok", "port": port, "config": cfg, "cfg_id": self._cfg_id, "is_connected": self._is_connected, "is_acquiring": self._is_acquiring}
 
-    def disconnect(self) -> Dict[str, Any]:
+    def connect(self, port: Optional[str] = None, baud: int = 115200) -> Dict[str, Any]:
+        """Connect to device via executor with timeout."""
+        try:
+            future = self._device_executor.submit(self._connect_internal, port, baud)
+            return future.result(timeout=self._device_timeout)
+        except FutureTimeoutError:
+            raise TimeoutError(f"Connection timed out after {self._device_timeout}s")
+        except Exception as e:
+            self._log.error(f"Connect failed: {e}")
+            raise
+
+    def _disconnect_internal(self) -> Dict[str, Any]:
+        """Internal disconnect method that runs in executor."""
         with self._dev_lock:
             self._stop_acquisition_locked()
             if self._client:
@@ -148,42 +170,74 @@ class DeviceService:
         with self._frames_lock:
             self._frames.clear()
             self._seq = 0
+        # Clear cached config
+        self._update_cached_config({})
         return {"status": "ok"}
 
+    def disconnect(self) -> Dict[str, Any]:
+        """Disconnect from device via executor with timeout."""
+        try:
+            future = self._device_executor.submit(self._disconnect_internal)
+            return future.result(timeout=self._device_timeout)
+        except FutureTimeoutError:
+            raise TimeoutError(f"Disconnect timed out after {self._device_timeout}s")
+        except Exception as e:
+            self._log.error(f"Disconnect failed: {e}")
+            raise
+
     # ---------------- Public API (synchronous) ----------------
-    def get_status(self) -> Dict[str, Any]:
-        with self._dev_lock:
-            if not self._client:
-                # Try to autoconnect silently
-                try:
-                    port = OscillClient.auto_find_port()
-                    if port:
-                        self.connect(port)
-                except Exception:
-                    pass
-            if not self._client:
-                return {"status": "disconnected", "is_connected": False, "is_acquiring": False}
-            try:
-                config = self._snapshot_config_locked()
-                return {"status": "ok", "config": config, "cfg_id": self._cfg_id, "is_connected": self._is_connected, "is_acquiring": self._is_acquiring}
-            except Exception as e:
-                return {"status": "error", "message": str(e), "is_connected": self._is_connected, "is_acquiring": self._is_acquiring}
-
-    def apply_config(self, changes: Dict[str, Any]) -> Tuple[Dict[str, Any], List[str]]:
+    def ensure_connected(self, port: Optional[str] = None, baud: int = 115200) -> Dict[str, Any]:
         """
-        Apply requested config atomically and return new status plus warnings.
+        Ensure device is connected. If not connected, attempt to connect.
+        If already connected, return current status.
+        
+        Args:
+            port: Port to connect to (None for auto-detect)
+            baud: Baud rate (default: 115200)
+            
+        Returns:
+            Status dict with connection info
+        """
+        if self._is_connected and self._client:
+            return self.get_status()
+        
+        # Not connected, attempt connection
+        try:
+            return self.connect(port, baud)
+        except Exception as e:
+            self._log.warning(f"Auto-connect failed: {e}")
+            return {"status": "disconnected", "is_connected": False, "is_acquiring": False, "error": str(e)}
 
-                Supported keys include:
-                    - v_div, t_div: structured {v, u} values for vertical/time divisions
-                    - v_offset, t_offset: raw 0..255 offsets
-                    - trigger_level: integer 0..255
-                    - trigger_mode: legacy raw register value (optional)
-                    - trigger_slope: "rising", "falling", "both", "none"
-                    - coupling: "DC", "AC", "GND"
-                    - filter_high, filter_low: booleans for hardware filters
-                    - sw_mode: processing mode ("normal", "avg", "avg_hires", "peak", ...)
-                    - sync_type: acquisition sync type ("auto", "wait_timeout", "free", "wait")
-                    - sync_front, sync_back: booleans enabling trigger edges
+    def get_status(self) -> Dict[str, Any]:
+        """Get status from cached configuration without querying device."""
+        if not self._is_connected or not self._client:
+            return {"status": "disconnected", "is_connected": False, "is_acquiring": False}
+        
+        # Return cached config instead of querying device
+        config = self._get_cached_config()
+        return {
+            "status": "ok", 
+            "config": config, 
+            "cfg_id": self._cfg_id, 
+            "is_connected": self._is_connected, 
+            "is_acquiring": self._is_acquiring
+        }
+
+    def _apply_config_internal(self, changes: Dict[str, Any]) -> Tuple[Dict[str, Any], List[str]]:
+        """
+        Internal apply config method that runs in executor.
+        
+        Supported keys include:
+            - v_div, t_div: structured {v, u} values for vertical/time divisions
+            - v_offset, t_offset: raw 0..255 offsets
+            - trigger_level: integer 0..255
+            - trigger_mode: legacy raw register value (optional)
+            - trigger_slope: "rising", "falling", "both", "none"
+            - coupling: "DC", "AC", "GND"
+            - filter_high, filter_low: booleans for hardware filters
+            - sw_mode: processing mode ("normal", "avg", "avg_hires", "peak", ...)
+            - sync_type: acquisition sync type ("auto", "wait_timeout", "free", "wait")
+            - sync_front, sync_back: booleans enabling trigger edges
         """
         warnings: List[str] = []
         with self._dev_lock:
@@ -321,11 +375,26 @@ class DeviceService:
                 c.ensure_qs()
                 # Increment config ID on any config change
                 self._cfg_id += 1
-                status = {"config": self._snapshot_config_locked(), "cfg_id": self._cfg_id}
+                # Update cached config
+                cfg = self._snapshot_config_locked()
+                status = {"config": cfg, "cfg_id": self._cfg_id}
             except Exception as e:
                 warnings.append(f"config update failed: {e}")
                 status = {}
         return status, warnings
+
+    def apply_config(self, changes: Dict[str, Any]) -> Tuple[Dict[str, Any], List[str]]:
+        """Apply config changes via executor with timeout."""
+        if not self._client:
+            raise RuntimeError("Not connected")
+        try:
+            future = self._device_executor.submit(self._apply_config_internal, changes)
+            return future.result(timeout=self._device_timeout)
+        except FutureTimeoutError:
+            raise TimeoutError(f"Config update timed out after {self._device_timeout}s")
+        except Exception as e:
+            self._log.error(f"Config update failed: {e}")
+            raise
 
     def get_latest_frame(self) -> Optional[Dict[str, Any]]:
         with self._frames_lock:
@@ -383,6 +452,16 @@ class DeviceService:
         except Exception:
             pass
         return {}
+
+    def _update_cached_config(self, config: Dict[str, Any]):
+        """Update the cached configuration in a thread-safe manner."""
+        with self._config_lock:
+            self._cached_config = config.copy()
+
+    def _get_cached_config(self) -> Dict[str, Any]:
+        """Get a copy of the cached configuration in a thread-safe manner."""
+        with self._config_lock:
+            return self._cached_config.copy()
 
     def _snapshot_config_locked(self) -> Dict[str, Any]:
         """Best-effort single snapshot of config under device lock."""
@@ -489,6 +568,8 @@ class DeviceService:
         except Exception:
             cfg.setdefault("trigger_slope", "Rising")
         cfg["cfg_id"] = self._cfg_id  # Add config ID
+        # Update cached config
+        self._update_cached_config(cfg)
         return cfg
 
     def _record_frame(self, payload: Dict[str, Any]):
@@ -560,7 +641,8 @@ class DeviceService:
             # Pace the loop lightly to avoid hogging CPU/USB
             time.sleep(backoff_s)
 
-    def start_acquisition(self) -> Dict[str, Any]:
+    def start(self) -> Dict[str, Any]:
+        """Start data acquisition from device."""
         with self._dev_lock:
             if not self._client:
                 raise RuntimeError("Not connected")
@@ -568,8 +650,23 @@ class DeviceService:
             self._is_acquiring = True
             return {"status": "ok"}
 
-    def stop_acquisition(self) -> Dict[str, Any]:
+    def stop(self) -> Dict[str, Any]:
+        """Stop data acquisition from device."""
         with self._dev_lock:
             self._stop_acquisition_locked()
             self._is_acquiring = False
             return {"status": "ok"}
+
+    def shutdown(self):
+        """Shutdown the service and cleanup resources."""
+        self._log.info("Shutting down DeviceService")
+        try:
+            self.disconnect()
+        except Exception as e:
+            self._log.error(f"Error during disconnect on shutdown: {e}")
+        
+        # Shutdown executor
+        try:
+            self._device_executor.shutdown(wait=True)
+        except Exception as e:
+            self._log.error(f"Error shutting down executor: {e}")

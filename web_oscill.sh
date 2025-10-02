@@ -152,8 +152,16 @@ check_serial_permissions() {
     fi
     
     # Check if user is in the appropriate group
-    if groups | grep -qE "dialout|uucp"; then
-        echo_info "User is already in serial port group ($(groups | grep -oE 'dialout|uucp'))"
+    # Use 'id' command which checks /etc/group, not just current session
+    if id -nG "$USER" | grep -qE "dialout|uucp"; then
+        echo_info "User is in serial port group: $(id -nG "$USER" | grep -oE 'dialout|uucp')"
+        
+        # Check if group is active in current session
+        if ! groups | grep -qE "dialout|uucp"; then
+            echo_warn "⚠️  Group is configured but not active in current session"
+            echo_warn "To activate without relogin, run: newgrp ${SERIAL_GROUP}"
+            echo_info "Continuing with current permissions (may need sudo for serial access)"
+        fi
     elif [ "$SERIAL_GROUP" = "root" ]; then
         echo_warn "No standard serial port group found (dialout/uucp)"
         echo_warn "Serial ports may require root access"
