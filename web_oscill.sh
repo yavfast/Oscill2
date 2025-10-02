@@ -38,6 +38,148 @@ echo_error() {
     echo -e "${RED}[ERROR]${NC} $1"
 }
 
+# Detect which group is used for serial ports (dialout or uucp)
+detect_serial_group() {
+    local SERIAL_GROUP=""
+    
+    # First, check actual serial devices if they exist
+    if ls -l /dev/ttyUSB* 2>/dev/null | grep -q uucp; then
+        SERIAL_GROUP="uucp"
+    elif ls -l /dev/ttyUSB* 2>/dev/null | grep -q dialout; then
+        SERIAL_GROUP="dialout"
+    # If no devices, check which group exists
+    elif getent group uucp > /dev/null 2>&1; then
+        SERIAL_GROUP="uucp"
+    elif getent group dialout > /dev/null 2>&1; then
+        SERIAL_GROUP="dialout"
+    else
+        # Fallback - no standard group found
+        SERIAL_GROUP="root"
+    fi
+    
+    echo "$SERIAL_GROUP"
+}
+
+# Check and setup CP210x USB-to-UART driver
+check_cp210x_driver() {
+    echo_info "Checking CP210x USB-to-UART driver..."
+    
+    # Check if driver is loaded
+    if ! lsmod | grep -q cp210x; then
+        echo_warn "CP210x driver not loaded. Loading..."
+        if sudo modprobe cp210x 2>/dev/null; then
+            echo_info "CP210x driver loaded successfully"
+        else
+            echo_error "Failed to load CP210x driver"
+            return 1
+        fi
+    else
+        echo_info "CP210x driver is already loaded"
+    fi
+    
+    # Check if custom Product ID (840e) needs to be added
+    echo_info "Checking for custom USB device support..."
+    
+    # Check if device with ID 10c4:840e is connected
+    if lsusb | grep -q "10c4:840e"; then
+        echo_info "Found device with ID 10c4:840e"
+        
+        # Try to add custom ID to driver
+        if [ -w "/sys/bus/usb-serial/drivers/cp210x/new_id" ]; then
+            echo_info "Adding custom Product ID (840e) to CP210x driver..."
+            if echo "10c4 840e" | sudo tee /sys/bus/usb-serial/drivers/cp210x/new_id > /dev/null 2>&1; then
+                echo_info "Custom Product ID added successfully"
+                sleep 1
+            else
+                echo_warn "Device may already be registered or driver needs reload"
+            fi
+        fi
+    fi
+    
+    return 0
+}
+
+# Setup udev rules for CP210x device
+setup_udev_rules() {
+    echo_info "Checking udev rules for CP210x device..."
+    
+    # Detect which group is used for serial ports
+    SERIAL_GROUP=$(detect_serial_group)
+    if [ "$SERIAL_GROUP" = "uucp" ]; then
+        echo_info "Detected serial group: uucp (Manjaro/Arch)"
+    else
+        echo_info "Detected serial group: dialout"
+    fi
+    
+    UDEV_RULE_FILE="/etc/udev/rules.d/99-cp210x.rules"
+    UDEV_RULE_CONTENT="# CP210x USB to Serial - allow access for ${SERIAL_GROUP} group
+SUBSYSTEM==\"tty\", ATTRS{idVendor}==\"10c4\", ATTRS{idProduct}==\"ea60\", MODE=\"0666\", GROUP=\"${SERIAL_GROUP}\"
+SUBSYSTEM==\"tty\", ATTRS{idVendor}==\"10c4\", ATTRS{idProduct}==\"840e\", MODE=\"0666\", GROUP=\"${SERIAL_GROUP}\"
+
+# Auto-load custom Product ID
+ACTION==\"add\", SUBSYSTEM==\"usb\", ATTR{idVendor}==\"10c4\", ATTR{idProduct}==\"840e\", RUN+=\"/bin/sh -c 'echo 10c4 840e > /sys/bus/usb-serial/drivers/cp210x/new_id'\""
+    
+    # Check if rules file exists and has correct content
+    if [ -f "$UDEV_RULE_FILE" ]; then
+        if grep -q "10c4.*840e" "$UDEV_RULE_FILE"; then
+            echo_info "udev rules for CP210x already exist"
+        else
+            echo_warn "Updating udev rules for CP210x..."
+            echo "$UDEV_RULE_CONTENT" | sudo tee "$UDEV_RULE_FILE" > /dev/null
+            sudo udevadm control --reload-rules
+            sudo udevadm trigger
+            echo_info "udev rules updated"
+        fi
+    else
+        echo_info "Creating udev rules for CP210x..."
+        echo "$UDEV_RULE_CONTENT" | sudo tee "$UDEV_RULE_FILE" > /dev/null
+        sudo udevadm control --reload-rules
+        sudo udevadm trigger
+        echo_info "udev rules created"
+    fi
+}
+
+# Check user permissions for serial port access
+check_serial_permissions() {
+    echo_info "Checking user permissions for serial port access..."
+    
+    # Detect which group is used for serial ports
+    SERIAL_GROUP=$(detect_serial_group)
+    if [ "$SERIAL_GROUP" = "uucp" ]; then
+        echo_info "System uses uucp group for serial ports (Manjaro/Arch)"
+    else
+        echo_info "System uses dialout group for serial ports"
+    fi
+    
+    # Check if user is in the appropriate group
+    if groups | grep -qE "dialout|uucp"; then
+        echo_info "User is already in serial port group ($(groups | grep -oE 'dialout|uucp'))"
+    elif [ "$SERIAL_GROUP" = "root" ]; then
+        echo_warn "No standard serial port group found (dialout/uucp)"
+        echo_warn "Serial ports may require root access"
+    else
+        echo_warn "User is not in ${SERIAL_GROUP} group"
+        echo_info "Adding user to ${SERIAL_GROUP} group..."
+        
+        if sudo usermod -a -G "$SERIAL_GROUP" "$USER"; then
+            echo_info "User added to ${SERIAL_GROUP} group"
+            echo_warn "⚠️  IMPORTANT: You need to log out and log back in for group changes to take effect"
+            echo_warn "Or run: newgrp ${SERIAL_GROUP}"
+        else
+            echo_error "Failed to add user to ${SERIAL_GROUP} group"
+            echo_warn "You may need to manually configure serial port access"
+        fi
+    fi
+    
+    # Check for available serial ports
+    if ls /dev/ttyUSB* 2>/dev/null; then
+        echo_info "Available serial ports:"
+        ls -l /dev/ttyUSB* 2>/dev/null || true
+    else
+        echo_warn "No /dev/ttyUSB* devices found. Make sure your device is connected."
+    fi
+}
+
 # Check if Python is available
 check_python() {
     if command -v python3 &> /dev/null; then
@@ -186,6 +328,14 @@ open_browser() {
 main() {
     echo_info "=== Web Oscill Launcher ==="
     echo_info "Script directory: $SCRIPT_DIR"
+    
+    # Check and setup CP210x driver
+    echo_info ""
+    echo_info "--- USB Device Setup ---"
+    check_cp210x_driver
+    setup_udev_rules
+    check_serial_permissions
+    echo_info ""
     
     # Check Python
     check_python
