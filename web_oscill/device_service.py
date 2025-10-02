@@ -381,6 +381,12 @@ class DeviceService:
             except Exception as e:
                 warnings.append(f"config update failed: {e}")
                 status = {}
+        
+        # Clear frame buffer after config change - old frames are no longer valid
+        with self._frames_lock:
+            self._frames.clear()
+            self._log.info(f"Cleared frame buffer after config change (cfg_id: {self._cfg_id})")
+        
         return status, warnings
 
     def apply_config(self, changes: Dict[str, Any]) -> Tuple[Dict[str, Any], List[str]]:
@@ -464,109 +470,82 @@ class DeviceService:
             return self._cached_config.copy()
 
     def _snapshot_config_locked(self) -> Dict[str, Any]:
-        """Best-effort single snapshot of config under device lock."""
+        """
+        Snapshot current device configuration under device lock.
+        
+        If any parameter fails to read, raises exception to trigger connection reset.
+        All parameters must be readable for config to be valid.
+        """
         cfg: Dict[str, Any] = {}
         c = self._client
         if not c:
             return cfg
-        try:
-            v_div_mv = c.get_v_div_mV()
-            cfg["v_div"] = {"v": v_div_mv, "u": "mV"}
-        except Exception:
-            cfg["v_div"] = {"v": 200, "u": "mV"}  # Default
-        try:
-            t_div_ms = c.get_time_div_ms()
-            cfg["t_div"] = {"v": round(t_div_ms, 6), "u": "ms"}
-        except Exception:
-            cfg["t_div"] = {"v": 5, "u": "ms"}  # Default
-        try:
-            cfg["v_offset"] = c.get_offset_raw()
-        except Exception:
-            cfg["v_offset"] = 128
-        try:
-            cfg["trigger_level"] = c.get_trigger_level()
-        except Exception:
-            cfg["trigger_level"] = 128
-        try:
-            cfg["trigger_mode_bits"] = c.get_trigger_mode()
-        except Exception:
-            cfg["trigger_mode_bits"] = 0x2C
+        
+        # Read all parameters - any failure will raise exception
+        v_div_mv = c.get_v_div_mV()
+        cfg["v_div"] = {"v": v_div_mv, "u": "mV"}
+        
+        t_div_ms = c.get_time_div_ms()
+        cfg["t_div"] = {"v": round(t_div_ms, 6), "u": "ms"}
+        
+        cfg["v_offset"] = c.get_offset_raw()
+        cfg["trigger_level"] = c.get_trigger_level()
+        
+        cfg["trigger_mode_bits"] = c.get_trigger_mode()
         cfg["trigger_mode"] = {"v": cfg["trigger_mode_bits"], "u": "bits"}
-        try:
-            cfg["rs_mode"] = c.get_rs_mode()
-        except Exception:
-            cfg["rs_mode"] = 0x00
+        
+        cfg["rs_mode"] = c.get_rs_mode()
+        
         # Time offset (TC, samples) and optional delay (TD)
-        try:
-            cfg["t_offset"] = c.get_reg_2('TC', signed=False)
-        except Exception:
-            cfg["t_offset"] = 0
-        try:
-            cfg["t_delay"] = c.get_reg_4('TD', signed=False)
-        except Exception:
-            cfg["t_delay"] = 0
-        try:
-            total_samples = c.get_reg_2('QS', signed=False)
-        except Exception:
-            samples_per_div = cfg.get("samples_per_div", 32)
-            horiz_divs = getattr(c, 'H_DIVS', 10)
-            total_samples = samples_per_div * horiz_divs
+        cfg["t_offset"] = c.get_reg_2('TC', signed=False)
+        cfg["t_delay"] = c.get_reg_4('TD', signed=False)
+        
+        total_samples = c.get_reg_2('QS', signed=False)
         cfg["samples_total"] = max(0, int(total_samples))
+        
         # Static geometry info for UI
-        try:
-            cfg["samples_per_div"] = getattr(c, 'SAMPLES_PER_DIV', 32)
-        except Exception:
-            cfg["samples_per_div"] = 32
+        cfg["samples_per_div"] = getattr(c, 'SAMPLES_PER_DIV', 32)
+        
         # Channel hardware/software modes and sync metadata
-        try:
-            o1 = c.get_channel_hw_mode()
-            channel_enabled = (o1 & 0x01) == 0
-            high_filter = bool(o1 & 0x04)
-            low_filter = bool(o1 & 0x08)
-            if o1 & 0x01:
-                coupling = "GND"
-            elif o1 & 0x02:
-                coupling = "AC"
-            else:
-                coupling = "DC"
-            cfg["channel_enabled"] = channel_enabled
-            cfg["coupling"] = coupling
-            cfg["filters"] = {"high": high_filter, "low": low_filter}
-            cfg["hw_mode_bits"] = o1
-        except Exception:
-            cfg.setdefault("coupling", "DC")
-            cfg.setdefault("filters", {"high": False, "low": False})
-            cfg.setdefault("channel_enabled", True)
-        try:
-            sw_bits = c.get_channel_sw_mode() & 0x07
-            cfg["sw_mode"] = SW_MODE_LABEL_BY_VALUE.get(sw_bits, "NORMAL")
-            cfg["sw_mode_bits"] = sw_bits
-        except Exception:
-            cfg.setdefault("sw_mode", "NORMAL")
-        try:
-            sync_bits = c.get_sync_type() & 0x03
-            cfg["sync_type"] = SYNC_TYPE_LABEL_BY_VALUE.get(sync_bits, "AUTO")
-            cfg["sync_type_bits"] = sync_bits
-        except Exception:
-            cfg.setdefault("sync_type", "AUTO")
-        try:
-            t1 = cfg.get("trigger_mode_bits", c.get_trigger_mode())
-            front_enabled = bool(t1 & (1 << 5))
-            back_enabled = bool(t1 & (1 << 4))
-            cfg["sync_front"] = front_enabled
-            cfg["sync_back"] = back_enabled
-            cfg["sync_hist_front"] = bool((t1 & (1 << 2)) and (t1 & (1 << 3)))
-            cfg["sync_hist_back"] = bool((t1 & (1 << 0)) and (t1 & (1 << 1)))
-            if front_enabled and not back_enabled:
-                cfg["trigger_slope"] = "Rising"
-            elif back_enabled and not front_enabled:
-                cfg["trigger_slope"] = "Falling"
-            elif front_enabled and back_enabled:
-                cfg["trigger_slope"] = "Both"
-            else:
-                cfg["trigger_slope"] = "None"
-        except Exception:
-            cfg.setdefault("trigger_slope", "Rising")
+        o1 = c.get_channel_hw_mode()
+        channel_enabled = (o1 & 0x01) == 0
+        high_filter = bool(o1 & 0x04)
+        low_filter = bool(o1 & 0x08)
+        if o1 & 0x01:
+            coupling = "GND"
+        elif o1 & 0x02:
+            coupling = "AC"
+        else:
+            coupling = "DC"
+        cfg["channel_enabled"] = channel_enabled
+        cfg["coupling"] = coupling
+        cfg["filters"] = {"high": high_filter, "low": low_filter}
+        cfg["hw_mode_bits"] = o1
+        
+        sw_bits = c.get_channel_sw_mode() & 0x07
+        cfg["sw_mode"] = SW_MODE_LABEL_BY_VALUE.get(sw_bits, "NORMAL")
+        cfg["sw_mode_bits"] = sw_bits
+        
+        sync_bits = c.get_sync_type() & 0x03
+        cfg["sync_type"] = SYNC_TYPE_LABEL_BY_VALUE.get(sync_bits, "AUTO")
+        cfg["sync_type_bits"] = sync_bits
+        
+        t1 = cfg["trigger_mode_bits"]
+        front_enabled = bool(t1 & (1 << 5))
+        back_enabled = bool(t1 & (1 << 4))
+        cfg["sync_front"] = front_enabled
+        cfg["sync_back"] = back_enabled
+        cfg["sync_hist_front"] = bool((t1 & (1 << 2)) and (t1 & (1 << 3)))
+        cfg["sync_hist_back"] = bool((t1 & (1 << 0)) and (t1 & (1 << 1)))
+        if front_enabled and not back_enabled:
+            cfg["trigger_slope"] = "Rising"
+        elif back_enabled and not front_enabled:
+            cfg["trigger_slope"] = "Falling"
+        elif front_enabled and back_enabled:
+            cfg["trigger_slope"] = "Both"
+        else:
+            cfg["trigger_slope"] = "None"
+        
         cfg["cfg_id"] = self._cfg_id  # Add config ID
         # Update cached config
         self._update_cached_config(cfg)
@@ -601,6 +580,7 @@ class DeviceService:
                 # Timestamp
                 ts = time.time()
                 # Snapshot config while holding the lock to keep it consistent
+                # If snapshot fails, it means device communication is broken - will trigger reset
                 cfg = self._snapshot_config_locked()
                 # Store compact payload; keep raw samples only
                 payload = {
@@ -624,8 +604,9 @@ class DeviceService:
                 consecutive_errors = 0  # Reset on success
             except Exception as e:
                 consecutive_errors += 1
+                self._log.error(f"Acquisition loop error ({consecutive_errors}/{max_consecutive_errors}): {e}")
                 if consecutive_errors >= max_consecutive_errors:
-                    self._log.warning(f"Device appears disconnected after {consecutive_errors} consecutive errors, disconnecting")
+                    self._log.error(f"Device communication failed after {consecutive_errors} consecutive errors, forcing disconnect")
                     try:
                         self.disconnect()
                     except Exception:

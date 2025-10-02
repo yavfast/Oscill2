@@ -248,21 +248,43 @@ def api_frames(since: Optional[int] = None, limit: int = 128, format: str = "hex
         data = service.get_frames(since=since, limit=limit)
         frames = data.get("frames", [])
         
-        if not frames and service._is_acquiring:
-            # Wait up to 5 seconds for new frames to arrive
-            max_wait_time = 5.0
-            wait_interval = 0.05  # Check every 50ms
-            elapsed = 0.0
-            
-            while elapsed < max_wait_time and service._is_acquiring:
-                time.sleep(wait_interval)
-                elapsed += wait_interval
+        if not frames:
+            if service._is_acquiring:
+                # Wait up to 5 seconds for new frames to arrive
+                max_wait_time = 5.0
+                wait_interval = 0.05  # Check every 50ms
+                elapsed = 0.0
                 
-                data = service.get_frames(since=since, limit=limit)
-                frames = data.get("frames", [])
-                
-                if frames:
-                    break
+                while elapsed < max_wait_time and service._is_acquiring:
+                    time.sleep(wait_interval)
+                    elapsed += wait_interval
+                    
+                    data = service.get_frames(since=since, limit=limit)
+                    frames = data.get("frames", [])
+                    
+                    if frames:
+                        break
+            else:
+                # Acquisition is stopped - temporarily start it to get one frame
+                try:
+                    service.start()
+                    # Wait for at least one frame to arrive
+                    max_wait_time = 5.0
+                    wait_interval = 0.05
+                    elapsed = 0.0
+                    
+                    while elapsed < max_wait_time:
+                        time.sleep(wait_interval)
+                        elapsed += wait_interval
+                        
+                        data = service.get_frames(since=since, limit=limit)
+                        frames = data.get("frames", [])
+                        
+                        if frames:
+                            break
+                finally:
+                    # Always stop acquisition again
+                    service.stop()
         
         # Convert config to new format
         current_config = service.get_status().get("config", {})

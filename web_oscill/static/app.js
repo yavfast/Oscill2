@@ -333,8 +333,9 @@ class App {
         this.saveConfig(changes);
       }
       
-      // Request one frame to update interface
-      if (!wasPolling && this.isDeviceConnected) {
+      // Always request one frame to update UI after config change
+      if (this.isDeviceConnected) {
+        console.log('[App] Requesting frame after config change (isRunning:', this.isRunning, ')');
         try {
           const lastSeq = this.api.getLastSeq();
           const data = await this.api.getFrames(lastSeq);
@@ -358,15 +359,29 @@ class App {
     }
   }
 
-  onAcquisitionChange(action) {
+  async onAcquisitionChange(action) {
     if (action === 'run') {
-      this.isRunning = true;
-      // Start acquisition on server
-      this.api.start().catch(e => console.error('Start acquisition error:', e));
+      console.log('[App] Starting acquisition...');
+      try {
+        await this.api.start();
+        this.isRunning = true;
+        // Start polling when acquisition starts
+        this.startPolling();
+        console.log('[App] Acquisition started and polling resumed');
+      } catch (e) {
+        console.error('Start acquisition error:', e);
+      }
     } else if (action === 'stop') {
-      this.isRunning = false;
-      // Stop acquisition on server
-      this.api.stop().catch(e => console.error('Stop acquisition error:', e));
+      console.log('[App] Stopping acquisition...');
+      try {
+        await this.api.stop();
+        this.isRunning = false;
+        // Stop polling when acquisition stops
+        this.stopPolling();
+        console.log('[App] Acquisition stopped and polling paused');
+      } catch (e) {
+        console.error('Stop acquisition error:', e);
+      }
     } else if (action === 'single') {
       this.acquireSingleFrame();
     }
