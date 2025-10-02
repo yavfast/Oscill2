@@ -5,6 +5,7 @@ from fastapi.responses import HTMLResponse, FileResponse, JSONResponse
 from pydantic import BaseModel
 from typing import Optional, Dict, Any, List, Union
 import os
+import time
 import orjson
 
 import sys
@@ -242,8 +243,26 @@ def api_frames(since: Optional[int] = None, limit: int = 128, format: str = "hex
     try:
         if not service._client:
             return {"status": "disconnected", "frames": []}
+        
+        # If acquisition is running and we would return an empty list, wait for frames
         data = service.get_frames(since=since, limit=limit)
         frames = data.get("frames", [])
+        
+        if not frames and service._is_acquiring:
+            # Wait up to 5 seconds for new frames to arrive
+            max_wait_time = 5.0
+            wait_interval = 0.05  # Check every 50ms
+            elapsed = 0.0
+            
+            while elapsed < max_wait_time and service._is_acquiring:
+                time.sleep(wait_interval)
+                elapsed += wait_interval
+                
+                data = service.get_frames(since=since, limit=limit)
+                frames = data.get("frames", [])
+                
+                if frames:
+                    break
         
         # Convert config to new format
         current_config = service.get_status().get("config", {})
