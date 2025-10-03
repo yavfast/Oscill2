@@ -200,37 +200,6 @@ curl -X GET "http://localhost:8000/api/frames?since=0&limit=10&format=hex"
 
 ---
 
-#### `GET /api/acquire/single`
-Отримання одного фрейму з розширеною інформацією.
-
-```bash
-curl -X GET http://localhost:8000/api/acquire/single
-```
-
-**Відповідь:**
-```json
-{
-  "status": "ok",
-  "v_div": {"v": 200, "u": "mV"},
-  "t_div": {"v": 5.0, "u": "ms"},
-  "samples": [128, 129, 127, ...],
-  "samples_peak_min": [127, 126, ...],
-  "samples_peak_max": [129, 130, ...],
-  "samples_voltage": {"values": [0.0, 0.1, -0.1, ...], "u": "mV"},
-  "samples_peak_min_voltage": {"values": [-0.1, -0.2, ...], "u": "mV"},
-  "samples_peak_max_voltage": {"values": [0.1, 0.2, ...], "u": "mV"},
-  "min_voltage": {"v": -0.25, "u": "mV"},
-  "max_voltage": {"v": 0.25, "u": "mV"},
-  "channels": 1,
-  "time": 1696251234.567,
-  "time_iso": "2023-10-02T14:20:34.567Z",
-  "cfg_id": 0,
-  "config": {...}
-}
-```
-
----
-
 ### Конфігурація
 
 #### `POST /api/config`

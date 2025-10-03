@@ -75,7 +75,6 @@ python -m uvicorn web_oscill.main:app --host 127.0.0.1 --port 8000
 - `POST /api/connect` - connect to device (auto-detect or specify port)
 - `POST /api/disconnect` - disconnect
 - `GET /api/status` - device status (fast, from cache)
-- `GET /api/acquire/single` - acquire single frame
 - `POST /api/config` - configure parameters
 - `GET /api/frames` - frame history with measurements
 - `POST /api/start` - start data acquisition

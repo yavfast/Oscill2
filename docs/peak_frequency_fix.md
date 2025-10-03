@@ -44,9 +44,8 @@ if is_peak_mode:
 freq_period = calculate_frequency_and_period(samples_for_freq, t_step_ms)
 ```
 
-### Додатково: Додано measurements в /api/acquire/single
-Раніше `calculate_measurements` викликалась тільки в `/api/frames`, але не в `/api/acquire/single`.
-Додано виклик в `api_acquire_single()` в `web_oscill/main.py`.
+### Додатково: Перевірено measurements в /api/frames
+`calculate_measurements` правильно викликається в `/api/frames` для всіх фреймів.
 
 ## Результати тестування
 

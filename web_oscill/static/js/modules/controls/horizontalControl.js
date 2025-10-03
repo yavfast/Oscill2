@@ -6,10 +6,11 @@ const HDIVS = 10;
 const DEFAULT_SAMPLES_PER_DIV = 32;
 
 export class HorizontalControl {
-  constructor({ layer, onConfigChange, formatTime }) {
+  constructor({ layer, onConfigChange, formatTime, onAutoTScale }) {
     this.layer = layer;
     this.onConfigChange = onConfigChange;
     this.formatTime = formatTime;
+    this.onAutoTScale = onAutoTScale;
 
   this.currentTIndex = DEFAULT_INDEX;
   this.samplesPerDiv = DEFAULT_SAMPLES_PER_DIV;
@@ -50,6 +51,15 @@ export class HorizontalControl {
       label: '+',
       onClick: () => this.changeTDiv(1),
     });
+
+    this.ui.tdivAuto = createButton(this.layer, {
+      x: padX + 224,
+      y: nextY,
+      width: 48,
+      height: 28,
+      label: 'Auto',
+      onClick: () => this.onAutoTScale && this.onAutoTScale(),
+    });
     nextY += 36;
 
     this.ui.hposLabel = createLabel({ x: padX, y: nextY, text: 'Position' });
@@ -71,6 +81,7 @@ export class HorizontalControl {
       this.ui.tdivMinus.group,
       this.ui.tdivValue,
       this.ui.tdivPlus.group,
+      this.ui.tdivAuto.group,
       this.ui.hposLabel,
       this.ui.hposSlider.group,
     );

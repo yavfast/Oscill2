@@ -10,9 +10,10 @@ const PAD_X = 12;
 const MODE_GAP = 12;
 
 export class ControlPanel {
-  constructor(onConfigChange, onAcquisitionChange) {
+  constructor(onConfigChange, onAcquisitionChange, onAutoAdjust) {
     this.onConfigChange = onConfigChange;
     this.onAcquisitionChange = onAcquisitionChange;
+    this.onAutoAdjust = onAutoAdjust;
 
     this.container = null;
     this.stage = null;
@@ -23,6 +24,7 @@ export class ControlPanel {
   }
 
   init() {
+    console.log('[ControlPanel] init() - onAutoAdjust callback:', typeof this.onAutoAdjust);
     this.container = document.getElementById('control-panel');
     if (!this.container) return;
 
@@ -71,6 +73,14 @@ export class ControlPanel {
       layer: this.layer,
       onConfigChange: this.onConfigChange,
       formatVoltage: (value) => this.formatVoltage(value),
+      onAutoVScale: () => {
+        console.log('[ControlPanel] onAutoVScale callback triggered');
+        this.onAutoAdjust && this.onAutoAdjust('v_div');
+      },
+      onAutoVOffset: () => {
+        console.log('[ControlPanel] onAutoVOffset callback triggered');
+        this.onAutoAdjust && this.onAutoAdjust('v_offset');
+      },
     });
     y = this.controls.vertical.build({ padX: PAD_X, y, colWidth });
 
@@ -78,12 +88,14 @@ export class ControlPanel {
       layer: this.layer,
       onConfigChange: this.onConfigChange,
       formatTime: (value) => this.formatTime(value),
+      onAutoTScale: () => this.onAutoAdjust && this.onAutoAdjust('t_div'),
     });
     y = this.controls.horizontal.build({ padX: PAD_X, y, colWidth });
 
     this.controls.trigger = new TriggerControl({
       layer: this.layer,
       onConfigChange: this.onConfigChange,
+      onAutoTrigger: () => this.onAutoAdjust && this.onAutoAdjust('trigger'),
     });
     y = this.controls.trigger.build({ padX: PAD_X, y, colWidth, modeGap: MODE_GAP });
 

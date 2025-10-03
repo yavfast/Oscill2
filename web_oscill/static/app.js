@@ -8,7 +8,11 @@ class App {
   constructor() {
     this.api = new ApiService();
     this.scopeView = new ScopeView('scope-view');
-    this.controlPanel = new ControlPanel(this.onConfigChange.bind(this), this.onAcquisitionChange.bind(this));
+    this.controlPanel = new ControlPanel(
+      this.onConfigChange.bind(this),
+      this.onAcquisitionChange.bind(this),
+      this.handleAutoAdjust.bind(this)
+    );
     this.statusBar = new StatusBar();
     this.measurementPanel = new MeasurementPanel();
     this.isRunning = false;
@@ -17,6 +21,7 @@ class App {
     this.currentCfgId = null; // Track current config ID
     this.isDeviceConnected = false; // Track device connection status
     this.frameRequestInFlight = false; // Guard to avoid overlapping frame requests
+    this.autoAdjustInProgress = false; // Guard for auto-adjust operations
   }
 
   async init() {
@@ -353,6 +358,95 @@ class App {
       console.error('Config change error:', e);
       
       // Resume frame polling even on error if it was running
+      if (wasPolling && this.isDeviceConnected && this.isRunning) {
+        this.startPolling();
+      }
+    }
+  }
+
+  async handleAutoAdjust(types) {
+    console.log(`[App] handleAutoAdjust called with types: ${types}`);
+    
+    if (this.autoAdjustInProgress) {
+      console.warn('[App] Auto-adjust already in progress');
+      return;
+    }
+
+    if (!this.isDeviceConnected) {
+      console.warn('[App] Cannot auto-adjust: device not connected');
+      return;
+    }
+
+    console.log(`[App] Starting auto-adjust: ${types}`);
+    this.autoAdjustInProgress = true;
+    
+    // Stop polling during auto-adjust
+    const wasPolling = this.pollInterval !== null;
+    if (wasPolling) {
+      this.stopPolling();
+    }
+
+    try {
+      // Call auto-adjust API
+      const response = await fetch(`/api/auto?types=${types}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      if (!response.ok) {
+        const error = await response.text();
+        throw new Error(`Auto-adjust failed: ${error}`);
+      }
+
+      const result = await response.json();
+      console.log('[App] Auto-adjust result:', result);
+
+      if (result.success) {
+        // Update UI with new configuration
+        if (result.config) {
+          // Update current config ID
+          if (result.config.cfg_id !== undefined) {
+            this.currentCfgId = result.config.cfg_id;
+          }
+          this.controlPanel.updateControls(result.config);
+          this.scopeView.updateConfig(result.config);
+          this.statusBar.updateStatus(null, result.config);
+          
+          // Save the updated configuration to localStorage
+          this.saveConfig(result.config);
+        }
+
+        // Log results
+        const applied = result.applied || [];
+        const iterations = result.iterations || {};
+        console.log(`[App] Auto-adjust complete: applied ${applied.join(', ')}`);
+        
+        applied.forEach(type => {
+          const iter = iterations[type] || 0;
+          console.log(`  - ${type}: ${iter} iteration(s)`);
+        });
+        
+        // Always request one frame to update UI after auto-adjust
+        if (this.isDeviceConnected) {
+          console.log('[App] Requesting frame after auto-adjust');
+          try {
+            const lastSeq = this.api.getLastSeq();
+            const data = await this.api.getFrames(lastSeq);
+            this.handleFrameResponse(data);
+          } catch (e) {
+            console.error('Frame request after auto-adjust failed:', e);
+          }
+        }
+      } else {
+        console.warn('[App] Auto-adjust reported failure:', result);
+      }
+
+    } catch (e) {
+      console.error('[App] Auto-adjust error:', e);
+    } finally {
+      this.autoAdjustInProgress = false;
+      
+      // Resume polling if it was running
       if (wasPolling && this.isDeviceConnected && this.isRunning) {
         this.startPolling();
       }

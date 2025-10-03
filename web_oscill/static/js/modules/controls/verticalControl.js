@@ -5,10 +5,12 @@ const VPOS_MIN = 0;
 const VPOS_MAX = 255;
 
 export class VerticalControl {
-  constructor({ layer, onConfigChange, formatVoltage }) {
+  constructor({ layer, onConfigChange, formatVoltage, onAutoVScale, onAutoVOffset }) {
     this.layer = layer;
     this.onConfigChange = onConfigChange;
     this.formatVoltage = formatVoltage;
+    this.onAutoVScale = onAutoVScale;
+    this.onAutoVOffset = onAutoVOffset;
 
     this.currentVIndex = 3; // 200 mV
     this.currentVDivMV = VDIV_VALUES_MV[this.currentVIndex];
@@ -48,6 +50,18 @@ export class VerticalControl {
       label: '+',
       onClick: () => this.changeVDiv(1),
     });
+
+    this.ui.vdivAuto = createButton(this.layer, {
+      x: padX + 224,
+      y: nextY,
+      width: 48,
+      height: 28,
+      label: 'Auto',
+      onClick: () => {
+        console.log('[VerticalControl] Auto V/div clicked');
+        this.onAutoVScale && this.onAutoVScale();
+      },
+    });
     nextY += 36;
 
     this.ui.vposLabel = createLabel({ x: padX, y: nextY, text: 'Position' });
@@ -61,6 +75,18 @@ export class VerticalControl {
       onChange: (val) => this.previewVPosition(val),
       onCommit: (val) => this.changeVPosition(val),
       format: (v) => `${Math.round(v)}`,
+    });
+
+    this.ui.vposCenter = createButton(this.layer, {
+      x: colWidth - 60,
+      y: nextY - 6,
+      width: 60,
+      height: 28,
+      label: 'Center',
+      onClick: () => {
+        console.log('[VerticalControl] Center V position clicked');
+        this.onAutoVOffset && this.onAutoVOffset();
+      },
     });
     nextY += 40;
 
@@ -99,8 +125,10 @@ export class VerticalControl {
       this.ui.vdivMinus.group,
       this.ui.vdivValue,
       this.ui.vdivPlus.group,
+      this.ui.vdivAuto.group,
       this.ui.vposLabel,
       this.ui.vposSlider.group,
+      this.ui.vposCenter.group,
       this.ui.cplLabel,
       this.ui.cplAc.group,
       this.ui.cplDc.group,

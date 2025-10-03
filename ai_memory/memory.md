@@ -100,7 +100,7 @@ if peak_min and peak_max:
 
 **Files Modified**:
 - `web_oscill/calculations.py` - fixed `calculate_measurements()` with doubled t_step
-- `web_oscill/main.py` - added `calculate_measurements()` call in `/api/acquire/single`
+- `web_oscill/main.py` - added `calculate_measurements()` call in `/api/frames`
 - `scripts/test_peak_frequency_fix.py` - test suite for synthetic data
 - `scripts/test_real_device_frequency.py` - test suite for real device
 - `docs/peak_frequency_fix.md` - detailed documentation
@@ -108,7 +108,7 @@ if peak_min and peak_max:
 **Final Solution**: The issue was that Peak mode returns half the samples (127 vs 254) because each sample represents min+max for a time interval. Fixed by:
 1. Using peak_min for segmentation (better signal)  
 2. Doubling time step (`t_step_ms * 2`) in Peak mode to account for doubled interval per sample
-3. Adding measurements calculation to `/api/acquire/single` endpoint
+3. Adding measurements calculation to `/api/frames` endpoint
 
 **Test Results on Real Device**:
 - Normal: 51.20 Hz  

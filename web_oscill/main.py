@@ -22,6 +22,7 @@ from calculations import (
     calculate_voltage_range,
     calculate_measurements
 )
+from auto_adjust import auto_adjust_multiple
 
 
 class ORJSONResponse(JSONResponse):
@@ -83,78 +84,6 @@ def api_disconnect():
         res = service.disconnect()
         client = None
         return res
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.get("/api/acquire/single")
-def api_acquire_single():
-    if not service._client:
-        # Respond gracefully so frontends can gate polling without error spam
-        return {"status": "disconnected", "message": "Not connected"}
-    try:
-        status = service.get_status()
-        frame = service.get_latest_frame()
-        if not frame:
-            raise HTTPException(status_code=502, detail="No data")
-        # Use current config snapshot from status (already includes cfg_id)
-        cfg = (status or {}).get("config", {}) or {}
-        frame_cfg_id = frame.get("cfg_id")
-        if frame_cfg_id is not None and cfg.get("cfg_id") is None:
-            cfg = dict(cfg)
-            cfg["cfg_id"] = frame_cfg_id
-        v_div_mv = get_voltage_mv(cfg)
-        t_div_ms = get_time_ms(cfg)
-        samples = list(frame.get("samples", []) or [])
-        sample_bits = int(frame.get("sample_bits") or 8)
-        peak_min = list(frame.get("samples_peak_min", []) or [])
-        peak_max = list(frame.get("samples_peak_max", []) or [])
-
-        if peak_min and peak_max and (not samples or len(samples) != min(len(peak_min), len(peak_max))):
-            count = min(len(peak_min), len(peak_max))
-            samples = [ (peak_min[i] + peak_max[i]) // 2 for i in range(count) ]
-
-        samples_mv = None
-        peak_min_mv = None
-        peak_max_mv = None
-        min_mv = None
-        max_mv = None
-
-        if v_div_mv is not None:
-            if samples:
-                samples_mv = samples_to_millivolts(samples, sample_bits, cfg)
-            if peak_min:
-                peak_min_mv = samples_to_millivolts(peak_min, sample_bits, cfg)
-            if peak_max:
-                peak_max_mv = samples_to_millivolts(peak_max, sample_bits, cfg)
-
-            voltage_range = calculate_voltage_range(samples, sample_bits, cfg, peak_min, peak_max)
-            min_mv = voltage_range.get("min_mv")
-            max_mv = voltage_range.get("max_mv")
-        
-        # Calculate measurements (frequency, period, etc.)
-        measurements = calculate_measurements(frame, cfg)
-        
-        return {
-            "status": "ok",
-            "v_div": {"v": v_div_mv, "u": "mV"},
-            "t_div": {"v": t_div_ms, "u": "ms"},
-            "samples": samples,
-            "samples_peak_min": peak_min,
-            "samples_peak_max": peak_max,
-            "samples_voltage": {"values": samples_mv, "u": "mV"} if samples_mv else None,
-            "samples_peak_min_voltage": {"values": peak_min_mv, "u": "mV"} if peak_min_mv else None,
-            "samples_peak_max_voltage": {"values": peak_max_mv, "u": "mV"} if peak_max_mv else None,
-            "min_voltage": {"v": min_mv, "u": "mV"} if min_mv is not None else None,
-            "max_voltage": {"v": max_mv, "u": "mV"} if max_mv is not None else None,
-            "measurements": measurements if measurements else None,
-            "channels": frame.get("channels", 1),
-            "time": frame.get("time"),
-            "time_iso": frame.get("time_iso"),
-            "cfg_id": frame_cfg_id,
-            "config": cfg,
-        }
-    except HTTPException:
-        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -327,6 +256,61 @@ def api_frames(since: Optional[int] = None, limit: int = 128, format: str = "hex
             "newest_seq": data.get("newest_seq", 0),
             "format": "hex" if use_hex else "array"
         }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/auto")
+def api_auto(types: Optional[str] = None):
+    """
+    Automatically adjust oscilloscope parameters.
+    
+    Query parameter:
+        types: Comma-separated list of adjustment types: v_div, t_div, v_offset, trigger
+        Example: /api/auto?types=v_div,t_div
+    
+    Returns:
+        Adjustment results with new configuration
+    """
+    if not service._client:
+        raise HTTPException(status_code=400, detail="Not connected")
+    
+    try:
+        # Parse types parameter
+        if not types:
+            # Default: auto-adjust all
+            types_list = ['v_div', 't_div', 'v_offset', 'trigger']
+        else:
+            types_list = [t.strip() for t in types.split(',')]
+        
+        # Validate types
+        valid_types = ['v_div', 't_div', 'v_offset', 'trigger']
+        invalid_types = [t for t in types_list if t not in valid_types]
+        if invalid_types:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid adjustment types: {', '.join(invalid_types)}. "
+                       f"Valid types: {', '.join(valid_types)}"
+            )
+        
+        # Get current config
+        status = service.get_status()
+        if not status or 'config' not in status:
+            raise HTTPException(status_code=500, detail="Cannot get current config")
+        
+        config = status['config'].copy()
+        
+        # Apply auto-adjustments
+        success = auto_adjust_multiple(service, config, types_list)
+        
+        # Return results
+        return {
+            'success': success,
+            'applied': types_list if success else [],
+            'config': config
+        }
+        
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

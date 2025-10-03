@@ -408,6 +408,42 @@ class DeviceService:
                 return None
             return dict(self._frames[-1])
 
+    def ensure_frame_available(self, timeout: float = 2.0) -> Optional[Dict[str, Any]]:
+        """
+        Ensure a frame with samples is available, starting acquisition if needed.
+        
+        Args:
+            timeout: Maximum time to wait for a frame in seconds
+            
+        Returns:
+            Frame data or None if timeout/no frame available
+        """
+        # First check if we already have a frame
+        frame = self.get_latest_frame()
+        if frame and frame.get('samples'):
+            return frame
+        
+        # No frame available, check if acquisition is running
+        was_acquiring = self._is_acquiring
+        
+        if not was_acquiring:
+            # Start acquisition temporarily
+            self.start()
+        
+        try:
+            # Wait for frame to arrive
+            start_time = time.time()
+            while (time.time() - start_time) < timeout:
+                frame = self.get_latest_frame()
+                if frame and frame.get('samples'):
+                    return frame
+                time.sleep(0.05)  # Check every 50ms
+            return None
+        finally:
+            # Stop acquisition if we started it
+            if not was_acquiring:
+                self.stop()
+
     def get_frames(self, since: Optional[int] = None, limit: int = 64) -> Dict[str, Any]:
         with self._frames_lock:
             items: List[Dict[str, Any]] = []

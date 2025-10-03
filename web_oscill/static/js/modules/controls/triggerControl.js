@@ -3,9 +3,10 @@ import { createButton, createLabel, createSlider, setButtonActive } from './uiHe
 const DEFAULT_SYNC_TYPE = 'AUTO';
 
 export class TriggerControl {
-  constructor({ layer, onConfigChange }) {
+  constructor({ layer, onConfigChange, onAutoTrigger }) {
     this.layer = layer;
     this.onConfigChange = onConfigChange;
+    this.onAutoTrigger = onAutoTrigger;
 
     this.syncType = DEFAULT_SYNC_TYPE;
     this.syncFront = true;
@@ -96,6 +97,15 @@ export class TriggerControl {
       onCommit: (val) => this.changeTriggerLevel(Math.round(val)),
       format: (v) => `${Math.round(v)}`,
     });
+
+    this.ui.levelAuto = createButton(this.layer, {
+      x: colWidth - 60,
+      y: nextY - 6,
+      width: 60,
+      height: 28,
+      label: 'Auto',
+      onClick: () => this.onAutoTrigger && this.onAutoTrigger(),
+    });
     nextY += 60;
 
     this.layer.add(
@@ -109,6 +119,7 @@ export class TriggerControl {
       this.ui.trigBack.group,
       this.ui.levelLabel,
       this.ui.levelSlider.group,
+      this.ui.levelAuto.group,
     );
     return nextY;
   }
