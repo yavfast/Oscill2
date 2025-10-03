@@ -287,9 +287,9 @@ export class ScopeView {
     const polygonPoints = [];
     const upper = [];
     const lower = [];
-    const denom = Math.max(1, count);
+    // Use the same time calculation as for samples to ensure alignment
     for (let i = 0; i < count; i++) {
-      const time = (i / denom) * totalTime - totalTime / 2;
+      const time = (i / Math.max(1, count)) * totalTime + this.xRange[0];
       const vMax = this.sampleToVoltage(peakMax[i], sampleBits, totalVoltage, vOffsetVolts);
       const vMin = this.sampleToVoltage(peakMin[i], sampleBits, totalVoltage, vOffsetVolts);
       const x = toX(time);
@@ -487,7 +487,7 @@ export class ScopeView {
     const points = [];
     const count = samples.length;
     for (let i = 0; i < count; i++) {
-      const time = (i / count) * totalTime + this.xRange[0];
+      const time = (i / Math.max(1, count)) * totalTime + this.xRange[0];
       const voltage = this.sampleToVoltage(samples[i], sampleBits, totalVoltage, vOffsetVolts);
       points.push(toX(time), toY(voltage));
     }

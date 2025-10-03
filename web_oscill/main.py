@@ -15,6 +15,13 @@ sys.path.append(os.path.dirname(__file__))
 from oscill_client import OscillClient
 from device_service import DeviceService
 from converters import get_voltage_mv, get_time_ms
+from calculations import (
+    samples_to_hex,
+    samples_from_hex,
+    samples_to_millivolts,
+    calculate_voltage_range,
+    calculate_measurements
+)
 
 
 class ORJSONResponse(JSONResponse):
@@ -114,22 +121,19 @@ def api_acquire_single():
 
         if v_div_mv is not None:
             if samples:
-                samples_mv = _samples_to_millivolts(samples, sample_bits, cfg)
+                samples_mv = samples_to_millivolts(samples, sample_bits, cfg)
             if peak_min:
-                peak_min_mv = _samples_to_millivolts(peak_min, sample_bits, cfg)
+                peak_min_mv = samples_to_millivolts(peak_min, sample_bits, cfg)
             if peak_max:
-                peak_max_mv = _samples_to_millivolts(peak_max, sample_bits, cfg)
+                peak_max_mv = samples_to_millivolts(peak_max, sample_bits, cfg)
 
-            try:
-                if peak_min_mv and peak_max_mv:
-                    min_mv = min(peak_min_mv)
-                    max_mv = max(peak_max_mv)
-                elif samples_mv:
-                    min_mv = min(samples_mv)
-                    max_mv = max(samples_mv)
-            except Exception:
-                min_mv = None
-                max_mv = None
+            voltage_range = calculate_voltage_range(samples, sample_bits, cfg, peak_min, peak_max)
+            min_mv = voltage_range.get("min_mv")
+            max_mv = voltage_range.get("max_mv")
+        
+        # Calculate measurements (frequency, period, etc.)
+        measurements = calculate_measurements(frame, cfg)
+        
         return {
             "status": "ok",
             "v_div": {"v": v_div_mv, "u": "mV"},
@@ -142,6 +146,7 @@ def api_acquire_single():
             "samples_peak_max_voltage": {"values": peak_max_mv, "u": "mV"} if peak_max_mv else None,
             "min_voltage": {"v": min_mv, "u": "mV"} if min_mv is not None else None,
             "max_voltage": {"v": max_mv, "u": "mV"} if max_mv is not None else None,
+            "measurements": measurements if measurements else None,
             "channels": frame.get("channels", 1),
             "time": frame.get("time"),
             "time_iso": frame.get("time_iso"),
@@ -302,13 +307,13 @@ def api_frames(since: Optional[int] = None, limit: int = 128, format: str = "hex
             if use_hex:
                 sample_bytes = frame.get("sample_bytes", 1)
                 if "samples" in processed_frame and processed_frame["samples"]:
-                    processed_frame["samples_hex"] = _samples_to_hex(processed_frame["samples"], sample_bytes)
+                    processed_frame["samples_hex"] = samples_to_hex(processed_frame["samples"], sample_bytes)
                     del processed_frame["samples"]
                 if "samples_peak_min" in processed_frame and processed_frame["samples_peak_min"]:
-                    processed_frame["samples_peak_min_hex"] = _samples_to_hex(processed_frame["samples_peak_min"], sample_bytes)
+                    processed_frame["samples_peak_min_hex"] = samples_to_hex(processed_frame["samples_peak_min"], sample_bytes)
                     del processed_frame["samples_peak_min"]
                 if "samples_peak_max" in processed_frame and processed_frame["samples_peak_max"]:
-                    processed_frame["samples_peak_max_hex"] = _samples_to_hex(processed_frame["samples_peak_max"], sample_bytes)
+                    processed_frame["samples_peak_max_hex"] = samples_to_hex(processed_frame["samples_peak_max"], sample_bytes)
                     del processed_frame["samples_peak_max"]
             
             measurements = calculate_measurements(frame, current_config)
@@ -359,109 +364,4 @@ def static_files(path: str):
         raise HTTPException(status_code=404)
     return FileResponse(fp)
 
-def _samples_to_hex(samples: List[int], sample_bytes: int = 1) -> str:
-    """Convert samples list to hex string for compact transmission."""
-    if not samples:
-        return ""
-    if sample_bytes == 1:
-        return ''.join(f'{s:02x}' for s in samples)
-    elif sample_bytes == 2:
-        return ''.join(f'{s:04x}' for s in samples)
-    else:
-        return ''.join(f'{s:02x}' for s in samples)
 
-
-def _samples_from_hex(hex_str: str, sample_bytes: int = 1) -> List[int]:
-    """Decode hex string back to samples list."""
-    if not hex_str:
-        return []
-    chars_per_sample = sample_bytes * 2
-    return [int(hex_str[i:i+chars_per_sample], 16) 
-            for i in range(0, len(hex_str), chars_per_sample)]
-
-
-def _samples_to_millivolts(samples: List[int], sample_bits: int, config: Dict[str, Any]) -> List[float]:
-    if not samples:
-        return []
-    v_div_mv = get_voltage_mv(config)
-    full_scale_mv = v_div_mv * 8.0
-    max_code = (1 << sample_bits) - 1
-    center = max_code / 2.0
-    if center <= 0:
-        return [0.0 for _ in samples]
-    scale = full_scale_mv / 2.0
-    return [((s - center) / center) * scale for s in samples]
-
-
-def calculate_measurements(frame: Dict[str, Any], config: Dict[str, Any]) -> Dict[str, Any]:
-    """Calculate measurements from frame metadata: frequency, period, Vpp, Vmax, Vmin, Vavg."""
-    if not frame:
-        return {}
-
-    sample_bits = int(frame.get("sample_bits") or 8)
-    samples = list(frame.get("samples") or [])
-    peak_min = frame.get("samples_peak_min") or []
-    peak_max = frame.get("samples_peak_max") or []
-
-    if peak_min and peak_max:
-        count = min(len(peak_min), len(peak_max))
-        peak_min = list(peak_min[:count])
-        peak_max = list(peak_max[:count])
-        if not samples or len(samples) != count:
-            samples = [(lo + hi) // 2 for lo, hi in zip(peak_min, peak_max)]
-
-    if not samples:
-        return {}
-
-    voltages_mv = _samples_to_millivolts(samples, sample_bits, config)
-    if not voltages_mv:
-        return {}
-
-    if peak_min and peak_max:
-        voltages_min_mv = _samples_to_millivolts(peak_min, sample_bits, config)
-        voltages_max_mv = _samples_to_millivolts(peak_max, sample_bits, config)
-        v_min_mv = min(voltages_min_mv) if voltages_min_mv else min(voltages_mv)
-        v_max_mv = max(voltages_max_mv) if voltages_max_mv else max(voltages_mv)
-    else:
-        v_min_mv = min(voltages_mv)
-        v_max_mv = max(voltages_mv)
-
-    v_pp_mv = v_max_mv - v_min_mv
-    v_avg_mv = sum(voltages_mv) / len(voltages_mv)
-
-    # Frequency and period calculation (simple zero-crossing method) on averaged waveform
-    freq = None
-    period = None
-    try:
-        zero_crossings: List[int] = []
-        threshold = v_avg_mv
-        for i in range(1, len(voltages_mv)):
-            prev = voltages_mv[i - 1]
-            current = voltages_mv[i]
-            if (prev <= threshold < current) or (prev >= threshold > current):
-                zero_crossings.append(i)
-        if len(zero_crossings) >= 2:
-            diffs = [zero_crossings[i] - zero_crossings[i - 1] for i in range(1, len(zero_crossings))]
-            if diffs:
-                avg_period_samples = sum(diffs) / len(diffs)
-                samples_per_div = config.get("samples_per_div", 32)
-                t_div_ms = get_time_ms(config)
-                time_per_sample = (t_div_ms / 1000.0) / max(1, samples_per_div)
-                period_s = avg_period_samples * time_per_sample
-                if period_s > 0:
-                    freq = 1.0 / period_s
-                    period = period_s
-    except Exception:
-        pass
-
-    measurements: Dict[str, Any] = {}
-    if freq is not None:
-        measurements["freq"] = {"v": freq, "u": "Hz"}
-    if period is not None:
-        measurements["period"] = {"v": period, "u": "s"}
-    measurements["v_pp"] = {"v": v_pp_mv / 1000.0, "u": "V"}
-    measurements["v_max"] = {"v": v_max_mv / 1000.0, "u": "V"}
-    measurements["v_min"] = {"v": v_min_mv / 1000.0, "u": "V"}
-    measurements["v_avg"] = {"v": v_avg_mv / 1000.0, "u": "V"}
-
-    return measurements

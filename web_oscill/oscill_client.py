@@ -522,6 +522,129 @@ class OscillClient:
 
     # ---------- Frame parsing ----------
     @staticmethod
+    def _process_avg_samples(raw_data: bytes, limit: int) -> List[int]:
+        """Process averaging mode samples (1 byte per sample)."""
+        return list(raw_data[:limit])
+
+    @staticmethod
+    def _process_avg_hires_samples(raw_data: bytes, limit: int) -> List[int]:
+        """Process high-resolution averaging mode samples (2 bytes per sample, big-endian)."""
+        samples = []
+        for i in range(0, limit, 2):
+            if i + 2 <= limit:
+                val = int.from_bytes(raw_data[i:i + 2], 'big')
+                samples.append(val)
+        return samples
+
+    @staticmethod
+    def _process_normal_samples(raw_data: bytes, limit: int) -> List[int]:
+        """Process normal mode samples (1 byte per sample)."""
+        return list(raw_data[:limit])
+
+    @staticmethod
+    def _process_peak_interlaced_samples(raw_data: bytes, value_bytes: int) -> Tuple[List[int], List[int], List[int]]:
+        """Process interlaced peak mode (alternating min/max) with interpolation and min/max validation."""
+        return OscillClient._process_peak_samples(raw_data, value_bytes)
+
+    @staticmethod
+    def _process_peak_samples(raw_data: bytes, value_bytes: int) -> Tuple[List[int], List[int], List[int]]:
+        """
+        Process peak mode data with interpolation and min/max validation.
+        
+        Args:
+            raw_data: Raw bytes from the channel data
+            value_bytes: Number of bytes per value (1 or 2)
+            
+        Returns:
+            Tuple of (samples, peak_min, peak_max) where samples is the expanded/interpolated list
+        """
+        raw_peak_min: List[int] = []
+        raw_peak_max: List[int] = []
+        samples: List[int] = []
+        
+        stride = value_bytes * 2
+        limit = len(raw_data) - (len(raw_data) % stride)
+        
+        # Extract min/max pairs from raw data
+        for i in range(0, limit, stride):
+            lo_bytes = raw_data[i:i + value_bytes]
+            hi_bytes = raw_data[i + value_bytes:i + stride]
+            if len(lo_bytes) < value_bytes or len(hi_bytes) < value_bytes:
+                break
+            lo_val = int.from_bytes(lo_bytes, 'big')
+            hi_val = int.from_bytes(hi_bytes, 'big')
+            # Ensure min <= max as per peak mode semantics
+            if lo_val > hi_val:
+                lo_val, hi_val = hi_val, lo_val
+            raw_peak_min.append(lo_val)
+            raw_peak_max.append(hi_val)
+        
+        # Expand Peak samples to match other modes' sample count
+        # Each peak interval [min, max] becomes 2 samples with smooth interpolation
+        peak_min: List[int] = []
+        peak_max: List[int] = []
+        count = len(raw_peak_min)
+        
+        for i in range(count):
+            # Add original values: samples contains average of min and max
+            samples.append((raw_peak_min[i] + raw_peak_max[i]) // 2)
+            peak_min.append(raw_peak_min[i])
+            peak_max.append(raw_peak_max[i])
+            
+            # Add interpolated values
+            if i < count - 1:
+                # Interpolated peak_min: average between current min and next min
+                interpolated_min = (raw_peak_min[i] + raw_peak_min[i + 1]) // 2
+                # Interpolated peak_max: average between current max and next max
+                interpolated_max = (raw_peak_max[i] + raw_peak_max[i + 1]) // 2
+                # Interpolated sample: average of interpolated min and max
+                interpolated = (interpolated_min + interpolated_max) // 2
+            else:
+                # Last interval: use average of min and max
+                interpolated = (raw_peak_min[i] + raw_peak_max[i]) // 2
+                interpolated_min = interpolated
+                interpolated_max = interpolated
+            
+            samples.append(interpolated)
+            peak_min.append(interpolated_min)
+            peak_max.append(interpolated_max)
+        
+        return samples, peak_min, peak_max
+
+    @staticmethod
+    def _process_peak_double_samples(raw_data: bytes, value_bytes: int, total_bytes_per_sample: int) -> Tuple[List[int], List[int], List[int]]:
+        """Process double peak mode (paired min/max) with interpolation (no swap needed)."""
+        samples = []
+        peak_min = []
+        peak_max = []
+        limit = len(raw_data) - (len(raw_data) % total_bytes_per_sample)
+        count = limit // total_bytes_per_sample
+        for i in range(count):
+            idx = i * total_bytes_per_sample
+            min_val = int.from_bytes(raw_data[idx:idx + value_bytes], 'big')
+            max_val = int.from_bytes(raw_data[idx + value_bytes:idx + total_bytes_per_sample], 'big')
+            samples.append((min_val + max_val) // 2)
+            peak_min.append(min_val)
+            peak_max.append(max_val)
+            
+            if i < count - 1:
+                next_idx = (i + 1) * total_bytes_per_sample
+                next_min = int.from_bytes(raw_data[next_idx:next_idx + value_bytes], 'big')
+                next_max = int.from_bytes(raw_data[next_idx + value_bytes:next_idx + total_bytes_per_sample], 'big')
+                interpolated_min = (min_val + next_min) // 2
+                interpolated_max = (max_val + next_max) // 2
+                interpolated = (interpolated_min + interpolated_max) // 2
+            else:
+                interpolated = (min_val + max_val) // 2
+                interpolated_min = interpolated
+                interpolated_max = interpolated
+            
+            samples.append(interpolated)
+            peak_min.append(interpolated_min)
+            peak_max.append(interpolated_max)
+        return samples, peak_min, peak_max
+
+    @staticmethod
     def parse_frame(body: bytes) -> Dict[str, Any]:
         # Body format: [2B attrs][ per-channel: 2B ch_attrs, 2B size, N bytes data ] * channels
         if not body or len(body) < 2:
@@ -556,43 +679,19 @@ class OscillClient:
         peak_max: Optional[List[int]] = None
 
         limit = len(raw_data) - (len(raw_data) % total_bytes_per_sample)
-        if sample_format == 0x02:
-            # Peak interlaced: alternating min/max values in the data stream
-            peak_min = []
-            peak_max = []
-            stride = value_bytes * 2
-            limit = len(raw_data) - (len(raw_data) % stride)
-            for i in range(0, limit, stride):
-                lo_bytes = raw_data[i:i + value_bytes]
-                hi_bytes = raw_data[i + value_bytes:i + stride]
-                if len(lo_bytes) < value_bytes or len(hi_bytes) < value_bytes:
-                    break
-                lo_val = int.from_bytes(lo_bytes, 'big')
-                hi_val = int.from_bytes(hi_bytes, 'big')
-                peak_min.append(lo_val)
-                peak_max.append(hi_val)
-                samples.append((lo_val + hi_val) // 2)
-        elif components == 1:
-            if value_bytes == 2:
-                samples = [
-                    int.from_bytes(raw_data[i:i + value_bytes], 'big')
-                    for i in range(0, limit, value_bytes)
-                ]
-            else:
-                samples = list(raw_data[:limit])
+        if sample_format == 0x00:  # AVG
+            samples = OscillClient._process_avg_samples(raw_data, limit)
+        elif sample_format == 0x01:  # AVG_HIRES
+            samples = OscillClient._process_avg_hires_samples(raw_data, limit)
+        elif sample_format == 0x02:  # PEAK_INTERLACED
+            samples, peak_min, peak_max = OscillClient._process_peak_interlaced_samples(raw_data, value_bytes)
+        elif sample_format == 0x03:  # PEAK_DOUBLE
+            samples, peak_min, peak_max = OscillClient._process_peak_double_samples(raw_data, value_bytes, total_bytes_per_sample)
+        elif sample_format == 0x04:  # NORMAL
+            samples = OscillClient._process_normal_samples(raw_data, limit)
         else:
-            peak_min = []
-            peak_max = []
-            for i in range(0, limit, total_bytes_per_sample):
-                first_chunk = raw_data[i:i + value_bytes]
-                second_chunk = raw_data[i + value_bytes:i + 2 * value_bytes]
-                if len(first_chunk) < value_bytes or len(second_chunk) < value_bytes:
-                    break
-                first_val = int.from_bytes(first_chunk, 'big')
-                second_val = int.from_bytes(second_chunk, 'big')
-                peak_min.append(first_val)
-                peak_max.append(second_val)
-                samples.append((first_val + second_val) // 2)
+            # Unknown format, fallback to normal
+            samples = OscillClient._process_normal_samples(raw_data, limit)
 
         sample_bits = value_bits
         frame: Dict[str, Any] = {
