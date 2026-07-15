@@ -1,6 +1,6 @@
 {
- "note": "partial .ofw keystream (mask). Tiers: 'proven' = lattice(0xFF @off4mod8)/SEQ/reset; 'vector-hi-conf' = 8051 vector-table LJMP opcode(0x02) inference; 'crib-validated' = known-plaintext crib-drag (hex LUTs), multi-version coherent + lattice-consistent (see docs/ofw_mask_cryptanalysis.spike.md \u00a73d). Low-confidence candidates live SEPARATELY in ks_conjectural.json.",
- "n_known": 106,
+ "note": "partial .ofw keystream (mask). Tiers: 'proven' = lattice(0xFF @off4mod8)/SEQ/reset; 'vector-hi-conf' = 8051 LJMP opcode(0x02) inference at a grid position with target-hi in app-code range 0x04-0x7f (13 cols: 12 IRQ-vector opcodes + col133 post-table startup LJMP, spike \u00a73f); 'crib-validated' = known-plaintext crib-drag (hex LUTs), multi-version coherent + lattice-consistent (see docs/ofw_mask_cryptanalysis.spike.md \u00a73d). Low-confidence candidates (incl. INT1/v15/Tmr0/Tmr2 opcodes) live SEPARATELY in ks_conjectural.json.",
+ "n_known": 107,
  "total": 514,
  "known": {
   "1": "0x06",
@@ -33,6 +33,7 @@
   "117": "0xc1",
   "118": "0xb0",
   "126": "0xd9",
+  "133": "0x29",
   "134": "0x87",
   "142": "0x41",
   "150": "0xd0",
@@ -141,6 +142,7 @@
   "117": "vector-hi-conf",
   "118": "proven",
   "126": "proven",
+  "133": "vector-hi-conf",
   "134": "proven",
   "142": "proven",
   "150": "proven",

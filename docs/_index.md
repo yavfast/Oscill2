@@ -75,7 +75,7 @@ _(Detailed Android specs and plans deferred — refer to existing docs/ for Andr
 | [sample_array_length.spike.md](sample_array_length.spike.md) | concluded | What bounds max sample count (QSh = RS/TS/M1/AP, not CPU freq); CPU freq = time resolution, not count |
 | [firmware_hardware.spike.md](firmware_hardware.spike.md) | concluded | Programmable ICs, PCB layout, firmware type, programming toolset |
 | [firmware_update_method.spike.md](firmware_update_method.spike.md) | concluded | How the Windows software updates firmware; `.ofw` format + encryption; modification feasibility |
-| [ofw_mask_cryptanalysis.spike.md](ofw_mask_cryptanalysis.spike.md) | concluded | Math foundation for unpacking `.ofw`: many-time-pad model, stride-8 0xFF crib → 64/514 mask recovered ciphertext-only; full mask needs 1 known page (C2); test-fw = validator, not oracle |
+| [ofw_mask_cryptanalysis.spike.md](ofw_mask_cryptanalysis.spike.md) | concluded | Math foundation for unpacking `.ofw`: many-time-pad model; file-only mask **107/514** (stride-8 0xFF lattice + SEQ/reset + 13 vector-LJMP incl. §3f + 2 hex-LUT cribs; ≤111 with candidates). Full mask needs 1 known page, but **C2-readback is LOCKED** → glitch-bypass only; test-fw = validator, not oracle |
 | [firmware_1.26_defects.md](firmware_1.26_defects.md) | draft (analysis) | Defect register for firmware 1.26 (slow-roll sweep drift, etc.) |
 
 _Durable `.ofw` findings are captured in skill [firmware_ofw_format](../.dev_flow/skills/firmware_ofw_format/SKILL.md); tooling in `firmware/ofw_crypto.py`._
