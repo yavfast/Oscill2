@@ -1,0 +1,14 @@
+# Regenerable SDCC build outputs — keep only ref.c, build*.sh, STRUCTURE.md
+ref.ihx
+ref.bin
+ref0400.ihx
+ref0400_app.bin
+test0400.*
+*.asm
+*.lst
+*.rst
+*.rel
+*.map
+*.mem
+*.sym
+*.lk
