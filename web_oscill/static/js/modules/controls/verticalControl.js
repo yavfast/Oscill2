@@ -1,5 +1,7 @@
 import { createButton, createLabel, createSlider, setButtonActive } from './uiHelpers.js';
 
+// [PL_AUDIT_WEB_06] Hardcoded list kept ONLY as offline fallback default; the
+// live values are fetched from GET /api/config/options during init.
 const VDIV_VALUES_MV = [20, 50, 100, 200, 500, 1000, 2000, 5000, 10000];
 const VPOS_MIN = 0;
 const VPOS_MAX = 255;
@@ -12,12 +14,27 @@ export class VerticalControl {
     this.onAutoVScale = onAutoVScale;
     this.onAutoVOffset = onAutoVOffset;
 
+    this.vdivValues = VDIV_VALUES_MV; // [PL_AUDIT_WEB_06] instance copy; overridden by backend options when available
     this.currentVIndex = 3; // 200 mV
-    this.currentVDivMV = VDIV_VALUES_MV[this.currentVIndex];
+    this.currentVDivMV = this.vdivValues[this.currentVIndex];
     this.vOffsetRaw = 128;
     this.coupling = 'DC';
 
     this.ui = {};
+  }
+
+  // [PL_AUDIT_WEB_06] Apply options fetched from GET /api/config/options (or leave fallback default if absent).
+  applyConfigOptions(opts) {
+    if (!opts) return;
+    if (Array.isArray(opts.v_div_values_mv) && opts.v_div_values_mv.length > 0) {
+      this.vdivValues = opts.v_div_values_mv;
+      this.currentVIndex = Math.max(0, Math.min(this.vdivValues.length - 1, this.currentVIndex));
+      this.currentVDivMV = this.vdivValues[this.currentVIndex];
+      if (this.ui.vdivValue) {
+        this.ui.vdivValue.text(this.formatVoltage(this.currentVDivMV));
+      }
+      if (this.layer) this.layer.batchDraw();
+    }
   }
 
   build({ padX, y, colWidth }) {
@@ -138,14 +155,14 @@ export class VerticalControl {
   }
 
   changeVDiv(delta) {
-    const nextIndex = Math.max(0, Math.min(VDIV_VALUES_MV.length - 1, this.currentVIndex + delta));
+    const nextIndex = Math.max(0, Math.min(this.vdivValues.length - 1, this.currentVIndex + delta)); // [PL_AUDIT_WEB_06]
     this.currentVIndex = nextIndex;
-    this.currentVDivMV = VDIV_VALUES_MV[this.currentVIndex];
+    this.currentVDivMV = this.vdivValues[this.currentVIndex];
     if (this.ui.vdivValue) {
       this.ui.vdivValue.text(this.formatVoltage(this.currentVDivMV));
     }
     this.layer.batchDraw();
-    this.onConfigChange && this.onConfigChange({ v_div: { v: VDIV_VALUES_MV[this.currentVIndex], u: 'mV' } });
+    this.onConfigChange && this.onConfigChange({ v_div: { v: this.vdivValues[this.currentVIndex], u: 'mV' } });
   }
 
   changeVPosition(value) {
@@ -184,10 +201,10 @@ export class VerticalControl {
     if (config.v_div) {
       let vValue = config.v_div.v;
       if (config.v_div.u === 'V') vValue *= 1000;
-      const idx = VDIV_VALUES_MV.indexOf(vValue);
+      const idx = this.vdivValues.indexOf(vValue); // [PL_AUDIT_WEB_06]
       if (idx !== -1) {
         this.currentVIndex = idx;
-        this.currentVDivMV = VDIV_VALUES_MV[idx];
+        this.currentVDivMV = this.vdivValues[idx];
       }
       if (this.ui.vdivValue) {
         const displayMv = typeof config.v_div.v === 'number'

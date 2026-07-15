@@ -1,6 +1,9 @@
 import { decodeFrameSamples } from './hexUtils.js';
 
 const API_BASE = '/api';
+// [PL_AUDIT_WEB_B10] Gate verbose per-frame logging; defaults to off so the
+// console isn't spammed on every poll (~10 Hz).
+const DEBUG = false;
 
 export class ApiService {
   constructor() {
@@ -62,7 +65,7 @@ export class ApiService {
     
     // Decode hex-encoded samples back to arrays
     if (data.format === 'hex' && data.frames) {
-      console.log('[API] Decoding', data.frames.length, 'hex frames');
+      if (DEBUG) console.log('[API] Decoding', data.frames.length, 'hex frames'); // [PL_AUDIT_WEB_B10]
       data.frames = data.frames.map(frame => {
         const decoded = decodeFrameSamples(frame);
         if (!decoded.samples && frame.samples_hex) {

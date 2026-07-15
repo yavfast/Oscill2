@@ -1,8 +1,10 @@
 import { createButton, createLabel, createSlider } from './uiHelpers.js';
 
+// [PL_AUDIT_WEB_06] Hardcoded lists kept ONLY as offline fallback defaults; the
+// live values are fetched from GET /api/config/options during init.
 const TDIV_VALUES_MS = [0.1, 0.2, 0.5, 1, 2, 5, 10, 20, 50, 100, 200, 500];
 const DEFAULT_INDEX = 5; // 5 ms
-const HDIVS = 10;
+const HDIVS = 8; // [PL_AUDIT_WEB_08] device captures 8 horizontal divisions (H_DIVS=8)
 const DEFAULT_SAMPLES_PER_DIV = 32;
 
 export class HorizontalControl {
@@ -12,13 +14,39 @@ export class HorizontalControl {
     this.formatTime = formatTime;
     this.onAutoTScale = onAutoTScale;
 
+  // [PL_AUDIT_WEB_06] Instance copies so backend-provided options can override the fallback defaults.
+  this.tdivValues = TDIV_VALUES_MS;
+  this.hDivs = HDIVS; // [PL_AUDIT_WEB_08]
   this.currentTIndex = DEFAULT_INDEX;
   this.samplesPerDiv = DEFAULT_SAMPLES_PER_DIV;
-  this.totalSamples = this.samplesPerDiv * HDIVS;
+  this.totalSamples = this.samplesPerDiv * this.hDivs;
   this.tOffsetMax = Math.max(0, this.totalSamples - 1);
   this.tOffsetRaw = Math.min(128, this.tOffsetMax);
 
     this.ui = {};
+  }
+
+  // [PL_AUDIT_WEB_06] Apply options fetched from GET /api/config/options (or leave fallback defaults if absent).
+  applyConfigOptions(opts) {
+    if (!opts) return;
+    if (Array.isArray(opts.t_div_values_ms) && opts.t_div_values_ms.length > 0) {
+      this.tdivValues = opts.t_div_values_ms;
+      this.currentTIndex = Math.max(0, Math.min(this.tdivValues.length - 1, this.currentTIndex));
+      if (this.ui.tdivValue) {
+        this.ui.tdivValue.text(this.formatTime(this.tdivValues[this.currentTIndex]));
+      }
+    }
+    if (typeof opts.h_divs === 'number' && opts.h_divs > 0) this.hDivs = opts.h_divs; // [PL_AUDIT_WEB_08]
+    if (typeof opts.samples_per_div === 'number' && opts.samples_per_div > 0) this.samplesPerDiv = opts.samples_per_div;
+    this.totalSamples = this.samplesPerDiv * this.hDivs;
+    this.tOffsetMax = Math.max(0, this.totalSamples - 1);
+    if (this.ui.hposSlider) {
+      this.ui.hposSlider.setRange(0, this.tOffsetMax);
+      const adjusted = this.ui.hposSlider.clamp(this.tOffsetRaw);
+      this.tOffsetRaw = adjusted;
+      this.ui.hposSlider.render(adjusted);
+    }
+    if (this.layer) this.layer.batchDraw();
   }
 
   build({ padX, y, colWidth }) {
@@ -38,7 +66,7 @@ export class HorizontalControl {
     this.ui.tdivValue = createLabel({
       x: padX + 44,
       y: nextY + 6,
-      text: this.formatTime(TDIV_VALUES_MS[this.currentTIndex]),
+      text: this.formatTime(this.tdivValues[this.currentTIndex]), // [PL_AUDIT_WEB_06]
       fontSize: 14,
       color: '#fff',
     });
@@ -89,13 +117,13 @@ export class HorizontalControl {
   }
 
   changeTDiv(delta) {
-    const nextIndex = Math.max(0, Math.min(TDIV_VALUES_MS.length - 1, this.currentTIndex + delta));
+    const nextIndex = Math.max(0, Math.min(this.tdivValues.length - 1, this.currentTIndex + delta)); // [PL_AUDIT_WEB_06]
     this.currentTIndex = nextIndex;
     if (this.ui.tdivValue) {
-      this.ui.tdivValue.text(this.formatTime(TDIV_VALUES_MS[this.currentTIndex]));
+      this.ui.tdivValue.text(this.formatTime(this.tdivValues[this.currentTIndex]));
     }
     this.layer.batchDraw();
-    this.onConfigChange && this.onConfigChange({ t_div: { v: TDIV_VALUES_MS[this.currentTIndex], u: 'ms' } });
+    this.onConfigChange && this.onConfigChange({ t_div: { v: this.tdivValues[this.currentTIndex], u: 'ms' } });
   }
 
   changeTPosition(value) {
@@ -125,11 +153,16 @@ export class HorizontalControl {
 
     if (config.t_div) {
       const tValue = config.t_div.v;
-      const idx = TDIV_VALUES_MS.indexOf(tValue);
+      const idx = this.tdivValues.indexOf(tValue); // [PL_AUDIT_WEB_06]
       if (idx !== -1) this.currentTIndex = idx;
       if (this.ui.tdivValue) {
-        this.ui.tdivValue.text(this.formatTime(TDIV_VALUES_MS[this.currentTIndex]));
+        this.ui.tdivValue.text(this.formatTime(this.tdivValues[this.currentTIndex]));
       }
+    }
+
+    // [PL_AUDIT_WEB_08] Prefer device truth for horizontal divisions from the frame config (default 8).
+    if (typeof config.h_divs === 'number' && config.h_divs > 0) {
+      this.hDivs = config.h_divs;
     }
 
     if (typeof config.samples_per_div === 'number') {
@@ -139,7 +172,7 @@ export class HorizontalControl {
     const reportedTotal = typeof config.samples_total === 'number'
       ? Math.max(0, Math.round(config.samples_total))
       : null;
-    this.totalSamples = reportedTotal !== null ? reportedTotal : (this.samplesPerDiv * HDIVS);
+    this.totalSamples = reportedTotal !== null ? reportedTotal : (this.samplesPerDiv * this.hDivs); // [PL_AUDIT_WEB_08]
     this.tOffsetMax = Math.max(0, this.totalSamples > 0 ? this.totalSamples - 1 : 0);
     if (this.ui.hposSlider) {
       this.ui.hposSlider.setRange(0, this.tOffsetMax);

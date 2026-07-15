@@ -41,6 +41,39 @@ export class ControlPanel {
 
     this._resizeObserver = new ResizeObserver(() => this._resize());
     this._resizeObserver.observe(this.container);
+
+    // [PL_AUDIT_WEB_06] Fire-and-forget: fetch shared constants once and push
+    // them into the controls. Deliberately not awaited so init() stays
+    // synchronous and existing call sites (setTriggerLevelChangeCallback, etc.)
+    // keep seeing the controls built with the hardcoded fallback defaults.
+    this._loadConfigOptions();
+  }
+
+  // [PL_AUDIT_WEB_06] One-time fetch of shared constants from the backend, with a
+  // safe fallback to the hardcoded defaults baked into the controls if it fails
+  // (so the UI still works offline).
+  async _loadConfigOptions() {
+    try {
+      const resp = await fetch('/api/config/options');
+      if (!resp.ok) return;
+      const opts = await resp.json();
+      this.applyConfigOptions(opts);
+    } catch (e) {
+      // Keep hardcoded fallback defaults; UI remains functional offline.
+      console.warn('[ControlPanel] /api/config/options unavailable, using fallback defaults:', e);
+    }
+  }
+
+  // [PL_AUDIT_WEB_06] Dispatch fetched options to the controls that consume them.
+  applyConfigOptions(opts) {
+    if (!opts) return;
+    if (this.controls.vertical && typeof this.controls.vertical.applyConfigOptions === 'function') {
+      this.controls.vertical.applyConfigOptions(opts);
+    }
+    if (this.controls.horizontal && typeof this.controls.horizontal.applyConfigOptions === 'function') {
+      this.controls.horizontal.applyConfigOptions(opts);
+    }
+    if (this.layer) this.layer.batchDraw();
   }
 
   _buildUI() {

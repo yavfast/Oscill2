@@ -43,8 +43,9 @@ export class ScopeView {
   this.tAxisPositionSeconds = 0;
   this.tAxisLabelSeconds = 0;
 
-    this.totalDivsX = 10;
+    this.totalDivsX = 8; // [PL_AUDIT_WEB_08] device captures 8 horizontal divisions (H_DIVS=8), overridable via frame config h_divs
     this.totalDivsY = 8;
+    this._lastGridSig = null; // [PL_AUDIT_WEB_B8] cached signature of last drawGrid() inputs
 
     // Plot margins for axis labels (pixels)
     this.margins = { left: 56, right: 16, top: 8, bottom: 24 };
@@ -97,51 +98,10 @@ export class ScopeView {
     this.stage.draw();
   }
 
-  redrawWave() {
-    if (!this.lastFrames || !this.lastConfig || !this.xRange || !this.yRange || !this.stage) return;
-    const latestFrame = this.lastFrames[this.lastFrames.length - 1];
-    const samples = latestFrame.samples || [];
-    if (samples.length === 0) {
-      this.waveLine.points([]);
-      if (this.peakArea) {
-        this.peakArea.points([]);
-        this.peakArea.visible(false);
-      }
-      this.waveLayer.batchDraw();
-      return;
-    }
-    const sampleBits = Math.max(1, latestFrame.sample_bits || 8);
-    const peakMin = latestFrame.samples_peak_min || [];
-    const peakMax = latestFrame.samples_peak_max || [];
-    const totalTime = this.xRange[1] - this.xRange[0];
-    const totalVoltage = this.yRange[1] - this.yRange[0];
-    const inner = this.getInnerRect();
-    const toX = (time) => {
-      const [xmin, xmax] = this.xRange;
-      const width = inner.width;
-      return inner.left + ((time - xmin) / (xmax - xmin)) * width;
-    };
-    const toY = (volt) => {
-      const [ymin, ymax] = this.yRange;
-      const height = inner.height;
-      return inner.top + (1 - (volt - ymin) / (ymax - ymin)) * height;
-    };
-    const points = [];
-    for (let i = 0; i < samples.length; i++) {
-      const time = (i / Math.max(1, samples.length)) * totalTime + this.xRange[0];
-      const voltage = this.sampleToVoltage(samples[i], sampleBits, totalVoltage);
-      points.push(toX(time), toY(voltage));
-    }
-    this._updatePeakArea(peakMin, peakMax, sampleBits, totalTime, totalVoltage, toX, toY);
-    this.waveLine.points(points);
-    this.waveLayer.batchDraw();
-
-    const currentTriggerLevel = this.isDraggingTrigger ? this.tempTriggerLevel : this.triggerLevel;
-    const trigYPix = this.triggerLevelToYPixel(currentTriggerLevel);
-    this._positionTriggerGroup(trigYPix);
-    this._positionCenterYGroup(toY(this.vAxisValueVolts));
-    this._positionCenterXGroup(toX(this.tAxisPositionSeconds));
-  }
+  // [PL_AUDIT_WEB_03] Removed dead duplicate redrawWave() definition that used
+  // to live here. It was silently shadowed by the second definition further
+  // down (the live/correct one: it computes and applies vOffsetVolts and guards
+  // marker repositioning against active drags). See redrawWave() below.
 
   update(frames, config) {
     if (!frames || frames.length === 0) return;
@@ -200,6 +160,10 @@ export class ScopeView {
     let tDiv = 0.005;
     if (config.t_div) {
       tDiv = config.t_div.u === 'ms' ? config.t_div.v / 1000 : config.t_div.v;
+    }
+    // [PL_AUDIT_WEB_08] Prefer device truth for horizontal divisions when the frame config provides it (default 8).
+    if (config && typeof config.h_divs === 'number' && config.h_divs > 0) {
+      this.totalDivsX = config.h_divs;
     }
     const totalTime = tDiv * this.totalDivsX;
     const totalVoltage = vDiv * this.totalDivsY;
@@ -528,10 +492,19 @@ export class ScopeView {
 
   drawGrid() {
     if (!this.gridLayer || !this.stage) return;
-    this.gridLayer.destroyChildren();
-    if (this.axisLayer) this.axisLayer.destroyChildren();
     const w = this.stage.width();
     const h = this.stage.height();
+    // [PL_AUDIT_WEB_B8] Cache the grid: it depends only on stage size, the div
+    // counts and the value ranges it draws. Skip the ~130-node rebuild (called
+    // every frame at ~10 Hz) when none of those inputs changed since last build.
+    // Resize (w/h) and range changes still flow through and force a rebuild.
+    const xr = this.xRange || [null, null];
+    const yr = this.yRange || [null, null];
+    const gridSig = [w, h, this.totalDivsX, this.totalDivsY, xr[0], xr[1], yr[0], yr[1], this.tAxisPositionSeconds || 0].join('|');
+    if (gridSig === this._lastGridSig) return;
+    this._lastGridSig = gridSig;
+    this.gridLayer.destroyChildren();
+    if (this.axisLayer) this.axisLayer.destroyChildren();
     const majorColor = '#666666';
     const minorColor = '#333333';
     const zeroColor = '#cccccc';
