@@ -68,6 +68,14 @@ _(Detailed Android specs and plans deferred — refer to existing docs/ for Andr
 
 ---
 
+## Firmware Reverse-Engineering (offline tooling)
+
+| Concept | Spec | Plan | Description |
+|---------|------|------|-------------|
+| [C_OMS](ofw_mask_solver.concept.md) | [SP_OMS](ofw_mask_solver.sp.md) | [PL_OMS](ofw_mask_solver.plan.md) | `.ofw` mask solver — automated per-column keystream candidate search (hybrid cross-version triage + anchored-window 8051 CSP, hard signals only) → per-column determinability catalog; builds on the `ofw_mask_cryptanalysis` spike; concept+spec+plan `draft` |
+
+---
+
 ## Investigations (spikes — no pipeline gates)
 
 | Document | Status | Description |
