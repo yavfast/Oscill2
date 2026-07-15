@@ -19,7 +19,12 @@ def samples_to_hex(samples: List[int], sample_bytes: int = 1) -> str:
     if not samples:
         return ""
     if sample_bytes == 1:
-        return ''.join(f'{s:02x}' for s in samples)
+        # [PL_AUDIT_WEB_B5] bytes(...).hex() is ~an order of magnitude faster than a
+        # per-element f-string join on this per-frame hot path. Valid 8-bit samples
+        # are 0..255; an out-of-range value raises here (caught upstream) rather than
+        # silently emitting a wrong-width field (the old '{s:02x}' overflowed to 3+
+        # chars for values >255, desyncing every following sample).
+        return bytes(samples).hex()
     elif sample_bytes == 2:
         return ''.join(f'{s:04x}' for s in samples)
     else:
@@ -204,15 +209,22 @@ def calculate_frequency_and_period(samples: List[int],
     
     segments_count = len(pos_segments) + len(neg_segments)
     result["segments_count"] = segments_count
-    
+
     # Need at least 3 segments for reliable frequency calculation
     if segments_count < 3:
         return result
-    
+
+    # [PL_AUDIT_WEB_B12] A full period is one positive run PLUS one negative run.
+    # With a strongly asymmetric duty cycle the noise filter can drop *all* runs of
+    # one sign while >=3 of the other survive; using 0 for the missing side then
+    # yields a half-period and reports ~2x the true frequency. Require both sides.
+    if not pos_segments or not neg_segments:
+        return result
+
     # Calculate period
-    avg_pos_filtered = calculate_average(pos_segments) if pos_segments else 0
-    avg_neg_filtered = calculate_average(neg_segments) if neg_segments else 0
-    
+    avg_pos_filtered = calculate_average(pos_segments)
+    avg_neg_filtered = calculate_average(neg_segments)
+
     t_period_ms = (avg_pos_filtered + avg_neg_filtered) * t_step_ms
     
     if t_period_ms > 0:

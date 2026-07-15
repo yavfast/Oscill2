@@ -4,15 +4,14 @@ from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import HTMLResponse, FileResponse, JSONResponse
 from pydantic import BaseModel
 from typing import Optional, Dict, Any, List, Union
+import logging
 import os
 import time
 import orjson
 
 import sys
-import os
 sys.path.append(os.path.dirname(__file__))
 
-from oscill_client import OscillClient
 from device_service import DeviceService
 from converters import get_voltage_mv, get_time_ms
 from calculations import (
@@ -22,7 +21,9 @@ from calculations import (
     calculate_voltage_range,
     calculate_measurements
 )
-from auto_adjust import auto_adjust_multiple
+from auto_adjust import auto_adjust_multiple, VDIV_VALUES_MV, TDIV_VALUES_MS
+
+log = logging.getLogger("web_api")
 
 
 class ORJSONResponse(JSONResponse):
@@ -35,13 +36,17 @@ class ORJSONResponse(JSONResponse):
 
 app = FastAPI(title="Oscill2 Web App", default_response_class=ORJSONResponse)
 
-# Add GZip compression middleware (applies to responses >= 1KB)
-app.add_middleware(GZipMiddleware, minimum_size=500)
+# [PL_AUDIT_WEB_B7] GZip threshold raised to 1000 bytes: small/frequent status &
+# frame responses in this 10 Hz polling API are below typical compression benefit.
+app.add_middleware(GZipMiddleware, minimum_size=1000)
 
+# [PL_AUDIT_WEB_07] The frontend is served same-origin by this app, so wildcard CORS
+# is unnecessary. Restrict to localhost origins (any port) and drop credentialed CORS
+# so a random website the user visits cannot drive the device-control API in their browser.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
+    allow_origin_regex=r"https?://(localhost|127\.0\.0\.1)(:\d+)?",
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
     max_age=3600,  # Cache preflight requests for 1 hour
@@ -49,7 +54,6 @@ app.add_middleware(
 
 # In-memory singleton service instance
 service = DeviceService(buffer_size=256)
-client: Optional[OscillClient] = None  # backwards-compat variable name used in handlers
 
 class ConnectReq(BaseModel):
     port: Optional[str] = None
@@ -62,7 +66,6 @@ def api_connect(req: Optional[ConnectReq] = None):
     If port is specified, explicitly connect to that port.
     If port is None/not specified, use ensure_connected (auto-detect).
     """
-    global client
     try:
         if req and req.port:
             # Explicit connection to specified port
@@ -71,31 +74,28 @@ def api_connect(req: Optional[ConnectReq] = None):
             # Auto-connect if needed
             baud = req.baud if req else 115200
             res = service.ensure_connected(port=None, baud=baud)
-        # expose client for legacy handlers during migration
-        client = service._client
         return res
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    except Exception:
+        log.exception("connect failed")
+        raise HTTPException(status_code=500, detail="Connection failed")
 
 @app.post("/api/disconnect")
 def api_disconnect():
-    global client
     try:
-        res = service.disconnect()
-        client = None
-        return res
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        return service.disconnect()
+    except Exception:
+        log.exception("disconnect failed")
+        raise HTTPException(status_code=500, detail="Disconnect failed")
 
 @app.get("/api/status")
 def api_status():
-    st = service.get_status()
-    if st.get("status") == "ok":
-        # Convert config to new format with units
-        config = st.get("config", {})
-        new_config = config  # Already in correct format
-        st["config"] = new_config
-    return st
+    # [PL_AUDIT_WEB_B15] Wrap so a device/service error surfaces as HTTP 500
+    # (rule PythonCatchAndReraise500) rather than an unhandled 500 with a trace.
+    try:
+        return service.get_status()
+    except Exception:
+        log.exception("status failed")
+        raise HTTPException(status_code=500, detail="Failed to read status")
 
 class ConfigReq(BaseModel):
     v_div: Optional[Dict[str, Any]] = None
@@ -115,7 +115,7 @@ class ConfigReq(BaseModel):
 
 @app.post("/api/config")
 def api_config(req: ConfigReq):
-    if not service._client:
+    if not service.is_connected():
         raise HTTPException(status_code=400, detail="Not connected")
     try:
         # Convert string values to appropriate formats
@@ -131,9 +131,10 @@ def api_config(req: ConfigReq):
         if req.trigger_level is not None:
             changes["trigger_level"] = req.trigger_level
         if req.trigger_mode is not None:
-            # Convert string to int (assuming mapping)
-            mode_map = {"Auto": 0x2C, "Normal": 0x2D, "Single": 0x2E}
-            changes["trigger_mode"] = mode_map.get(req.trigger_mode, 0x2C)
+            # [PL_AUDIT_WEB_B3] Pass the mode name through; DeviceService owns the
+            # name->register mapping (single source of truth). Do not duplicate the
+            # {Auto,Normal,Single}->register map here.
+            changes["trigger_mode"] = req.trigger_mode
         if req.trigger_slope is not None:
             # This might need to be handled in device_service
             changes["trigger_slope"] = req.trigger_slope
@@ -161,8 +162,9 @@ def api_config(req: ConfigReq):
         if isinstance(status, dict) and status.get("cfg_id") is not None:
             response["cfg_id"] = status["cfg_id"]
         return response
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    except Exception:
+        log.exception("apply config failed")
+        raise HTTPException(status_code=500, detail="Failed to apply configuration")
 
 @app.get("/api/frames")
 def api_frames(since: Optional[int] = None, limit: int = 128, format: str = "hex"):
@@ -175,21 +177,21 @@ def api_frames(since: Optional[int] = None, limit: int = 128, format: str = "hex
         format: "hex" (compact hex strings) or "array" (JSON arrays)
     """
     try:
-        if not service._client:
+        if not service.is_connected():
             return {"status": "disconnected", "frames": []}
-        
+
         # If acquisition is running and we would return an empty list, wait for frames
         data = service.get_frames(since=since, limit=limit)
         frames = data.get("frames", [])
-        
+
         if not frames:
-            if service._is_acquiring:
+            if service.is_acquiring():
                 # Wait up to 5 seconds for new frames to arrive
                 max_wait_time = 5.0
                 wait_interval = 0.05  # Check every 50ms
                 elapsed = 0.0
-                
-                while elapsed < max_wait_time and service._is_acquiring:
+
+                while elapsed < max_wait_time and service.is_acquiring():
                     time.sleep(wait_interval)
                     elapsed += wait_interval
                     
@@ -227,11 +229,14 @@ def api_frames(since: Optional[int] = None, limit: int = 128, format: str = "hex
         # Process frames and add measurements
         processed_frames = []
         use_hex = format.lower() == "hex"
-        
-        for frame in frames:
+        # [PL_AUDIT_WEB_B9] The client renders only the newest frame, so compute the
+        # (relatively expensive) measurements just for it, not for every buffered frame.
+        newest_idx = len(frames) - 1
+
+        for i, frame in enumerate(frames):
             processed_frame = dict(frame)
             processed_frame.pop("config", None)
-            
+
             # Convert samples to hex format if requested
             if use_hex:
                 sample_bytes = frame.get("sample_bytes", 1)
@@ -244,20 +249,22 @@ def api_frames(since: Optional[int] = None, limit: int = 128, format: str = "hex
                 if "samples_peak_max" in processed_frame and processed_frame["samples_peak_max"]:
                     processed_frame["samples_peak_max_hex"] = samples_to_hex(processed_frame["samples_peak_max"], sample_bytes)
                     del processed_frame["samples_peak_max"]
-            
-            measurements = calculate_measurements(frame, current_config)
-            if measurements:
-                processed_frame["measurements"] = measurements
+
+            if i == newest_idx:
+                measurements = calculate_measurements(frame, current_config)
+                if measurements:
+                    processed_frame["measurements"] = measurements
             processed_frames.append(processed_frame)
-        
+
         return {
             "config": new_config,
             "frames": processed_frames,
             "newest_seq": data.get("newest_seq", 0),
             "format": "hex" if use_hex else "array"
         }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    except Exception:
+        log.exception("frames fetch failed")
+        raise HTTPException(status_code=500, detail="Failed to fetch frames")
 
 @app.post("/api/auto")
 def api_auto(types: Optional[str] = None):
@@ -271,9 +278,9 @@ def api_auto(types: Optional[str] = None):
     Returns:
         Adjustment results with new configuration
     """
-    if not service._client:
+    if not service.is_connected():
         raise HTTPException(status_code=400, detail="Not connected")
-    
+
     try:
         # Parse types parameter
         if not types:
@@ -311,31 +318,47 @@ def api_auto(types: Optional[str] = None):
         
     except HTTPException:
         raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    except Exception:
+        log.exception("auto-adjust failed")
+        raise HTTPException(status_code=500, detail="Auto-adjust failed")
 
 @app.post("/api/start")
 def api_start():
     """Start data acquisition."""
-    if not service._client:
+    if not service.is_connected():
         raise HTTPException(status_code=400, detail="Not connected")
     try:
-        res = service.start()
-        return res
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        return service.start()
+    except Exception:
+        log.exception("start failed")
+        raise HTTPException(status_code=500, detail="Failed to start acquisition")
 
 @app.post("/api/stop")
 def api_stop():
     """Stop data acquisition."""
     try:
-        res = service.stop()
-        return res
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        return service.stop()
+    except Exception:
+        log.exception("stop failed")
+        raise HTTPException(status_code=500, detail="Failed to stop acquisition")
+
+@app.get("/api/config/options")
+def api_config_options():
+    """
+    [PL_AUDIT_WEB_06] Single source of truth for constants the frontend must agree
+    on: the V/div and Time/div step lists, and the display grid geometry (h_divs,
+    samples_per_div). The frontend fetches these instead of hardcoding its own copies.
+    """
+    geometry = service.display_geometry()
+    return {
+        "v_div_values_mv": VDIV_VALUES_MV,
+        "t_div_values_ms": TDIV_VALUES_MS,
+        "h_divs": geometry["h_divs"],
+        "samples_per_div": geometry["samples_per_div"],
+    }
 
 # Serve static index.html
-static_dir = os.path.join(os.path.dirname(__file__), "static")
+static_dir = os.path.realpath(os.path.join(os.path.dirname(__file__), "static"))
 
 @app.get("/")
 def index():
@@ -343,7 +366,12 @@ def index():
 
 @app.get("/static/{path:path}")
 def static_files(path: str):
-    fp = os.path.join(static_dir, path)
+    # [PL_AUDIT_WEB_S1] Prevent path traversal: resolve the requested path and
+    # confirm it stays inside static_dir before serving. Without this, a request
+    # like /static/../../etc/passwd escapes the static root.
+    fp = os.path.realpath(os.path.join(static_dir, path))
+    if os.path.commonpath([static_dir, fp]) != static_dir:
+        raise HTTPException(status_code=403, detail="Forbidden")
     if not os.path.isfile(fp):
         raise HTTPException(status_code=404)
     return FileResponse(fp)

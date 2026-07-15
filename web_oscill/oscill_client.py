@@ -48,6 +48,10 @@ class OscillClient:
         self._cpu_tick_10ps: Optional[int] = None  # machine cycle length in 10ps units
 
     def open(self):
+        # [PL_AUDIT_WEB_B14] Guard against re-opening over a live port (SP_OCL
+        # invariant): silently replacing self.ser would leak the previous handle.
+        if self.ser is not None and getattr(self.ser, "is_open", False):
+            raise AssertionError("Serial port already open; call close() first")
         self.ser = serial.Serial(self.port, self.baud, timeout=self.timeout)
 
     def close(self):

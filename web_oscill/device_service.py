@@ -208,6 +208,31 @@ class DeviceService:
             self._log.warning(f"Auto-connect failed: {e}")
             return {"status": "disconnected", "is_connected": False, "is_acquiring": False, "error": str(e)}
 
+    def is_connected(self) -> bool:
+        """Public accessor: True if a device is connected.
+
+        [PL_AUDIT_WEB_01] The web layer must use this instead of reaching into
+        the private ``_client`` handle (rule HardwareAccessOnlyThroughDeviceService).
+        """
+        return bool(self._is_connected and self._client)
+
+    def is_acquiring(self) -> bool:
+        """Public accessor: True if the background acquisition loop is running."""
+        return bool(self._is_acquiring)
+
+    @staticmethod
+    def display_geometry() -> Dict[str, int]:
+        """Static display grid geometry (single source of truth for the frontend).
+
+        [PL_AUDIT_WEB_06] Exposes the device's horizontal-division count and
+        samples-per-division so the web layer need not import OscillClient directly
+        (rule HardwareAccessOnlyThroughDeviceService) nor hardcode its own copy.
+        """
+        return {
+            "h_divs": OscillClient.H_DIVS,
+            "samples_per_div": OscillClient.SAMPLES_PER_DIV,
+        }
+
     def get_status(self) -> Dict[str, Any]:
         """Get status from cached configuration without querying device."""
         if not self._is_connected or not self._client:
@@ -541,6 +566,10 @@ class DeviceService:
         
         # Static geometry info for UI
         cfg["samples_per_div"] = getattr(c, 'SAMPLES_PER_DIV', 32)
+        # [PL_AUDIT_WEB_08] Expose the device horizontal-division count (device truth
+        # = 8, NOT the 10 the frontend historically assumed) so the display grid and
+        # time-axis are computed against the real capture window.
+        cfg["h_divs"] = getattr(c, 'H_DIVS', 8)
         
         # Channel hardware/software modes and sync metadata
         o1 = c.get_channel_hw_mode()
@@ -598,6 +627,7 @@ class DeviceService:
         backoff_s = 0.005  # Reduced from 0.02 to 0.005 (5ms) for lower latency
         consecutive_errors = 0
         max_consecutive_errors = 5  # Disconnect if 5 consecutive errors
+        force_disconnect = False
         while not self._stop_event.is_set():
             # Try to acquire device without blocking for too long
             got = self._dev_lock.acquire(timeout=0.1)
@@ -615,9 +645,12 @@ class DeviceService:
                     continue
                 # Timestamp
                 ts = time.time()
-                # Snapshot config while holding the lock to keep it consistent
-                # If snapshot fails, it means device communication is broken - will trigger reset
-                cfg = self._snapshot_config_locked()
+                # [PL_AUDIT_WEB_04] Use the cached config instead of re-reading ~15
+                # registers over serial on every frame. Config only changes via
+                # connect()/apply_config(), both of which refresh the cache under
+                # the same lock. A broken device is already detected by get_frame()
+                # above (it raises), so the per-frame snapshot health-check is redundant.
+                cfg = self._get_cached_config()
                 # Store compact payload; keep raw samples only
                 payload = {
                     "time": ts,
@@ -643,20 +676,31 @@ class DeviceService:
                 self._log.error(f"Acquisition loop error ({consecutive_errors}/{max_consecutive_errors}): {e}")
                 if consecutive_errors >= max_consecutive_errors:
                     self._log.error(f"Device communication failed after {consecutive_errors} consecutive errors, forcing disconnect")
-                    try:
-                        self.disconnect()
-                    except Exception:
-                        pass
-                    break
-                # Swallow and keep trying
-                time.sleep(backoff_s)
+                    # [PL_AUDIT_WEB_05] Do NOT call the executor-based disconnect()
+                    # from here: we hold _dev_lock and disconnect() submits work to
+                    # the device executor, which would block on the same lock (RLock
+                    # is not re-entrant across threads) for the full 5s timeout. Flag
+                    # it and perform the disconnect after releasing the lock, below.
+                    force_disconnect = True
+                else:
+                    # Swallow and keep trying
+                    time.sleep(backoff_s)
             finally:
                 try:
                     self._dev_lock.release()
                 except RuntimeError:
                     pass
+            if force_disconnect:
+                break
             # Pace the loop lightly to avoid hogging CPU/USB
             time.sleep(backoff_s)
+        if force_disconnect:
+            # Now off the device executor path and not holding _dev_lock: safe to
+            # tear the connection down directly on this (acquisition) thread.
+            try:
+                self._disconnect_internal()
+            except Exception:
+                pass
 
     def start(self) -> Dict[str, Any]:
         """Start data acquisition from device."""

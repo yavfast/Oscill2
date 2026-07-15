@@ -25,10 +25,11 @@ SEGMENTS_COUNT_MIN = 4  # At least 4 half-periods on screen
 SEGMENTS_COUNT_MAX = 8  # At most 8 half-periods on screen
 
 # General parameters
-# MAX_ITERATIONS = 10  # Maximum number of adjustment iterations
-# ITERATION_DELAY = 0.2  # Delay between iterations in seconds (200ms)
-# FRAME_WAIT_TIMEOUT = 2.0  # Maximum time to wait for frame (seconds)
-# FRAME_WAIT_POLL_INTERVAL = 0.05  # Poll interval when waiting for frame
+# [PL_AUDIT_WEB_B13] Hard cap on recursive step adjustments. Termination normally
+# comes from the value list boundary, but a signal sitting exactly between two
+# adjacent steps can oscillate; this bounds the recursion so it can never hit
+# Python's RecursionError (each level performs a real device apply_config).
+MAX_AUTO_ITERATIONS = len(TDIV_VALUES_MS) + 2
 
 # Offset parameters
 V_OFFSET_MIN = 0
@@ -39,81 +40,78 @@ TRIGGER_LEVEL_MIN = 0
 TRIGGER_LEVEL_MAX = 255
 
 
-def find_next_vdiv(current_mv: float, direction: int) -> Optional[float]:
+def _apply_failed(warnings: List[str]) -> bool:
+    """[PL_AUDIT_WEB_02] True when apply_config reported an actual device write
+    failure (vs a benign 'Unsupported <field>' warning). _apply_config_internal
+    swallows hardware errors and returns them as a 'config update failed: ...'
+    warning without raising, so auto-adjust must inspect the warnings to know a
+    change did NOT take effect."""
+    return any(str(w).startswith("config update failed") for w in (warnings or []))
+
+
+def find_next_step(values: List[float], current: float, direction: int) -> Optional[float]:
     """
-    Find next V/div value in the list.
-    
+    Find the next value in a sorted step list, in the given direction.
+
+    [PL_AUDIT_WEB_B4] Shared implementation for find_next_vdiv / find_next_tdiv,
+    which were byte-for-byte identical except for the list.
+
     Args:
-        current_mv: Current V/div value in millivolts
-        direction: +1 for larger (zoom out), -1 for smaller (zoom in)
-        
+        values: Ascending list of valid step values.
+        current: Current value.
+        direction: +1 for the next larger step, -1 for the next smaller.
+
     Returns:
-        Next V/div value or None if at boundary
+        Next step value, or None if already at the boundary.
     """
     try:
-        current_idx = VDIV_VALUES_MV.index(current_mv)
-        next_idx = current_idx + direction
-        
-        if 0 <= next_idx < len(VDIV_VALUES_MV):
-            return VDIV_VALUES_MV[next_idx]
+        next_idx = values.index(current) + direction
+        if 0 <= next_idx < len(values):
+            return values[next_idx]
         return None
     except ValueError:
-        # Current value not in list, find closest
+        # Current value not in list, find closest in the requested direction
         if direction > 0:
-            larger = [v for v in VDIV_VALUES_MV if v > current_mv]
+            larger = [v for v in values if v > current]
             return larger[0] if larger else None
-        else:
-            smaller = [v for v in VDIV_VALUES_MV if v < current_mv]
-            return smaller[-1] if smaller else None
+        smaller = [v for v in values if v < current]
+        return smaller[-1] if smaller else None
+
+
+def find_next_vdiv(current_mv: float, direction: int) -> Optional[float]:
+    """Find next V/div value in the list. +1 = zoom out, -1 = zoom in."""
+    return find_next_step(VDIV_VALUES_MV, current_mv, direction)
 
 
 def find_next_tdiv(current_ms: float, direction: int) -> Optional[float]:
-    """
-    Find next Time/div value in the list.
-    
-    Args:
-        current_ms: Current Time/div value in milliseconds
-        direction: +1 for larger (show more time), -1 for smaller (show less time)
-        
-    Returns:
-        Next Time/div value or None if at boundary
-    """
-    try:
-        current_idx = TDIV_VALUES_MS.index(current_ms)
-        next_idx = current_idx + direction
-        
-        if 0 <= next_idx < len(TDIV_VALUES_MS):
-            return TDIV_VALUES_MS[next_idx]
-        return None
-    except ValueError:
-        # Current value not in list, find closest
-        if direction > 0:
-            larger = [v for v in TDIV_VALUES_MS if v > current_ms]
-            return larger[0] if larger else None
-        else:
-            smaller = [v for v in TDIV_VALUES_MS if v < current_ms]
-            return smaller[-1] if smaller else None
+    """Find next Time/div value in the list. +1 = more time, -1 = less time."""
+    return find_next_step(TDIV_VALUES_MS, current_ms, direction)
 
 
-def auto_adjust_v_div(device_service, config: Dict[str, Any]) -> bool:
+def auto_adjust_v_div(device_service, config: Dict[str, Any], _depth: int = 0) -> bool:
     """
     Automatically adjust voltage scale (V/div) so signal uses 20-80% of screen vertically.
-    
+
     Algorithm:
     1. Get current frame and measurements
     2. Calculate fill_factor = data_v_range / full_v_range
     3. If fill_factor > 0.8: increase V/div (zoom out) and recurse
     4. If fill_factor < 0.2: decrease V/div (zoom in) and recurse
     5. Otherwise: optimal, stop
-    
+
     Args:
         device_service: Device service instance
         config: Current device configuration
-        
+        _depth: Internal recursion depth guard (do not set from callers)
+
     Returns:
         True if adjustment was made or optimal, False if no signal
     """
     try:
+        # [PL_AUDIT_WEB_B13] Stop if we've stepped too many times (oscillation guard).
+        if _depth >= MAX_AUTO_ITERATIONS:
+            logger.warning("[AUTO V/div] Max iterations reached; stopping")
+            return True
         # Get fresh frame and measurements
         frame = device_service.get_latest_frame()
         if not frame or 'samples' not in frame:
@@ -156,24 +154,30 @@ def auto_adjust_v_div(device_service, config: Dict[str, Any]) -> bool:
             # Apply new V/div
             changes = {'v_div': {'v': next_vdiv, 'u': 'mV'}}
             new_config, warnings = device_service.apply_config(changes)
+            if _apply_failed(warnings):
+                logger.warning(f"[AUTO V/div] apply failed: {warnings}")
+                return False
             config.update(new_config)
-            
+
             # Recurse
-            return auto_adjust_v_div(device_service, config)
-            
+            return auto_adjust_v_div(device_service, config, _depth + 1)
+
         elif fill_factor < FILL_FACTOR_MIN:
             # Signal too small - decrease V/div (zoom in)
             next_vdiv = find_next_vdiv(v_div_mv, -1)
             if next_vdiv is None:
                 return True  # At min, consider success
-            
+
             # Apply new V/div
             changes = {'v_div': {'v': next_vdiv, 'u': 'mV'}}
             new_config, warnings = device_service.apply_config(changes)
+            if _apply_failed(warnings):
+                logger.warning(f"[AUTO V/div] apply failed: {warnings}")
+                return False
             config.update(new_config)
-            
+
             # Recurse
-            return auto_adjust_v_div(device_service, config)
+            return auto_adjust_v_div(device_service, config, _depth + 1)
             
         else:
             # Optimal fill factor
@@ -184,24 +188,29 @@ def auto_adjust_v_div(device_service, config: Dict[str, Any]) -> bool:
         return False
 
 
-def auto_adjust_t_div(device_service, config: Dict[str, Any]) -> bool:
+def auto_adjust_t_div(device_service, config: Dict[str, Any], _depth: int = 0) -> bool:
     """
     Automatically adjust time base (Time/div) so 4-8 signal cycles are visible on screen.
-    
+
     Algorithm:
     1. Get current frame and calculate frequency (segments count)
     2. If segments_count < 4: increase Time/div (show more time) and recurse
     3. If segments_count > 8: decrease Time/div (show less time) and recurse
     4. Otherwise: optimal, stop
-    
+
     Args:
         device_service: Device service instance
         config: Current device configuration
-        
+        _depth: Internal recursion depth guard (do not set from callers)
+
     Returns:
         True if adjustment was made or optimal, False if no signal
     """
     try:
+        # [PL_AUDIT_WEB_B13] Oscillation guard (see auto_adjust_v_div).
+        if _depth >= MAX_AUTO_ITERATIONS:
+            logger.warning("[AUTO T/div] Max iterations reached; stopping")
+            return True
         # Get fresh frame
         frame = device_service.get_latest_frame()
         if not frame or 'samples' not in frame:
@@ -233,24 +242,30 @@ def auto_adjust_t_div(device_service, config: Dict[str, Any]) -> bool:
             # Apply new Time/div
             changes = {'t_div': {'v': next_tdiv, 'u': 'ms'}}
             new_config, warnings = device_service.apply_config(changes)
+            if _apply_failed(warnings):
+                logger.warning(f"[AUTO T/div] apply failed: {warnings}")
+                return False
             config.update(new_config)
-            
+
             # Recurse
-            return auto_adjust_t_div(device_service, config)
-            
+            return auto_adjust_t_div(device_service, config, _depth + 1)
+
         elif segments_count > SEGMENTS_COUNT_MAX:
             # Too many cycles - decrease Time/div (show less time)
             next_tdiv = find_next_tdiv(t_div_ms, -1)
             if next_tdiv is None:
                 return True  # At min, consider success
-            
+
             # Apply new Time/div
             changes = {'t_div': {'v': next_tdiv, 'u': 'ms'}}
             new_config, warnings = device_service.apply_config(changes)
+            if _apply_failed(warnings):
+                logger.warning(f"[AUTO T/div] apply failed: {warnings}")
+                return False
             config.update(new_config)
-            
+
             # Recurse
-            return auto_adjust_t_div(device_service, config)
+            return auto_adjust_t_div(device_service, config, _depth + 1)
             
         else:
             # Optimal segments count
@@ -335,8 +350,12 @@ def auto_adjust_v_offset(device_service, config: Dict[str, Any]) -> Dict[str, An
         # Apply new offset
         changes = {'v_offset': v_offset_raw}
         new_config, warnings = device_service.apply_config(changes)
+        if _apply_failed(warnings):
+            logger.warning(f"[AUTO V Offset] apply failed: {warnings}")
+            result['reason'] = f'apply_failed: {warnings}'
+            return result
         config.update(new_config)
-        
+
         result['success'] = True
         result['new_value'] = v_offset_raw
         result['reason'] = 'centered'
@@ -399,8 +418,12 @@ def auto_adjust_trigger_level(device_service, config: Dict[str, Any]) -> Dict[st
         # Apply new trigger level
         changes = {'trigger_level': trigger_raw}
         new_config, warnings = device_service.apply_config(changes)
+        if _apply_failed(warnings):
+            logger.warning(f"[AUTO Trigger] apply failed: {warnings}")
+            result['reason'] = f'apply_failed: {warnings}'
+            return result
         config.update(new_config)
-        
+
         result['success'] = True
         result['new_value'] = trigger_raw
         result['reason'] = 'centered'
@@ -459,12 +482,23 @@ def auto_adjust_multiple(device_service, config: Dict[str, Any],
                 adj_result = auto_adjust_t_div(device_service, config)
             else:
                 continue
-            
-            if not adj_result:
+
+            # [PL_AUDIT_WEB_02] v_offset/trigger return a result DICT (always truthy);
+            # v_div/t_div return a bool. `if not adj_result` treated a failed dict
+            # ({'success': False, ...}) as success. Normalize both shapes to the real
+            # success flag so /api/auto reports failures honestly.
+            if isinstance(adj_result, dict):
+                ok = bool(adj_result.get('success'))
+                if not ok:
+                    logger.warning(f"[AUTO Multiple] {adjust_type} did not succeed: "
+                                   f"{adj_result.get('reason')}")
+            else:
+                ok = bool(adj_result)
+            if not ok:
                 success = False
-            
+
         except Exception as e:
             logger.error(f"[AUTO Multiple] Error in {adjust_type}: {e}")
             success = False
-    
+
     return success
