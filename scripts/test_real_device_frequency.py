@@ -1,13 +1,51 @@
 #!/usr/bin/env python3
 """
-Test script to check frequency calculation in different modes on real device.
+MANUAL HARDWARE TEST — frequency calculation across SW modes on a real device.
+
+This is NOT a hardware-free unit test. It requires:
+  * a live web_oscill server running at BASE_URL, and
+  * a physical Oscill device connected with a signal applied.
+
+It also drives an endpoint (/api/acquire/single) that is part of the manual
+acquisition flow. Because none of that is available in CI / on a bare checkout,
+running this unguarded produced a permanent FALSE FAILURE (item PL_AUDIT_WEB_09).
+
+Behaviour now: by default the script SKIPS with an explanatory message and
+exits 0. To actually run it against real hardware, set OSCILL_HW_TEST=1:
+
+    OSCILL_HW_TEST=1 python3 scripts/test_real_device_frequency.py
 """
 
-import requests
+import os
+import sys
 import time
-import json
 
 BASE_URL = "http://localhost:8000"
+
+
+def _skip(reason):
+    print("=" * 70)
+    print("SKIP: test_real_device_frequency (manual hardware test)")
+    print("=" * 70)
+    print(f"  Reason: {reason}")
+    print("  Set OSCILL_HW_TEST=1 and start the server with a connected device to run it.")
+    sys.exit(0)
+
+
+if os.environ.get("OSCILL_HW_TEST") != "1":
+    _skip("OSCILL_HW_TEST != 1 (default: no live server/device assumed)")
+
+try:
+    import requests  # noqa: E402  (only needed when actually running against hardware)
+except ImportError:
+    _skip("'requests' is not installed")
+
+# Fail fast (still exit 0) if the server is unreachable, so this never becomes a
+# false failure even when explicitly opted in without a running server.
+try:
+    requests.get(f"{BASE_URL}/api/status", timeout=3)
+except Exception as exc:  # noqa: BLE001
+    _skip(f"server at {BASE_URL} is not reachable ({exc})")
 
 def test_frequency_in_modes():
     """Test frequency calculation in different SW modes."""
