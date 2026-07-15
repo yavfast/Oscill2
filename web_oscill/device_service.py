@@ -114,9 +114,9 @@ class DeviceService:
             # RS: realtime (0), post-processing/normal via M1 (not explicitly modeled here)
             # TD (delay) = 0
             cli.set_scan_delay(0)
-            # TA/TW (max wait for auto/wait) = 500 (units 12*MC per docs)
-            cli.set_max_sync_wait_auto(500)
-            cli.set_max_sync_wait_on_trig(500)
+            # [task_trigger-highqs] TA/TW (max trigger wait) are programmed AFTER the
+            # timebase is set (below) via apply_sync_wait(), sized to the sweep — the old
+            # fixed 500 (12*MC ≈ 86 µs @ 70 MHz) starved the trigger, esp. at high QS.
             # AP/AR (averaging/ris passes) = 0
             cli.set_avg_passes(0)
             cli.set_min_ris_passes(0)
@@ -138,6 +138,9 @@ class DeviceService:
             total_samples = cli.ensure_qs()
             # Timebase 5 ms/div (computed at the new density)
             cli.set_time_div_ms(5)
+            # [task_trigger-highqs] Size the trigger-wait window (TA/TW) to the sweep now
+            # that the timebase and density are set.
+            cli.apply_sync_wait()
             # Center the sweep offset so the trigger is in the middle of the displayed window.
             center_offset = total_samples // 2 if isinstance(total_samples, int) and total_samples > 0 else 0
             center_offset = max(0, min(0xFFFF, center_offset))
@@ -466,6 +469,10 @@ class DeviceService:
                         density_changed = True
                         c.set_time_div_ms(t_div_now)  # recompute TS → same t/div at new density
                 c.ensure_qs()
+                # [task_trigger-highqs] Re-size the trigger-wait window to the (possibly
+                # changed) timebase/density on every config change. Cheap, backend-side;
+                # keeps the trigger firing after t/div or mode changes.
+                c.apply_sync_wait()
                 if density_changed and old_spd:
                     try:
                         new_qs = c.samples_per_div * c.H_DIVS

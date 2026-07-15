@@ -1,7 +1,11 @@
 import time
+import os
+import logging
 import serial
 from serial.tools import list_ports
 from typing import Optional, Dict, Any, Tuple, List
+
+log = logging.getLogger("oscill_client")
 
 # OBEX opcodes
 OBEX_CONNECT = 0x80
@@ -46,6 +50,17 @@ class OscillClient:
     MAX_SAMPLES_PER_DIV = 256  # safety ceiling on the derived density
     H_DIVS = 8
 
+    # [task_trigger-highqs] Device max trigger-wait (TA/TW) sizing. The window is scaled
+    # to the sweep so a periodic-signal edge can actually land inside it, instead of the
+    # former fixed ~86 µs (500 × 12×MC @ 70 MHz) that starved the trigger. AUTO waits a
+    # short time then free-runs (responsive display); WAIT holds longer for a real edge.
+    AUTO_WAIT_SWEEPS = 1.0
+    AUTO_WAIT_MIN_S = 0.05
+    AUTO_WAIT_MAX_S = 0.30
+    TRIG_WAIT_SWEEPS = 4.0
+    TRIG_WAIT_MIN_S = 0.15
+    TRIG_WAIT_MAX_S = 1.00
+
     # [task_qs-raise] Serial speed control. Init/handshake happens at DEFAULT_BAUD (per
     # the device docs — the session starts at a low speed); after init the link is raised
     # to HIGH_BAUD so large frames (big QS) transfer fast. baud = 1842000 / coeff.
@@ -79,6 +94,17 @@ class OscillClient:
         # per-frame register reads (each costs a CP210x USB round-trip — the dominant cost
         # once the link is at high baud).
         self._frame_wait_s: Optional[float] = None
+        # [task_trigger-highqs] WAIT-mode trigger-wait allowance (s), set by
+        # apply_sync_wait(); the PC read budget adds it so a frame that waits for a
+        # trigger isn't cut off by a too-short serial read timeout.
+        self._trigger_wait_s: Optional[float] = None
+        # [task_trigger-highqs] Cached ROLL-mode flag (RS bit2). Only ROLL streams
+        # continuously, so only ROLL frames are returned early on chunk count; a normal
+        # frame is read through to End-of-Body (no truncation). Set by set_rs_mode().
+        self._is_roll: bool = False
+        # [task_trigger-highqs] Opt-in per-frame timing diagnostics (elapsed/chunks/bytes/
+        # budget) for on-device confirmation of the trigger/timeout path. Off by default.
+        self._debug_timing: bool = os.environ.get("OSCILL_DEBUG_TIMING") == "1"
 
     def open(self):
         # [PL_AUDIT_WEB_B14] Guard against re-opening over a live port (SP_OCL
@@ -388,22 +414,31 @@ class OscillClient:
                     wait_s = 0.0
         if wait_s > 0:
             time.sleep(wait_s)
+        # [task_trigger-highqs] Budget = sweep wait + the device trigger-wait allowance
+        # (TA/TW window) + margin, so a frame that legitimately waits for a trigger edge is
+        # not cut off by a too-short serial read timeout (former budget = wait_s + 1.0
+        # ignored the trigger wait entirely). Cap raised to 12 s.
+        trig_s = self._trigger_wait_s if self._trigger_wait_s else 1.0
+        budget = wait_s + trig_s + 0.5
         # Temporarily extend serial timeout to cover slow acquisitions
         old_timeout = self.ser.timeout
+        chunks: List[bytes] = []
+        t_start0 = time.monotonic()
         try:
-            # Budget timeout to acquisition estimate + margin, cap to 10s
-            budget = wait_s + 1.0
             if old_timeout is None or old_timeout < budget:
-                self.ser.timeout = min(max(budget, 1.5), 10.0)
+                self.ser.timeout = min(max(budget, 1.5), 12.0)
 
             # Initial request (final flag ok). Some devices will return Continue for long data or ROLL mode.
             self.ser.write(self._build_packet(OBEX_GET_FINAL, headers))
             opcode, body = self._read_resp()
 
             # Collect body chunks across potential Continue responses until End-of-Body arrives.
-            chunks: List[bytes] = []
             start_t = time.monotonic()
-            max_chunks = 4  # return after a few chunks for ROLL
+            # [task_trigger-highqs] Only ROLL streams indefinitely, so only ROLL returns
+            # early on chunk count; a normal frame is read through to End-of-Body — the old
+            # unconditional max_chunks=4 truncated large-QS frames spanning >4 OBEX chunks.
+            # A generous safety cap + the time budget still bound a stuck device.
+            max_chunks = 4 if self._is_roll else 256
             while True:
                 hdrs = self._parse_headers(body)
                 if BODY in hdrs:
@@ -416,11 +451,12 @@ class OscillClient:
                     if chunks:
                         return b"".join(chunks + ([eob] if eob else []))
                     return eob
-                # Time/iteration budget: return what we have in ROLL or very slow modes
-                if chunks and (
-                    (time.monotonic() - start_t) > (budget * 1.25) or
-                    len(chunks) >= max_chunks
-                ):
+                # Hard time backstop for a stuck device — bounds EVERY mode (even one that
+                # streams empty Continue responses without End-of-Body), independent of chunks.
+                if (time.monotonic() - start_t) > (budget * 1.5):
+                    return b"".join(chunks) if chunks else None
+                # ROLL/streaming: return the batch collected so far after a few chunks.
+                if chunks and len(chunks) >= max_chunks:
                     return b"".join(chunks)
                 if opcode not in (0x90,):
                     # No continuation indicated and no EoB; fall back to concatenated chunks if any
@@ -437,6 +473,19 @@ class OscillClient:
                 opcode, body = self._read_resp()
         finally:
             self.ser.timeout = old_timeout
+            # [task_trigger-highqs] Opt-in frame-timing diagnostics (OSCILL_DEBUG_TIMING=1):
+            # runs on every return path so it captures timeouts (0 chunks) too. Confirms on
+            # device which limit bites — trigger-wait vs chunk truncation vs read timeout.
+            if self._debug_timing:
+                try:
+                    nbytes = sum(len(c) for c in chunks)
+                    log.info(
+                        f"[frame-timing] elapsed={(time.monotonic() - t_start0) * 1000:.0f}ms "
+                        f"chunks={len(chunks)} bytes={nbytes} wait_s={wait_s:.3f} "
+                        f"trig_s={trig_s:.3f} budget={budget:.2f} roll={self._is_roll}"
+                    )
+                except Exception:
+                    pass
         # Unreachable: loop returns upon success or lack of chunks
 
     # ---------- Registry helpers ----------
@@ -626,6 +675,9 @@ class OscillClient:
         return self.get_reg_1('RS')
 
     def set_rs_mode(self, rs_bits: int) -> int:
+        # [task_trigger-highqs] Cache ROLL (bit2) so get_data_single can read a normal
+        # frame to End-of-Body while still returning ROLL streams early.
+        self._is_roll = bool(rs_bits & 0x04)
         return self.set_reg_1('RS', rs_bits)
 
     def get_ts_native(self) -> int:
@@ -678,6 +730,42 @@ class OscillClient:
         :return: The actual value set in the register.
         """
         return self.set_reg_4('TW', value, signed=False)
+
+    def _sync_wait_units(self, seconds: float) -> int:
+        """Convert a wall-clock trigger-wait into TA/TW register units (12×MC).
+
+        MC (get_cpu_tick_10ps) is the machine-cycle length in 10 ps; one TA/TW unit is
+        12×MC. Falls back to the legacy 500 if MC is unreadable. [task_trigger-highqs]
+        """
+        tick_10ps = self.get_cpu_tick_10ps()  # cached; 10 ps units
+        unit_s = 12.0 * float(tick_10ps) * 1e-11  # 12×MC in seconds (10 ps = 1e-11 s)
+        if unit_s <= 0:
+            return 500
+        return max(1, min(0xFFFFFFFF, int(round(seconds / unit_s))))
+
+    def apply_sync_wait(self) -> None:
+        """Program TA/TW from the current timebase so the trigger has a wall-clock window
+        sized to the sweep (t/div × H_DIVS) instead of a fixed ~86 µs. AUTO waits briefly
+        then free-runs; WAIT holds longer for a real edge. Caches the WAIT allowance for
+        the PC read budget. Best-effort: leaves registers untouched on a read failure.
+        [task_trigger-highqs]
+        """
+        try:
+            sweep_s = (self.get_sample_period_ps() / 1e12) * self.samples_per_div * self.H_DIVS
+        except Exception:
+            return
+        if sweep_s <= 0:
+            return
+        auto_s = min(max(self.AUTO_WAIT_SWEEPS * sweep_s, self.AUTO_WAIT_MIN_S), self.AUTO_WAIT_MAX_S)
+        wait_s = min(max(self.TRIG_WAIT_SWEEPS * sweep_s, self.TRIG_WAIT_MIN_S), self.TRIG_WAIT_MAX_S)
+        try:
+            self.set_max_sync_wait_auto(self._sync_wait_units(auto_s))
+            self.set_max_sync_wait_on_trig(self._sync_wait_units(wait_s))
+            self._trigger_wait_s = wait_s
+        except Exception as e:
+            # Non-critical: a failed sync-wait write must not break the connection, but
+            # leave a trace — the trigger stays mis-sized until the next config change.
+            log.warning(f"apply_sync_wait: failed to program TA/TW (trigger may mis-fire): {e}")
 
     def set_avg_passes(self, value: int) -> int:
         """
