@@ -67,10 +67,11 @@ _(Detailed Android specs and plans deferred — refer to existing docs/ for Andr
 
 ---
 
-## Firmware Investigation (spikes — no pipeline gates)
+## Investigations (spikes — no pipeline gates)
 
 | Document | Status | Description |
 |----------|--------|-------------|
+| [sample_array_length.spike.md](sample_array_length.spike.md) | concluded | What bounds max sample count (QSh = RS/TS/M1/AP, not CPU freq); CPU freq = time resolution, not count |
 | [firmware_hardware.spike.md](firmware_hardware.spike.md) | concluded | Programmable ICs, PCB layout, firmware type, programming toolset |
 | [firmware_update_method.spike.md](firmware_update_method.spike.md) | concluded | How the Windows software updates firmware; `.ofw` format + encryption; modification feasibility |
 | [firmware_1.26_defects.md](firmware_1.26_defects.md) | draft (analysis) | Defect register for firmware 1.26 (slow-roll sweep drift, etc.) |

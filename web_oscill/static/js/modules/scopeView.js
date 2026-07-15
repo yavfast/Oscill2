@@ -214,7 +214,10 @@ export class ScopeView {
     const count = samples.length;
     const points = [];
     for (let i = 0; i < count; i++) {
-      const time = (i / count) * totalTime - totalTime / 2;
+      // [PL_AUDIT_WEB] Edge-to-edge mapping (count-1), matching the zero/trigger
+      // marker, the time axis, and xPixelToTOffset. Using count here put sample i
+      // at i/count while the zero line uses index/(N-1), shifting the trace left.
+      const time = (i / Math.max(1, count - 1)) * totalTime - totalTime / 2;
       const voltage = this.sampleToVoltage(samples[i], sampleBits, totalVoltage, vOffsetVolts);
       points.push(toX(time), toY(voltage));
     }
@@ -253,7 +256,7 @@ export class ScopeView {
     const lower = [];
     // Use the same time calculation as for samples to ensure alignment
     for (let i = 0; i < count; i++) {
-      const time = (i / Math.max(1, count)) * totalTime + this.xRange[0];
+      const time = (i / Math.max(1, count - 1)) * totalTime + this.xRange[0];
       const vMax = this.sampleToVoltage(peakMax[i], sampleBits, totalVoltage, vOffsetVolts);
       const vMin = this.sampleToVoltage(peakMin[i], sampleBits, totalVoltage, vOffsetVolts);
       const x = toX(time);
@@ -348,9 +351,12 @@ export class ScopeView {
     const r = this.getInnerRect();
     
     // ІНВЕРТОВАНА ЛОГІКА: level = 0 -> bottom, level = 255 -> top
-    const normalized = level / 255;
+    // [task_scope-zero-offset] /256 (not /255) to match sampleToVoltage's vStep
+    // (totalVoltage/256) and the protocol's "1/256th of ADC range" for S1/level, so
+    // the trigger-level line sits exactly where a sample of that value is drawn.
+    const normalized = level / 256;
     const yPix = r.top + (1 - normalized) * r.height;
-    
+
     return yPix;
   }
 
@@ -363,8 +369,9 @@ export class ScopeView {
     
     const screenPosNormalized = (clamped - r.top) / Math.max(1, r.height);
     // Інвертуємо: top (screenPos=0) -> level=255, bottom (screenPos=1) -> level=0
-    const raw = Math.round((1 - screenPosNormalized) * 255);
-    
+    // [task_scope-zero-offset] *256 to invert triggerLevelToYPixel's /256 exactly.
+    const raw = Math.round((1 - screenPosNormalized) * 256);
+
     return Math.max(0, Math.min(255, raw));
   }
 
@@ -451,7 +458,7 @@ export class ScopeView {
     const points = [];
     const count = samples.length;
     for (let i = 0; i < count; i++) {
-      const time = (i / Math.max(1, count)) * totalTime + this.xRange[0];
+      const time = (i / Math.max(1, count - 1)) * totalTime + this.xRange[0];
       const voltage = this.sampleToVoltage(samples[i], sampleBits, totalVoltage, vOffsetVolts);
       points.push(toX(time), toY(voltage));
     }

@@ -24,6 +24,13 @@ OSCILL_4BYTE = 0xF1
 VENDOR_ID = 0x10c4
 PRODUCT_ID = 0x840E
 
+# [task_config-limits] Canonical device step lists — single source of truth.
+# Kept in the Layer-0 device client so higher layers (auto_adjust, device_service)
+# depend downward (LayerDependencyDirection) and share one definition
+# (SingleSourceForSharedConstants). auto_adjust re-exports these for compatibility.
+VDIV_VALUES_MV = [20.0, 50.0, 100.0, 200.0, 500.0, 1000.0, 2000.0, 5000.0, 10000.0]
+TDIV_VALUES_MS = [0.1, 0.2, 0.5, 1, 2, 5, 10, 20, 50, 100, 200, 500]
+
 class OscillClient:
     SAMPLES_PER_DIV = 32
     H_DIVS = 8
@@ -363,6 +370,22 @@ class OscillClient:
 
     def set_v_div_mV(self, mv_per_div: int) -> int:
         return self.set_reg_2('V1', mv_per_div, signed=False)
+
+    def read_device_limits(self) -> Dict[str, Optional[int]]:
+        """[task_config-limits] Read device-reported parameter bounds via property
+        GETs (0x70, 2-byte big-endian). V1l/V1h = the two channel-sensitivity bounds
+        in mV/div (same unit as get_v_div_mV; see caller note on min/max). QSh = max
+        output sample count for the current settings. None for any bound omitted."""
+        def _prop_int(name: str) -> Optional[int]:
+            b = self.get_property(name)
+            return int.from_bytes(b, 'big') if b else None
+        # Raw property values — caller derives min/max via min()/max() because the
+        # V1l/V1h "low/high" labels do not reliably map to numeric min/max across units.
+        return {
+            'v1l_mv': _prop_int('V1l'),
+            'v1h_mv': _prop_int('V1h'),
+            'qsh': _prop_int('QSh'),
+        }
 
     def get_offset_volts(self) -> float:
         native = self.get_reg_2('P1', signed=True)

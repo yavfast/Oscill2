@@ -10,11 +10,10 @@ from converters import get_voltage_mv, get_time_ms
 
 logger = logging.getLogger(__name__)
 
-# Constants for V/div (voltage per division) in millivolts
-VDIV_VALUES_MV = [20.0, 50.0, 100.0, 200.0, 500.0, 1000.0, 2000.0, 5000.0, 10000.0]
-
-# Constants for Time/div in milliseconds
-TDIV_VALUES_MS = [0.1, 0.2, 0.5, 1, 2, 5, 10, 20, 50, 100, 200, 500]
+# [task_config-limits] V/div and Time/div step lists — single source of truth now
+# lives in the Layer-0 device client (oscill_client). Re-exported here so existing
+# importers (`from auto_adjust import VDIV_VALUES_MV, TDIV_VALUES_MS`) keep working.
+from oscill_client import VDIV_VALUES_MV, TDIV_VALUES_MS  # noqa: F401 (re-export)
 
 # Auto V/div parameters
 FILL_FACTOR_MIN = 0.2  # Signal should use at least 20% of screen

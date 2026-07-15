@@ -9,6 +9,7 @@
 > - Initialized from existing codebase via onboard procedure (2026-04-22)
 > - 2026-07-15 code-audit reconciliation (PL_AUDIT_WEB): documented GET /api/frames side effect that temporarily starts/stops acquisition when the buffer is empty and acquisition is stopped
 > - 2026-07-15 — PL_AUDIT_WEB code-audit propagation: documented new GET /api/config/options endpoint; CORS restricted to localhost (allow_credentials=False), GZip minimum_size=1000, /static/{path} 403 path-traversal guard; generic error messages (no str(e) leak)
+> - 2026-07-15 — ConfigDict gains a `limits` block (per-parameter min/max) for client informativeness; apply_config silently clamps incoming values to those limits. See SP_DSV (device_service.sp.md → ConfigDict.limits).
 
 ## Middleware & Hardening
 
@@ -79,7 +80,7 @@
 | v_div | Optional[{v,u}] | V/div as structured value |
 | t_div | Optional[{v,u}] | T/div as structured value |
 | v_offset | Optional[int\|float\|{v,u}] | Raw 0..255 or dict |
-| t_offset | Optional[int\|float\|{v,u}] | In samples |
+| t_offset | Optional[int\|float\|{v,u}] | In **delivered-space** samples (trigger index in the plotted array); DeviceService converts to the device TC register. See device_service.sp.md. |
 | trigger_level | Optional[int] | 0..255 |
 | trigger_mode | Optional[str] | "Auto"/"Normal"/"Single" |
 | trigger_slope | Optional[str] | "Rising"/"Falling"/"Both"/"None" |
