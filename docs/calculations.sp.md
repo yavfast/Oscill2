@@ -5,7 +5,10 @@
 > **Implements:** C_CAL
 > **Depends on specs:** SP_CVT
 > **Used by specs:** SP_DSV, SP_AAJ, SP_WEB
-> **Changelog:** Initialized from existing codebase via onboard procedure (2026-04-22)
+> **Changelog:**
+> - Initialized from existing codebase via onboard procedure (2026-04-22)
+> - 2026-07-15 code-audit reconciliation (PL_AUDIT_WEB): corrected samples_to_millivolts degenerate case — returns zeros (not []) when center ≤ 0; branch is effectively dead
+> - 2026-07-15 — PL_AUDIT_WEB code-audit propagation: documented calculate_frequency_and_period both-sides invariant (freq=None if either filtered segment list is empty, avoiding ~2x-inflated frequency on asymmetric duty cycles)
 
 ## Contracts
 
@@ -17,7 +20,9 @@
 
 ### samples_to_millivolts(samples, sample_bits, config) → List[float]
 - Formula: `((s - center) / center) × (v_div_mv × 4)` where center = (2^sample_bits - 1) / 2
-- Returns [] if samples empty or center ≤ 0.
+- Returns [] if samples empty.
+- Degenerate branch: if center ≤ 0, returns a list of `0.0` (one per sample), not []. Since
+  center = (2^sample_bits - 1) / 2, this branch is effectively dead for any sample_bits ≥ 1.
 
 ### calculate_segments(samples, threshold) → tuple[List[int], List[int]]
 - Returns (pos_segments, neg_segments): lists of consecutive-run lengths above/below threshold.
@@ -26,6 +31,11 @@
 ### calculate_frequency_and_period(samples, t_step_ms) → Dict
 - Output: `{freq: Optional[float], period: Optional[float], segments_count: int}`
 - `freq` and `period` are None if segments_count < 3 or all segments filtered.
+- **Both-sides invariant (PL_AUDIT_WEB):** after noise-filtering, frequency is computed ONLY if BOTH
+  the positive and negative filtered segment lists are non-empty. A full period is one positive run
+  PLUS one negative run; if a strongly asymmetric duty cycle wipes out one side, the function returns
+  `freq=None` (and `period=None`) rather than treating the missing side as 0 — which previously
+  yielded a half-period and a ~2x-inflated frequency. `segments_count` is still reported in all cases.
 - `freq` in Hz; `period` in seconds.
 
 ### calculate_measurements(frame, config) → Dict

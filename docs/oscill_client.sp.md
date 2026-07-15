@@ -5,7 +5,9 @@
 > **Implements:** C_OCL
 > **Depends on specs:** —
 > **Used by specs:** SP_DSV
-> **Changelog:** Initialized from existing codebase via onboard procedure (2026-04-22)
+> **Changelog:**
+> - Initialized from existing codebase via onboard procedure (2026-04-22)
+> - 2026-07-15 code-audit reconciliation (PL_AUDIT_WEB): removed nonexistent `signed` parameter from get_reg_1/set_reg_1 (only reg_2/reg_4 accept it)
 
 ## Data Structures
 
@@ -58,9 +60,12 @@ OscillClient(port, baud, timeout=3.0)
 
 ### Register access
 ```
-get_reg_1/2/4(name: str, signed: bool = False) → int
-set_reg_1/2/4(name: str, val: int, signed: bool = False) → int  # returns confirmed value
+get_reg_1(name: str) → int
+get_reg_2/4(name: str, signed: bool = False) → int
+set_reg_1(name: str, val: int) → int                            # returns confirmed value
+set_reg_2/4(name: str, val: int, signed: bool = False) → int    # returns confirmed value
 ```
+(Note: reg_1 accessors have NO `signed` parameter; only the 2-byte and 4-byte variants do.)
 All values clamped to type range before write: 1B [0,255], 2B [0,0xFFFF], 4B [0,0xFFFFFFFF].
 
 ### High-level config API

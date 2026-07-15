@@ -1,0 +1,16 @@
+[Unit]
+Description=Oscill2 web oscilloscope server (FastAPI/uvicorn)
+Documentation=file:///hdd/PROJECTS/Oscill2/README.md
+After=network.target
+
+[Service]
+Type=simple
+# Adjust these two paths if your clone is not at /hdd/PROJECTS/Oscill2
+WorkingDirectory=/hdd/PROJECTS/Oscill2
+ExecStart=/hdd/PROJECTS/Oscill2/.venv/bin/python -m uvicorn web_oscill.main:app --host 127.0.0.1 --port 8000 --log-level info
+Restart=on-failure
+RestartSec=2
+# Serial device access (CP210x) is granted via the user's group (uucp/dialout) at runtime.
+
+[Install]
+WantedBy=default.target

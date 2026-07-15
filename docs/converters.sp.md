@@ -5,7 +5,9 @@
 > **Implements:** C_CVT
 > **Depends on specs:** —
 > **Used by specs:** SP_CAL, SP_DSV, SP_AAJ, SP_WEB
-> **Changelog:** Initialized from existing codebase via onboard procedure (2026-04-22)
+> **Changelog:**
+> - Initialized from existing codebase via onboard procedure (2026-04-22)
+> - 2026-07-15 code-audit reconciliation (PL_AUDIT_WEB): documented convert() early-return short-circuit — identical from_unit/to_unit skips parse_unit validation
 
 ## Data Structures
 
@@ -48,7 +50,11 @@ Examples: `"V"`, `"mV"`, `"ms"`, `"kHz"`
 - **Errors:**
   - `ValueError` from parse_unit if unit is invalid
   - `ValueError("Cannot convert between different quantities: ...")` if quantities differ
-- **Invariant:** `convert(x, u, u) == x` for any valid unit u
+- **Early-return short-circuit (intended):** when `from_unit == to_unit`, the function returns `value`
+  immediately, *before* calling `parse_unit`. Consequently an identical-but-invalid unit string
+  (e.g. `convert(x, "bogus", "bogus")`) skips validation and returns `value` without raising.
+  Validation only runs when the two unit strings differ.
+- **Invariant:** `convert(x, u, u) == x` for any string u (valid or not, since validation is skipped)
 
 ### get_voltage_mv(config: dict) → float
 - **Input:** config dict — must contain `"v_div"` key with `{v, u}` value

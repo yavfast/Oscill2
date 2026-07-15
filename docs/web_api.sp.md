@@ -5,7 +5,15 @@
 > **Implements:** C_WEB
 > **Depends on specs:** SP_DSV, SP_CAL, SP_AAJ, SP_CVT
 > **Used by specs:** — (top of Python stack)
-> **Changelog:** Initialized from existing codebase via onboard procedure (2026-04-22)
+> **Changelog:**
+> - Initialized from existing codebase via onboard procedure (2026-04-22)
+> - 2026-07-15 code-audit reconciliation (PL_AUDIT_WEB): documented GET /api/frames side effect that temporarily starts/stops acquisition when the buffer is empty and acquisition is stopped
+> - 2026-07-15 — PL_AUDIT_WEB code-audit propagation: documented new GET /api/config/options endpoint; CORS restricted to localhost (allow_credentials=False), GZip minimum_size=1000, /static/{path} 403 path-traversal guard; generic error messages (no str(e) leak)
+
+## Middleware & Hardening
+
+- **CORS** (PL_AUDIT_WEB): restricted to localhost origins via `allow_origin_regex=r"https?://(localhost|127\.0\.0\.1)(:\d+)?"` with `allow_credentials=False` (previously wildcard `*`). The frontend is served same-origin, so a random site the user visits cannot drive the device-control API from their browser.
+- **GZip**: `minimum_size=1000` bytes (previously 500). The small, frequent status/frame responses in this ~10 Hz polling API fall below the compression-benefit threshold.
 
 ## Endpoints
 
@@ -28,8 +36,15 @@
 ### GET /api/frames
 - **Query:** `since?: int, limit?: int (default 128), format?: "hex"|"array" (default "hex")`
 - **Response:** `{config: ConfigDict, frames: List[FrameDict], newest_seq: int, format: str}`
-- **Logic:** Waits up to 5s for frames if buffer is empty and device is active.
+- **Logic:** If the buffer is empty:
+  - device is acquiring → waits up to 5s polling every 50ms for frames to arrive (pure read).
+  - device is connected but acquisition is STOPPED → **state-mutating side effect**: temporarily calls
+    `service.start()`, polls up to 5s for one frame, then always calls `service.stop()` in a `finally`
+    block. So this "read" endpoint may briefly start and stop device acquisition to return a frame.
   Frame dicts include `measurements: {freq?, period?, v_pp, v_max, v_min, v_avg}` each as `{v,u}`.
+- **Design smell (known, revisit):** a GET/read endpoint that mutates device state (start/stop acquisition)
+  is a side-effect-in-a-reader anti-pattern. Flagged for future redesign (e.g., an explicit
+  "capture one frame" action or requiring acquisition to be started by the caller).
 
 ### POST /api/auto
 - **Query:** `types?: string` (comma-separated: "v_div,t_div,v_offset,trigger")
@@ -39,11 +54,22 @@
 ### POST /api/start / POST /api/stop
 - **Response:** `{status: "ok"}`
 
+### GET /api/config/options
+- **Query/Body:** none
+- **Response:** `{v_div_values_mv: List[float], t_div_values_ms: List[float], h_divs: int, samples_per_div: int}`
+- **Purpose (PL_AUDIT_WEB):** single source of truth for constants the frontend must agree on — the
+  V/div and Time/div step lists (from `auto_adjust`) and the display grid geometry (`h_divs`=8,
+  `samples_per_div`) from `service.display_geometry()`. The frontend fetches these instead of
+  hardcoding its own copies (rule `SingleSourceForSharedConstants`).
+
 ### GET /
 - **Response:** FileResponse(static/index.html)
 
 ### GET /static/{path}
-- **Response:** FileResponse for any file in static/
+- **Response:** FileResponse for a file inside static/
+- **Hardening (PL_AUDIT_WEB):** rejects path traversal with **403** — the requested path is resolved
+  with `os.path.realpath` and must stay contained in `static_dir` (checked via `os.path.commonpath`).
+  Requests like `/static/../../etc/passwd` are refused. Missing files still return 404.
 
 ## Request Models
 
@@ -67,6 +93,8 @@
 
 ## Validation Rules
 
-- POST /api/config → 400 if service._client is None
+- POST /api/config → 400 if not connected (via `service.is_connected()`)
 - POST /api/auto → 400 if not connected; 400 if invalid type names
-- All device errors → 500 with `detail: str(e)`
+- All device errors → 500 with a **generic** `detail` (e.g. "Connection failed", "Failed to apply
+  configuration", "Failed to fetch frames"). Internal exception text is logged server-side
+  (`log.exception`) but **no longer leaked** to the client via `str(e)` (PL_AUDIT_WEB).

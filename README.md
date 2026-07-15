@@ -70,6 +70,34 @@ pip install -r requirements.txt
 python -m uvicorn web_oscill.main:app --host 127.0.0.1 --port 8000
 ```
 
+#### Run as a systemd user service (recommended for persistent use)
+
+To keep the server running across logins/reboots — with auto-restart — install it as a
+**systemd user service**. A ready unit template is at [`deploy/oscill-web.service`](deploy/oscill-web.service)
+(edit `WorkingDirectory`/`ExecStart` if your clone is not at `/hdd/PROJECTS/Oscill2`):
+
+```bash
+mkdir -p ~/.config/systemd/user
+cp deploy/oscill-web.service ~/.config/systemd/user/
+systemctl --user daemon-reload
+systemctl --user enable --now oscill-web.service        # start now + on login
+sudo loginctl enable-linger "$USER"                     # also run without an active login (survives reboot)
+```
+
+Manage / inspect:
+
+```bash
+systemctl --user status  oscill-web        # state
+systemctl --user restart oscill-web        # after a code change
+systemctl --user stop    oscill-web
+journalctl  --user -u oscill-web -f        # live logs
+systemctl --user disable oscill-web        # remove from autostart
+```
+
+Requirements: the `.venv` must already exist (see Manual Launch above), and your user must be
+in the serial group (`uucp` on Arch/Manjaro, `dialout` on Debian/Ubuntu) for device access —
+`web_oscill.sh` sets this up, or add it manually.
+
 ### API Endpoints
 
 - `POST /api/connect` - connect to device (auto-detect or specify port)
@@ -79,6 +107,7 @@ python -m uvicorn web_oscill.main:app --host 127.0.0.1 --port 8000
 - `GET /api/frames` - frame history with measurements
 - `POST /api/start` - start data acquisition
 - `POST /api/stop` - stop acquisition
+- `GET /api/config/options` - valid V/div & Time/div step lists + grid geometry (h_divs, samples_per_div)
 
 See [docs/web_api_reference.md](docs/web_api_reference.md) for detailed API documentation.
 

@@ -5,7 +5,10 @@
 > **Implements:** C_DSV
 > **Depends on specs:** SP_OCL, SP_CVT
 > **Used by specs:** SP_WEB, SP_AAJ
-> **Changelog:** Initialized from existing codebase via onboard procedure (2026-04-22)
+> **Changelog:**
+> - Initialized from existing codebase via onboard procedure (2026-04-22)
+> - 2026-07-15 code-audit reconciliation (PL_AUDIT_WEB): documented start() "Not connected" RuntimeError path (stop() remains unconditional ok)
+> - 2026-07-15 — PL_AUDIT_WEB code-audit propagation: added public is_connected()/is_acquiring()/display_geometry() contracts; ConfigDict now includes h_divs alongside samples_per_div; acquisition loop reuses cached config per frame (no per-frame register re-read)
 
 ## Data Structures
 
@@ -45,6 +48,8 @@ DeviceService(buffer_size: int = 256)
 | filters | {high: bool, low: bool} | HW filter state |
 | samples_total | int | QS register value |
 | t_offset | int | TC register (pre-trigger samples) |
+| samples_per_div | int | Display geometry (OscillClient.SAMPLES_PER_DIV, =32) |
+| h_divs | int | Horizontal division count (device H_DIVS, =8 — NOT 10) |
 | cfg_id | int | Config version counter |
 
 ### Frame dict (from get_frames / get_latest_frame)
@@ -73,6 +78,20 @@ DeviceService(buffer_size: int = 256)
 ### disconnect() → Dict
 - Stops acquisition; closes serial; clears frame buffer; clears cached config
 
+### is_connected() → bool
+- Public accessor: True when a device is connected (`_is_connected and _client`).
+- **(PL_AUDIT_WEB)** The web layer uses this instead of touching the private `_client` handle
+  (rule `HardwareAccessOnlyThroughDeviceService`).
+
+### is_acquiring() → bool
+- Public accessor: True when the background acquisition loop is running.
+- Used by the web layer in place of the private `_is_acquiring` flag.
+
+### display_geometry() → Dict  *(staticmethod)*
+- Returns `{h_divs: int, samples_per_div: int}` = `{OscillClient.H_DIVS (8), OscillClient.SAMPLES_PER_DIV (32)}`.
+- **(PL_AUDIT_WEB)** Single source of truth for display grid geometry so the web layer need not
+  import `OscillClient` directly nor hardcode a copy.
+
 ### get_status() → Dict
 - No device I/O — returns cached config
 
@@ -94,6 +113,16 @@ DeviceService(buffer_size: int = 256)
 
 ### start() / stop() → Dict
 - Both return `{status: "ok"}`
+- **Errors:** `start()` raises `RuntimeError("Not connected")` if no client is connected.
+  `stop()` has no error path — it returns `{status: "ok"}` unconditionally.
+
+### Background acquisition loop (`_acq_loop`)
+- Pulls one frame at a time under `_dev_lock` and appends it to the ring buffer.
+- **(PL_AUDIT_WEB, behavioral/non-breaking)** No longer re-reads the full register config per frame.
+  It reuses the **cached** config (refreshed under lock on connect / apply_config); each frame's
+  `cfg_id` is taken from that cache. A broken device is still detected by `get_frame()` (which
+  raises), so the previous per-frame config snapshot health-check was redundant. This removes ~15
+  serial register reads per frame.
 
 ## Validation Rules
 
