@@ -9,6 +9,11 @@ OBEX_GET = 0x03
 OBEX_GET_FINAL = 0x83
 OBEX_PUT_FINAL = 0x82
 OBEX_ABORT = 0xFF
+# [task_qs-raise] SET-SPEED is a device-specific OBEX opcode (mirrors Android
+# ClientSession.setSpeed → sendRequest(Header.OSCILL_SPEED, {coeff})). Body = one
+# speed-coefficient byte; baud = 1842000 / coeff. Sent at the CURRENT baud; the device
+# switches its UART after acking, so the host must switch to match immediately after.
+OSCILL_SPEED = 0x91
 
 # Headers
 OSCILL_PROPERTY = 0x70
@@ -32,8 +37,22 @@ VDIV_VALUES_MV = [20.0, 50.0, 100.0, 200.0, 500.0, 1000.0, 2000.0, 5000.0, 10000
 TDIV_VALUES_MS = [0.1, 0.2, 0.5, 1, 2, 5, 10, 20, 50, 100, 200, 500]
 
 class OscillClient:
+    # [task_qs-raise] Default/fallback sampling density (samples per division). The
+    # ACTIVE density is the per-instance `self.samples_per_div`, derived at connect and
+    # on mode change from the device's QSh ceiling (refresh_samples_per_div). QSh is
+    # mode-dependent (8-bit modes ~1788 → 223/div; 16-bit hi-res ~894 → 111/div), so a
+    # single constant cannot be optimal for every mode.
     SAMPLES_PER_DIV = 32
+    MAX_SAMPLES_PER_DIV = 256  # safety ceiling on the derived density
     H_DIVS = 8
+
+    # [task_qs-raise] Serial speed control. Init/handshake happens at DEFAULT_BAUD (per
+    # the device docs — the session starts at a low speed); after init the link is raised
+    # to HIGH_BAUD so large frames (big QS) transfer fast. baud = 1842000 / coeff.
+    DEFAULT_BAUD = 115200
+    HIGH_BAUD = 921600           # host side; device runs 921000 (1842000/2) — 0.065% off, well in tolerance
+    SPEED_115200 = 0x10          # coeff for 115200
+    SPEED_921000 = 0x02          # coeff for 921000
 
     # Channel data format codes (bits 2..0 of the FIRST channel attribute byte)
     # Mapping follows Android implementation in ChannelSWMode + OscillData docs.
@@ -51,8 +70,15 @@ class OscillClient:
         self.timeout = timeout
         self.ser: Optional[serial.Serial] = None
         self.conn_id: Optional[bytes] = None
+        # [task_qs-raise] Active sampling density; refreshed from QSh per mode.
+        self.samples_per_div: int = self.SAMPLES_PER_DIV
         # Cached values
         self._cpu_tick_10ps: Optional[int] = None  # machine cycle length in 10ps units
+        # [task_qs-raise] Cached per-frame acquisition wait (QS × sample_period). Recomputed
+        # lazily after invalidation on a QS/TS/MC change, so steady-state frames make no
+        # per-frame register reads (each costs a CP210x USB round-trip — the dominant cost
+        # once the link is at high baud).
+        self._frame_wait_s: Optional[float] = None
 
     def open(self):
         # [PL_AUDIT_WEB_B14] Guard against re-opening over a live port (SP_OCL
@@ -61,13 +87,142 @@ class OscillClient:
             raise AssertionError("Serial port already open; call close() first")
         self.ser = serial.Serial(self.port, self.baud, timeout=self.timeout)
 
-    def close(self):
+    def close(self, restore: bool = True):
+        # [task_qs-raise] Return the device to the base baud before closing so the next
+        # session's low-speed handshake succeeds (the device keeps its UART speed across
+        # an OBEX disconnect — reset() is a software ABORT, not a UART reset). Best-effort:
+        # if comms are already dead, we still drop the host baud. Pass restore=False from
+        # the connect-time rescue path to avoid recursion.
+        try:
+            if restore:
+                self.restore_default_speed()
+        except Exception:
+            pass
         try:
             if self.ser and self.ser.is_open:
                 self.ser.close()
         finally:
             self.ser = None
             self.conn_id = None
+            self.baud = self.DEFAULT_BAUD
+
+    # ---------- Serial speed control (task_qs-raise) ----------
+    def set_speed(self, coeff: int) -> bool:
+        """Send the OBEX SET-SPEED request (opcode 0x91) with a 1-byte coefficient at the
+        CURRENT baud. The device acks at the OLD baud (response opcode 0x0F, echoing the
+        coefficient) and THEN switches its UART, so the host must switch immediately after
+        (see _set_host_baud). Returns True if the device acked. NOTE: the device switches on
+        receipt regardless of this return, so callers must switch the host even if this is
+        False (see raise_speed) — otherwise the link desyncs."""
+        assert self.ser is not None
+        self.ser.write(self._build_packet(OSCILL_SPEED, bytes([coeff & 0xFF])))
+        # The ack (0x0F) is immediate; use a short read timeout so a dead/desynced port
+        # can't block the full serial timeout (~3 s) here — this runs inside connect's 5 s
+        # executor budget (rescue does two of these) and inside disconnect under _dev_lock.
+        old_timeout = self.ser.timeout
+        try:
+            self.ser.timeout = 0.5
+            opcode, _ = self._read_resp()
+        finally:
+            self.ser.timeout = old_timeout
+        # 0x0F = device's SET-SPEED ack (observed); accept the OBEX OK/Continue codes too.
+        return opcode in (0x0F, 0xA0, 0x90)
+
+    def _set_host_baud(self, baud: int) -> None:
+        """Switch the host serial baud to match the device, then flush stale bytes."""
+        assert self.ser is not None
+        self.ser.baudrate = baud
+        self.baud = baud
+        time.sleep(0.05)  # let the device's UART settle at the new rate
+        try:
+            self.ser.reset_input_buffer()
+            self.ser.reset_output_buffer()
+        except Exception:
+            pass
+
+    def _verify_link(self) -> bool:
+        """Confirm two-way comms at the current baud by reading a known register."""
+        try:
+            return int(self.get_reg_2('QS', signed=False)) > 0
+        except Exception:
+            return False
+
+    def raise_speed(self, coeff: int = SPEED_921000, baud: int = HIGH_BAUD) -> int:
+        """Raise the serial speed AFTER the low-speed init/handshake. Commands the device
+        (SET-SPEED at the current baud), switches the host, and verifies the link. Reverts
+        to the base baud on any failure. Returns the achieved baud."""
+        if self.ser is None or self.baud == baud:
+            return self.baud
+        try:
+            # The device switches its UART on RECEIPT of this command, so we must switch
+            # the host regardless of the ack — bailing here (not switching) is exactly what
+            # desyncs the link. set_speed's bool is advisory (logged), not a gate.
+            self.set_speed(coeff)
+            self._set_host_baud(baud)
+            if self._verify_link():
+                return self.baud
+            # Unverified at the raised baud: both ends are high now, so SET-SPEED(115200)
+            # still reaches the device — bring both back down cleanly.
+            self.restore_default_speed()
+            return self.baud
+        except Exception:
+            try:
+                self.restore_default_speed()
+            except Exception:
+                pass
+            return self.baud
+
+    def restore_default_speed(self) -> None:
+        """Return the device (and host) to the base baud. Best-effort — safe to call even
+        if comms are dead; the host baud is dropped regardless so a reopen starts clean."""
+        if self.ser is None or self.baud == self.DEFAULT_BAUD:
+            return
+        try:
+            self.set_speed(self.SPEED_115200)
+            self._set_host_baud(self.DEFAULT_BAUD)
+        except Exception:
+            # Comms may have died mid-restore. Drop BOTH the real port baud and our
+            # bookkeeping to 115200 so they stay in agreement (setting only self.baud
+            # would leave the host actually at the high baud → a full-session data outage).
+            if self.ser is not None:
+                try:
+                    self.ser.baudrate = self.DEFAULT_BAUD
+                except Exception:
+                    pass
+            self.baud = self.DEFAULT_BAUD
+
+    def open_and_handshake(self) -> None:
+        """Open at the base baud and complete the OBEX handshake (reset + connect). If the
+        device is stuck at a raised baud from a previous ungraceful session, rescue it:
+        reopen at HIGH_BAUD, command it back to 115200, then reopen at base and retry."""
+        self.baud = self.DEFAULT_BAUD
+        self.open()
+        try:
+            self.reset()
+            self.connect()
+            return
+        except Exception:
+            pass
+        # Rescue path — the device may still be at HIGH_BAUD.
+        try:
+            self.close(restore=False)
+            self.baud = self.HIGH_BAUD
+            self.open()
+            try:
+                self.set_speed(self.SPEED_115200)
+                time.sleep(0.05)
+            finally:
+                self.close(restore=False)
+        except Exception:
+            try:
+                self.close(restore=False)
+            except Exception:
+                pass
+        # Retry the handshake at the base baud (raises if the device is truly unreachable).
+        self.baud = self.DEFAULT_BAUD
+        self.open()
+        self.reset()
+        self.connect()
 
     def _build_packet(self, opcode: int, headers: bytes = b"") -> bytes:
         total = 3 + len(headers)
@@ -192,6 +347,19 @@ class OscillClient:
             return hdrs[OSCILL_2BYTE][-1]
         return None
 
+    def _compute_frame_wait_s(self) -> Optional[float]:
+        """Estimate the per-frame acquisition wait = QS × sample_period (+5% margin, capped
+        at 3 s). Reads QS/TS registers. Returns None on a read failure so the caller does
+        NOT cache it — the next frame retries, preserving per-frame self-healing on a
+        transient glitch (a bad value cached here would stick until the next config change)."""
+        try:
+            qs = self.get_reg_2('QS')
+            sample_s = self.get_sample_period_ps() / 1e12
+            est = float(qs) * float(sample_s)
+            return min(max(est * 1.05, 0.0), 3.0)
+        except Exception:
+            return None
+
     def get_data_single(self, before_delay_ms: int = 0) -> Optional[bytes]:
         assert self.ser is not None
         headers = b""
@@ -203,21 +371,21 @@ class OscillClient:
         if before_delay_ms > 0:
             wait_s = max(wait_s, before_delay_ms / 1000.0)
         else:
-            try:
-                # Estimated acquisition time ~ QS * sample_period
-                qs = self.get_reg_2('QS')
-                sample_s = self.get_sample_period_ps() / 1e12
-                est = float(qs) * float(sample_s)
-                # Add a small margin and clamp to a reasonable cap
-                wait_s = min(max(est * 1.05, 0.0), 3.0)
-            except Exception:
-                # Fallback heuristic
+            # [task_qs-raise] Use the cached wait (QS × sample_period); recompute only after
+            # a config change invalidated it. Avoids per-frame register reads (~2 CP210x USB
+            # round-trips) that dominate the frame time once the link is at high baud.
+            if self._frame_wait_s is None:
+                self._frame_wait_s = self._compute_frame_wait_s()  # stays None on failure → retried next frame
+            if self._frame_wait_s is not None:
+                wait_s = self._frame_wait_s
+            else:
+                # Transient read failure: fall back to a t/div heuristic for THIS frame
+                # only (do not cache), matching the pre-cache self-healing behaviour.
                 try:
                     tdiv = self.get_time_div_ms() / 1000
-                    if tdiv >= 0.02:
-                        wait_s = min(tdiv, 0.5)
+                    wait_s = min(tdiv, 0.5) if tdiv >= 0.02 else 0.0
                 except Exception:
-                    pass
+                    wait_s = 0.0
         if wait_s > 0:
             time.sleep(wait_s)
         # Temporarily extend serial timeout to cover slow acquisitions
@@ -433,8 +601,9 @@ class OscillClient:
         # Period (10ps) = (1 / (freq_mhz * 1e6)) * 1e11 = 1e5 / freq_mhz
         mc_value = int(round(1e5 / freq_mhz))
         self.set_reg_2('MC', mc_value, signed=False)
-        # Invalidate cache
+        # Invalidate caches (MC changes the sample period → frame wait)
         self._cpu_tick_10ps = None
+        self._frame_wait_s = None
         return self.get_cpu_tick_10ps()
 
     def set_channel_hw_mode(self, o1_bits: int) -> int:
@@ -463,6 +632,7 @@ class OscillClient:
         return self.get_reg_4('TS', signed=False)
 
     def set_ts_native(self, ts_native: int) -> int:
+        self._frame_wait_s = None  # sample period changed → invalidate cached frame wait
         return self.set_reg_4('TS', ts_native, signed=False)
 
     def get_sample_period_ps(self) -> float:
@@ -474,14 +644,14 @@ class OscillClient:
 
     def set_time_div_ms(self, t_div_ms: float) -> float:
         # sample period = t_div_ms / SAMPLES_PER_DIV
-        sample_ps = max(1, (float(t_div_ms) * 1e9) / self.SAMPLES_PER_DIV)
+        sample_ps = max(1, (float(t_div_ms) * 1e9) / self.samples_per_div)
         cpu_ps = self.get_cpu_tick_10ps() * 10.0
         ts_native = int(round(sample_ps * 256.0 / cpu_ps))
         self.set_ts_native(ts_native)
         return self.get_time_div_ms()
 
     def get_time_div_ms(self) -> float:
-        return (self.get_sample_period_ps() * self.SAMPLES_PER_DIV) / 1e9
+        return (self.get_sample_period_ps() * self.samples_per_div) / 1e9
 
 
 
@@ -544,8 +714,31 @@ class OscillClient:
         return self.get_reg_2('TC', signed=False)
 
     def ensure_qs(self, total_samples: Optional[int] = None) -> int:
-        total = total_samples or (self.SAMPLES_PER_DIV * self.H_DIVS)
+        total = total_samples or (self.samples_per_div * self.H_DIVS)
+        self._frame_wait_s = None  # QS changed → invalidate cached frame wait
         return self.set_reg_2('QS', total, signed=False)
+
+    def refresh_samples_per_div(self) -> int:
+        """[task_qs-raise] Derive the sampling density from the device's QSh ceiling for
+        the CURRENT mode and store it in self.samples_per_div. QSh is the max output
+        sample count for the active regime (mode/RS/TS/AP); dividing by H_DIVS gives the
+        max samples-per-division that fits. Bounded to [SAMPLES_PER_DIV, MAX_SAMPLES_PER_DIV].
+        Returns the new density; leaves it unchanged if QSh cannot be read.
+
+        Caller must hold the device lock and have already applied any mode change, since
+        QSh depends on the mode. Changing the density changes the time-per-sample for a
+        given t/div, so the caller must re-apply the timebase (set_time_div_ms) and QS
+        (ensure_qs) afterwards.
+        """
+        try:
+            b = self.get_property('QSh')
+            qsh = int.from_bytes(b, 'big') if b else None
+        except Exception:
+            qsh = None
+        if qsh and qsh > 0:
+            derived = qsh // self.H_DIVS
+            self.samples_per_div = max(self.SAMPLES_PER_DIV, min(self.MAX_SAMPLES_PER_DIV, derived))
+        return self.samples_per_div
 
     # ---------- Frame parsing ----------
     @staticmethod

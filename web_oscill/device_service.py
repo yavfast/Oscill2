@@ -98,9 +98,10 @@ class DeviceService:
                 if not port:
                     raise RuntimeError("Device not found")
             cli = OscillClient(port, baud)
-            cli.open()
-            cli.reset()
-            cli.connect()
+            # [task_qs-raise] Open + OBEX handshake at the base baud (device starts a
+            # session at low speed); rescues a device left at a raised baud by a prior
+            # ungraceful session. Speed is raised only AFTER init (below).
+            cli.open_and_handshake()
 
             # Set CPU frequency to 70 MHz
             cli.set_cpu_freq_mhz(70)
@@ -130,10 +131,12 @@ class DeviceService:
             # T1 bit composition is device-specific; reuse Android defaults: 0x2C
             cli.set_trigger_mode(0x2C)
             cli.set_trigger_level(128)
-            # Samples per div and total QS; choose 10 divs * min(64, QSh/10)
-            # Ensure QS sane
+            # [task_qs-raise] Derive the sampling density from the device's QSh ceiling
+            # for the mode just set (M1=Normal above), then size QS to it. QSh is
+            # mode-dependent, so this must run after set_channel_sw_mode.
+            cli.refresh_samples_per_div()
             total_samples = cli.ensure_qs()
-            # Timebase 5 ms/div
+            # Timebase 5 ms/div (computed at the new density)
             cli.set_time_div_ms(5)
             # Center the sweep offset so the trigger is in the middle of the displayed window.
             center_offset = total_samples // 2 if isinstance(total_samples, int) and total_samples > 0 else 0
@@ -141,6 +144,14 @@ class DeviceService:
             cli.set_samples_offset(center_offset)
             # Calibrate at the end
             cli.calibrate()
+            # [task_qs-raise] Init/handshake/calibrate all done at the base baud; now raise
+            # the serial link so the larger mode-aware frames (QS up to ~1784) transfer fast
+            # (~155 ms → ~19 ms at 921600). Best-effort: falls back to 115200 on any failure.
+            # On by default (verified stable @921600); set OSCILL_HIGH_BAUD=0 to opt out
+            # (e.g. a flaky cable/adapter that can't sustain the higher rate).
+            if os.environ.get("OSCILL_HIGH_BAUD", "1") != "0":
+                achieved_baud = cli.raise_speed()
+                self._log.info(f"Serial link running at {achieved_baud} baud")
             self._client = cli
             self._is_connected = True
             # Start acquisition automatically after successful connection
@@ -229,17 +240,20 @@ class DeviceService:
         """Public accessor: True if the background acquisition loop is running."""
         return bool(self._is_acquiring)
 
-    @staticmethod
-    def display_geometry() -> Dict[str, int]:
-        """Static display grid geometry (single source of truth for the frontend).
+    def display_geometry(self) -> Dict[str, int]:
+        """Display grid geometry (single source of truth for the frontend).
 
         [PL_AUDIT_WEB_06] Exposes the device's horizontal-division count and
         samples-per-division so the web layer need not import OscillClient directly
         (rule HardwareAccessOnlyThroughDeviceService) nor hardcode its own copy.
+        [task_qs-raise] samples_per_div is now the live per-connection density (derived
+        from QSh per mode); falls back to the class default when disconnected.
         """
+        spd = getattr(self._client, "samples_per_div", OscillClient.SAMPLES_PER_DIV) \
+            if self._client else OscillClient.SAMPLES_PER_DIV
         return {
             "h_divs": OscillClient.H_DIVS,
-            "samples_per_div": OscillClient.SAMPLES_PER_DIV,
+            "samples_per_div": int(spd),
         }
 
     def get_status(self) -> Dict[str, Any]:
@@ -437,7 +451,34 @@ class DeviceService:
                         c.set_sync_type(sync_bits)
                     else:
                         warnings.append(f"Unsupported sync_type '{changes['sync_type']}'")
+                # [task_qs-raise] A mode change alters QSh and thus the optimal sampling
+                # density. Recompute it only when sw_mode changed (QSh is flat over t/div,
+                # verified live). Density scales time-per-sample, so re-apply the current
+                # t/div to preserve the timebase; QS = density × H_DIVS then changes, so
+                # rescale the sweep offset (TC) proportionally to the resized window — else
+                # a centered TC can exceed a shrunk hi-res QS (888) or drift in 8-bit (1784).
+                # Runs after the sw_mode register write above.
+                density_changed = False
+                old_spd = c.samples_per_div
+                if "sw_mode" in changes:
+                    t_div_now = c.get_time_div_ms()  # at OLD density, before refresh
+                    if c.refresh_samples_per_div() != old_spd:
+                        density_changed = True
+                        c.set_time_div_ms(t_div_now)  # recompute TS → same t/div at new density
                 c.ensure_qs()
+                if density_changed and old_spd:
+                    try:
+                        new_qs = c.samples_per_div * c.H_DIVS
+                        old_tc = c.get_reg_2('TC', signed=False)
+                        new_tc = int(round(old_tc * c.samples_per_div / old_spd))
+                        c.set_samples_offset(max(0, min(new_qs - 1, new_tc)))
+                    except Exception:
+                        pass
+                # [task_qs-raise] Any config change cleared the buffer, so the delivered
+                # length is stale. Reset it BEFORE the snapshot below so the response
+                # reconciles against the requested QS-space — critical when QS changed
+                # across modes (e.g. AVG_HIRES 888 → NORMAL 1784). First frame re-establishes it.
+                self._last_delivered_len = None
                 # Increment config ID on any config change
                 self._cfg_id += 1
                 # Update cached config; return it reconciled to delivered-space so the
@@ -449,6 +490,7 @@ class DeviceService:
                 status = {}
         
         # Clear frame buffer after config change - old frames are no longer valid
+        # (_last_delivered_len was reset above, under the device lock, before the snapshot).
         with self._frames_lock:
             self._frames.clear()
             self._log.info(f"Cleared frame buffer after config change (cfg_id: {self._cfg_id})")
@@ -651,7 +693,8 @@ class DeviceService:
         cfg["samples_total"] = max(0, int(total_samples))
         
         # Static geometry info for UI
-        cfg["samples_per_div"] = getattr(c, 'SAMPLES_PER_DIV', 32)
+        # [task_qs-raise] live per-connection density (mode-aware), not the class default.
+        cfg["samples_per_div"] = getattr(c, 'samples_per_div', 32)
         # [PL_AUDIT_WEB_08] Expose the device horizontal-division count (device truth
         # = 8, NOT the 10 the frontend historically assumed) so the display grid and
         # time-axis are computed against the real capture window.

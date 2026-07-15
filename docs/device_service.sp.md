@@ -9,6 +9,7 @@
 > - Initialized from existing codebase via onboard procedure (2026-04-22)
 > - 2026-07-15 code-audit reconciliation (PL_AUDIT_WEB): documented start() "Not connected" RuntimeError path (stop() remains unconditional ok)
 > - 2026-07-15 — PL_AUDIT_WEB code-audit propagation: added public is_connected()/is_acquiring()/display_geometry() contracts; ConfigDict now includes h_divs alongside samples_per_div; acquisition loop reuses cached config per frame (no per-frame register re-read)
+> - 2026-07-15 — task_qs-raise: samples_per_div is now the live per-mode density (223/111, from QSh) not a fixed 32; display_geometry() is an instance method reading it; apply_config re-derives density on mode change (re-applying t/div) and resets _last_delivered_len before the response snapshot to avoid stale cross-mode geometry
 
 ## Data Structures
 
@@ -48,7 +49,7 @@ DeviceService(buffer_size: int = 256)
 | filters | {high: bool, low: bool} | HW filter state |
 | samples_total | int | **Delivered** sample count = actual plotted array length. Reconciled from the raw QS register: the device returns fewer samples than QS (empirically QS−2 in AVG/NORMAL). See _reconcile_display_geometry. |
 | t_offset | int | Trigger index in the **delivered** array = `TC − (QS − delivered) − 1` (delivered-space), so the client's zero/trigger marker sits on the real trigger. Raw TC (pre-trigger samples) is not exposed. |
-| samples_per_div | int | Display geometry (OscillClient.SAMPLES_PER_DIV, =32) |
+| samples_per_div | int | Display geometry — the **live per-connection** density (`OscillClient.samples_per_div`), derived from QSh per mode: 223 (8-bit NORMAL/AVG/PEAK), 111 (16-bit AVG_HIRES/PEAK_HI). No longer the fixed 32. |
 | h_divs | int | Horizontal division count (device H_DIVS, =8 — NOT 10) |
 | limits | {param: {min, max}} | Valid range per parameter, for client informativeness + clamping. See below. |
 | cfg_id | int | Config version counter |
@@ -109,8 +110,11 @@ existing v_offset/trigger_level clamping; no warning appended).
 - Public accessor: True when the background acquisition loop is running.
 - Used by the web layer in place of the private `_is_acquiring` flag.
 
-### display_geometry() → Dict  *(staticmethod)*
-- Returns `{h_divs: int, samples_per_div: int}` = `{OscillClient.H_DIVS (8), OscillClient.SAMPLES_PER_DIV (32)}`.
+### display_geometry() → Dict  *(instance method)*
+- Returns `{h_divs: int, samples_per_div: int}` = `{OscillClient.H_DIVS (8), <live density>}`.
+- **(task_qs-raise)** `samples_per_div` is the connected client's live per-mode density (223 / 111),
+  falling back to the class default (32) when disconnected. Changed from a staticmethod to an
+  instance method so it can read the live density. Call site `service.display_geometry()` unchanged.
 - **(PL_AUDIT_WEB)** Single source of truth for display grid geometry so the web layer need not
   import `OscillClient` directly nor hardcode a copy.
 
@@ -121,6 +125,12 @@ existing v_offset/trigger_level clamping; no warning appended).
 - `changes` keys: v_div, v_offset, t_div, t_offset, trigger_level, trigger_mode, trigger_slope, coupling, filter_high, filter_low, sw_mode, sync_type, sync_front, sync_back
 - Returns (status_dict, warnings_list)
 - Frame buffer cleared after any config change
+- **(task_qs-raise)** After applying a mode change, the sampling density is re-derived from QSh
+  (`OscillClient.refresh_samples_per_div`); if it changed, the current t/div is re-applied before
+  `ensure_qs` so the timebase is preserved at the new density. The delivered-length cache
+  (`_last_delivered_len`) is reset before the response snapshot, so the apply response reconciles
+  against the requested QS-space rather than a stale cross-mode delivered length (e.g. AVG_HIRES 887 →
+  NORMAL 1784); the first new frame re-establishes the real delivered count.
 - **Errors:** `TimeoutError` (5s); `RuntimeError` if not connected
 
 ### get_frames(since=None, limit=64) → Dict
