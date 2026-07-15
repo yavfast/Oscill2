@@ -1,6 +1,6 @@
 # Spike: Firmware & Programmable ICs of the Oscill Hardware
 
-Status: draft (investigation — no pipeline gates)
+Status: concluded (investigation — no pipeline gates)
 Date: 2026-07-14
 Sources: `firmware/shema_1.jpeg` (PCB layout), `firmware/shema_2.jpeg` (analog part),
 `firmware/Uosc126.ofw` (original firmware), `firmware/oscilnew.zip` (PC software).

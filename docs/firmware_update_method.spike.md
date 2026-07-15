@@ -1,6 +1,6 @@
 # Spike: Firmware Update Method & Modification Feasibility
 
-Status: draft (investigation — no pipeline gates)
+Status: concluded (investigation — no pipeline gates)
 Date: 2026-07-14
 Goal: determine how the Windows software updates firmware, and whether the 1.26 defects
 (`firmware_1.26_defects.md`) can be fixed on the owner's own device.

@@ -67,6 +67,18 @@ _(Detailed Android specs and plans deferred — refer to existing docs/ for Andr
 
 ---
 
+## Firmware Investigation (spikes — no pipeline gates)
+
+| Document | Status | Description |
+|----------|--------|-------------|
+| [firmware_hardware.spike.md](firmware_hardware.spike.md) | concluded | Programmable ICs, PCB layout, firmware type, programming toolset |
+| [firmware_update_method.spike.md](firmware_update_method.spike.md) | concluded | How the Windows software updates firmware; `.ofw` format + encryption; modification feasibility |
+| [firmware_1.26_defects.md](firmware_1.26_defects.md) | draft (analysis) | Defect register for firmware 1.26 (slow-roll sweep drift, etc.) |
+
+_Durable `.ofw` findings are captured in skill [firmware_ofw_format](../.dev_flow/skills/firmware_ofw_format/SKILL.md); tooling in `firmware/ofw_crypto.py`._
+
+---
+
 ## Rules & Standards
 
 - [Naming Rules](.dev_flow/rules/naming.md)
