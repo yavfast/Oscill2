@@ -1,4 +1,5 @@
 import { formatSecondsAxis, formatVoltsAxis } from './format.js';
+import { hexToSamples } from './hexUtils.js';
 
 export class ScopeView {
   constructor(containerId) {
@@ -84,6 +85,16 @@ export class ScopeView {
     this.waveLayer.add(this.peakArea);
     this.waveLayer.add(this.waveLine);
 
+    // [SP_RES_02_06] Small status badge shown when the newest frame carries an
+    // enhanced block (accumulation depth + status_reason). Cyan to distinguish from
+    // the yellow raw trace.
+    this.enhBadge = new Konva.Text({
+      x: 0, y: 0, text: '', fontSize: 11, fill: '#4fc3f7', visible: false,
+      fontFamily: 'system-ui, -apple-system, Segoe UI, Roboto, Arial',
+      fontStyle: 'bold',
+    });
+    this.overlayLayer.add(this.enhBadge);
+
     this.triggerGroup = this._createTriggerGroup();
     this.overlayLayer.add(this.triggerGroup);
     this.centerYGroup = this._createCenterYGroup();
@@ -110,12 +121,14 @@ export class ScopeView {
     if (config && config.cfg_id !== undefined) this.currentCfgId = config.cfg_id;
 
     const latestFrame = frames[frames.length - 1];
-    const samples = latestFrame.samples || [];
-    const peakMin = latestFrame.samples_peak_min || [];
-    const peakMax = latestFrame.samples_peak_max || [];
+    const trace = this._selectTrace(latestFrame);
+    const samples = trace.samples;
+    const peakMin = trace.peakMin;
+    const peakMax = trace.peakMax;
     if (samples.length === 0) return;
 
-    const sampleBits = Math.max(1, latestFrame.sample_bits || 8);
+    const sampleBits = trace.sampleBits;
+    this._updateEnhBadge(latestFrame.enhanced);
 
     if (config) {
       // Only update v_offset if not currently being dragged
@@ -425,7 +438,8 @@ export class ScopeView {
   redrawWave() {
     if (!this.lastFrames || !this.lastConfig || !this.xRange || !this.yRange || !this.stage) return;
     const latestFrame = this.lastFrames[this.lastFrames.length - 1];
-    const samples = latestFrame.samples || [];
+    const trace = this._selectTrace(latestFrame);
+    const samples = trace.samples;
     if (samples.length === 0) {
       this.waveLine.points([]);
       if (this.peakArea) {
@@ -435,9 +449,10 @@ export class ScopeView {
       this.waveLayer.batchDraw();
       return;
     }
-    const sampleBits = Math.max(1, latestFrame.sample_bits || 8);
-    const peakMin = latestFrame.samples_peak_min || [];
-    const peakMax = latestFrame.samples_peak_max || [];
+    const sampleBits = trace.sampleBits;
+    const peakMin = trace.peakMin;
+    const peakMax = trace.peakMax;
+    this._updateEnhBadge(latestFrame.enhanced);
     const totalTime = this.xRange[1] - this.xRange[0];
     const totalVoltage = this.yRange[1] - this.yRange[0];
     
@@ -495,6 +510,60 @@ export class ScopeView {
     const vStep = totalVoltage / (maxValue + 1);
     const vMin = -totalVoltage / 2 + vOffsetVolts;
     return vMin + (sample * vStep);
+  }
+
+  // [SP_RES_02_06] Choose the render source: the enhanced trace (16-bit, decoded from
+  // its own hex block via hexToSamples) when the newest frame carries one, else the raw
+  // frame. Enhanced supersedes the peak envelope (a single averaged/upscaled line).
+  _selectTrace(frame) {
+    const enh = frame && frame.enhanced;
+    // Render the enhanced trace for every emitted block EXCEPT peak-mode, where the raw
+    // min/max envelope is the meaningful view and enhancement does nothing.
+    if (enh && enh.samples_hex && enh.status_reason !== 'peak-mode') {
+      const raw16 = hexToSamples(enh.samples_hex, enh.sample_bytes || 2);
+      // [SP_RES_01_03] The block carries 8-bit-domain values scaled ×257 into 16-bit.
+      // Divide back to the 0..255 real-valued domain and render on the SAME 8-bit
+      // data→pixel mapping as the raw trace (ConsistentDataToPixelMapping): the
+      // renderer's vStep = totalVoltage/2^bits differs from the backend's max_code
+      // mV mapping, so feeding it the raw 16-bit codes would shift the trace slightly.
+      return {
+        samples: raw16.map((v) => v / 257),
+        sampleBits: 8,
+        peakMin: [],
+        peakMax: [],
+      };
+    }
+    return {
+      samples: (frame && frame.samples) || [],
+      sampleBits: Math.max(1, (frame && frame.sample_bits) || 8),
+      peakMin: (frame && frame.samples_peak_min) || [],
+      peakMax: (frame && frame.samples_peak_max) || [],
+    };
+  }
+
+  // [SP_RES_02_06] Reflect enhancement state: depth folded in + status_reason.
+  _updateEnhBadge(enh) {
+    if (!this.enhBadge) return;
+    if (!enh) {
+      this.enhBadge.visible(false);
+      return;
+    }
+    const reason = enh.status_reason || 'ok';
+    let text;
+    if (enh.averaging_active) {
+      text = `ENH ×${enh.frames_accumulated}` +
+        (enh.frames_rejected ? ` (−${enh.frames_rejected})` : '') +
+        `  +${(enh.effective_bits_gain || 0).toFixed(1)} bits`;
+    } else {
+      text = `ENH: ${reason}`;
+    }
+    if (enh.smoothing_active) text += '  ~SMA';
+    const inner = this.getInnerRect();
+    this.enhBadge.text(text);
+    this.enhBadge.position({ x: inner.left + 6, y: inner.top + 6 });
+    this.enhBadge.fill(enh.averaging_active ? '#4fc3f7' : '#c9a227');
+    this.enhBadge.visible(true);
+    this.overlayLayer.batchDraw();
   }
 
   drawGrid() {

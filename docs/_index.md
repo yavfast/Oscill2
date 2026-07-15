@@ -38,6 +38,7 @@ Oscill2 is a USB oscilloscope platform with three independent clients sharing th
 | Concept | Spec | Plan | Description |
 |---------|------|------|-------------|
 | [C_AAJ](auto_adjust.concept.md) | [SP_AAJ](auto_adjust.sp.md) | [PL_AAJ](auto_adjust.plan.md) | Auto V/div, T/div, offset, trigger |
+| [C_RES](resolution_enhancement.concept.md) | [SP_RES](resolution_enhancement.sp.md) | [PL_RES](resolution_enhancement.plan.md) | Periodic-signal resolution enhancement — coherent multi-frame averaging (align+gate+avg) + SMA; status `draft` |
 
 ### Layer 3 — HTTP API
 

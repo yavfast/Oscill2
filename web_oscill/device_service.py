@@ -484,6 +484,12 @@ class DeviceService:
                 # Update cached config; return it reconciled to delivered-space so the
                 # apply response matches /api/status and /api/frames (single geometry).
                 cfg = self._snapshot_config_locked()
+                # [SP_RES_02_01] Enhancement settings are backend-only (no register
+                # write above): fold the requested enh_* onto the fresh snapshot,
+                # silently clamped, and re-cache. cfg_id already bumped + buffer cleared
+                # below, so an enh_*-only change resets the averaging window like any other.
+                self._apply_enh_settings(cfg, changes)
+                self._update_cached_config(cfg)
                 status = {"config": self._reconcile_display_geometry(cfg), "cfg_id": self._cfg_id}
             except Exception as e:
                 warnings.append(f"config update failed: {e}")
@@ -658,6 +664,23 @@ class DeviceService:
             cfg["limits"] = lim
         return cfg
 
+    def _apply_enh_settings(self, cfg: Dict[str, Any], changes: Dict[str, Any]) -> None:
+        """Fold resolution-enhancement settings into cfg, silently clamped.  [SP_RES_02_01 / SP_RES_03_01]
+
+        enh_enabled → bool; enh_depth → [2,64]; enh_sma_window → [1,63] then forced odd
+        (even → nearest lower odd). No warning on out-of-range, consistent with the
+        v_offset/trigger_level clamp. Backend-only: never passed to oscill_client.
+        """
+        if changes.get("enh_enabled") is not None:
+            cfg["enh_enabled"] = bool(changes["enh_enabled"])
+        if changes.get("enh_depth") is not None:
+            cfg["enh_depth"] = max(2, min(64, int(changes["enh_depth"])))
+        if changes.get("enh_sma_window") is not None:
+            w = max(1, min(63, int(changes["enh_sma_window"])))
+            if w % 2 == 0:
+                w -= 1
+            cfg["enh_sma_window"] = w
+
     def _snapshot_config_locked(self) -> Dict[str, Any]:
         """
         Snapshot current device configuration under device lock.
@@ -740,6 +763,16 @@ class DeviceService:
         else:
             cfg["trigger_slope"] = "None"
         
+        # [SP_RES_01_01] Resolution-enhancement controls (backend-only, C_RES_DEC_04 —
+        # never written to a device register). Carried forward across re-snapshots from
+        # the prior cached config so they survive an unrelated register change; seeded to
+        # defaults on first snapshot. apply_config mutates them (clamped) via
+        # _apply_enh_settings. Bare scalars, not {v,u} (StructuredConfigValues).
+        prev = self._get_cached_config()
+        cfg["enh_enabled"] = bool(prev.get("enh_enabled", False))
+        cfg["enh_depth"] = int(prev.get("enh_depth", 16))
+        cfg["enh_sma_window"] = int(prev.get("enh_sma_window", 1))
+
         # [task_config-limits] Parameter min/max for client informativeness + clamping.
         # Device-authoritative where a property exists (v_div via V1l/V1h with step-list
         # fallback; samples_total via QSh); structural for raw 0..255 offsets; t_div from
@@ -764,6 +797,9 @@ class DeviceService:
             "t_div": {"values": list(TDIV_VALUES_MS), "u": "ms"},
             "samples_total": {"min": 1, "max": int(qsh)},
             "t_offset": {"min": 0, "max": max(0, int(total_samples) - 1)},
+            # [SP_RES_01_04] Structural bounds (cap per-poll enhancement cost).
+            "enh_depth": {"min": 2, "max": 64},
+            "enh_sma_window": {"min": 1, "max": 63},
         }
 
         cfg["cfg_id"] = self._cfg_id  # Add config ID

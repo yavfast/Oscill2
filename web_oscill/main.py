@@ -22,6 +22,7 @@ from calculations import (
     calculate_measurements
 )
 from auto_adjust import auto_adjust_multiple, VDIV_VALUES_MV, TDIV_VALUES_MS
+import resolution  # [PL_RES] on-read periodic-signal resolution enhancement
 
 log = logging.getLogger("web_api")
 
@@ -112,6 +113,10 @@ class ConfigReq(BaseModel):
     sync_type: Optional[str] = None
     sync_front: Optional[bool] = None
     sync_back: Optional[bool] = None
+    # [SP_RES_01_01] Resolution-enhancement controls (backend-only; clamped in DeviceService).
+    enh_enabled: Optional[bool] = None
+    enh_depth: Optional[int] = None
+    enh_sma_window: Optional[int] = None
 
 @app.post("/api/config")
 def api_config(req: ConfigReq):
@@ -153,6 +158,13 @@ def api_config(req: ConfigReq):
             changes["sync_front"] = req.sync_front
         if req.sync_back is not None:
             changes["sync_back"] = req.sync_back
+        # [SP_RES_02_01] Forward enhancement settings; DeviceService owns the clamp.
+        if req.enh_enabled is not None:
+            changes["enh_enabled"] = req.enh_enabled
+        if req.enh_depth is not None:
+            changes["enh_depth"] = req.enh_depth
+        if req.enh_sma_window is not None:
+            changes["enh_sma_window"] = req.enh_sma_window
 
         status, warnings = service.apply_config(changes)
         # Convert embedded config to UI format for consistency
@@ -254,6 +266,34 @@ def api_frames(since: Optional[int] = None, limit: int = 128, format: str = "hex
                 measurements = calculate_measurements(frame, current_config)
                 if measurements:
                     processed_frame["measurements"] = measurements
+                # [SP_RES_02_06] Newest frame only: attach the enhanced block when
+                # enhancement is enabled. Non-destructive (raw samples_hex untouched) and
+                # best-effort — any failure degrades to no enhanced block, never a 500.
+                # Guard: only attach when this displayed frame IS the buffer-newest — a
+                # truncated (limit-capped) poll list must not carry a block computed for
+                # a newer reference than the frame it rides on.
+                newest_seq = int(data.get("newest_seq", 0) or 0)
+                if current_config.get("enh_enabled") and frame.get("seq") == newest_seq:
+                    try:
+                        enh_depth = int(current_config.get("enh_depth", 16) or 16)
+                        # Fetch the most-recent window (chronological), newest-first.
+                        window_data = service.get_frames(
+                            since=max(0, newest_seq - enh_depth), limit=enh_depth)
+                        window = list(reversed(window_data.get("frames", [])))
+                        block = resolution.compute_enhanced_trace(window, current_config)
+                        if block:
+                            processed_frame["enhanced"] = block
+                            if block.get("averaging_active"):
+                                enh_samples = samples_from_hex(
+                                    block["samples_hex"], block.get("sample_bytes", 2))
+                                enh_meas = calculate_measurements(
+                                    {"samples": enh_samples,
+                                     "sample_bits": block.get("sample_bits", 16)},
+                                    current_config)
+                                if enh_meas:
+                                    processed_frame["measurements"] = enh_meas
+                    except Exception:
+                        log.exception("resolution enhancement failed (degraded to raw)")
             processed_frames.append(processed_frame)
 
         return {
