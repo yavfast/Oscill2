@@ -26,3 +26,4 @@ node_modules
 firmware/ks_solver_catalog.json
 # RCIGD intermediate snapshot (ofw_graph_decode.py) — regenerable, not the proven mask
 firmware/ks_graph_state.json
+scratchpad
