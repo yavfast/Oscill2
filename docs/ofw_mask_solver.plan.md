@@ -120,9 +120,67 @@ Notes:
 - The real run is the deliverable artifact the user asked for. Cross-check its output against `ks_partial` (all 107 → `known`) and against §3f (col 133 shows `known` when present; the trap slots show `variants`).
 - [SP_OMS_06_01](./ofw_mask_solver.sp.md#SP_OMS_06_01) **Reversibility** is satisfied by design across all phases (no implementation step): the tool is read-only on `.ofw`/`ks_partial`; the only writes are the deletable `ks_solver_catalog.json` + new modules; `propose_promotions` never writes the proven mask. No rollback code needed.
 
+### Phase 5 — Recursive cross-version instruction-graph decode (RCIGD) [IN-PROGRESS 2026-07-16]
+
+**Purpose.** Not to *prove* bytes but to **narrow per-column K-domains** (256 → few) by branch-and-bound
+over instruction-alignment hypotheses, using the two hard rejections the user named — **illegal opcode**
+(S1) and **out-of-range address** (S3) — plus cross-version coupling (S4). Output = a per-column candidate
+map + ranked function-entry hypotheses, to seed later work. Accepts non-uniqueness (goal is fewer branches).
+
+**Why this can prune where per-column cannot.** In isolation a column has *operand-escape* (any byte is a
+legal operand) → no rejection. Rejection compounds only along an **assumed alignment chain**: from a known
+instruction boundary, each opcode's length forces the next boundary; a branch dies when the chain (a) hits
+an illegal opcode, (b) resolves an abs target out of `flash_ranges`, or (c) is forced to split a known-K
+column's instruction inconsistently. The chain is seeded where alignment is known (L=0) and **propagates
+across pages through resolved jump targets** (a jump's target is a new aligned entry).
+
+**Cross-version coupling (the crux).** K is shared but `P[v][col]=C[v][col]−K[col]` differs per version, so
+instruction boundaries **diverge per version** from a shared start. The single coupling is shared K: a
+candidate value `k` at `col` is kept only if it yields a legal, boundary-consistent tiling in **every**
+version carrying that page. Divergent versions therefore prune *more*, not less (this is what took §3f-region
+decode-forward to floor-29 — the measured baseline this phase generalizes to all 10 code pages).
+
+**State (RAM-resident; `DomainState`).**
+- `dom[col]` for col 2..513: a set of surviving K values. Known cols → singleton; unknown → `{0..255}`.
+- `boundaries[L][v]`: discovered instruction-boundary offsets per (page, version) (a hypothesis under a branch).
+- `frontier`: unresolved jump targets `{page-hi known, lo-domain}` — the branch points (the 16 L0 vectors seed it).
+- `entries`: confirmed aligned entry points (seed = L0 known boundaries; grows as targets resolve).
+- Only **snapshots** are persisted (§ checkpoint); the live search tree stays in RAM.
+
+**Algorithm (branch-and-bound + MRV).**
+1. **Seed.** entries ← L0 known boundaries (reset chain col2→5, startup col133→136). frontier ← the 16 vector
+   LJMP targets (`target-hi` from the lattice; `target-lo` domain = `dom[lo_col]`).
+2. **Propagate (deterministic, no branch).** From each entry, run `decode_forward` per version: at each opcode
+   boundary landing on a **known** col, its length is forced → advance; where the tiling crosses a known col
+   as an operand, record no constraint; if a known col is required both as a mid-operand and as a boundary by
+   different steps → contradiction → kill this branch. Intersect surviving `k` at each visited unknown opcode
+   col across versions → prune `dom[col]`. Range-check every resolved abs target (S3); illegal-opcode check
+   every boundary (S1).
+3. **Branch (MRV).** Pick the frontier node with the **smallest `target-lo` domain**. For each candidate `lo`:
+   set `K[lo_col]=lo` tentatively → target address concrete → new entry at `(page,off)`. Recurse from step 2
+   in a bounded window (N instns or until RET/RETI). Keep `lo` iff the window stays legal+in-range in all
+   versions; else drop it (prunes `dom[lo_col]`).
+4. **Accumulate.** Union the K-assignments over all **surviving** branches → the narrowed `dom[col]` (a
+   probabilistic prior, never a forced byte). Rank frontier `lo` candidates by surviving-branch count.
+5. **Backtrack** on any emptied domain / range violation. **Terminate** on empty frontier, node-budget, or
+   domain fixpoint.
+
+**Hard invariants (carried from SP_OMS).** Never writes `ks_partial` (RCIGD output is a *separate* domain map);
+a `unique`-width domain is *reported*, not auto-promoted; determinism (no RNG); read-only on `.ofw`.
+
+**Checkpoint (intermediate results only).** `firmware/ks_graph_state.json` (git-ignored, regenerable): per-col
+domain sizes + sets, frontier with lo-domains, live-branch stats, a seed/config hash for resume. Written every
+K nodes and at exit; `kickoff` writes the seed snapshot. RAM is the working store; the file is a resumable snapshot.
+
+**Staging.** 5a *(this turn)* — `DomainState` + seed + frontier + checkpoint I/O + `kickoff` (seed snapshot,
+sound, runnable). 5b — the `decode_forward` per-version primitive with known-col checkpointing. 5c — MRV
+frontier expansion + backtrack + accumulation. 5d — measure narrowed domains vs the floor-29 baseline; if a
+domain reaches width 1 under strict S1/S3/S4 (not a statistical guess) it is proposed via the existing gated
+`propose` path, never auto-written. Each of 5b–5d gets its own clean-context review before commit.
+
 ## Backlog
 
-- **Broader code-page seed discovery** (beyond L=0) — v1 Pass-2 attacks only pages with guaranteed seeds (L=0 vector grid; see PL_OMS_DEC_01). Following resolved LJMP targets into other code pages, or phase-alignment decode, is deferred. *Return when:* L=0 yield is exhausted and more columns are wanted.
+- ~~**Broader code-page seed discovery** (beyond L=0)~~ — **ACTIVATED as Phase 5 (RCIGD)** 2026-07-16.
 - **Richer S5 data-page cribs** (register-name tables, additional LUTs beyond the two hex LUTs) — *Return when:* a specific data-page column becomes a target.
 - **Re-run on new inputs** — a 4th firmware version (breaks OTP on varying cols) or a C2 known-page (adds anchors) — *Return when:* either becomes available.
 
@@ -170,3 +228,7 @@ undeterminable=402. Hiding col 133 re-derives it as `unique`=`0x29` (the accepta
 |------|--------|
 | 2026-07-15 | Initial version. 4 bottom-up phases (decoder → triage → window CSP → catalog); tests as standalone scripts (project rule); §3f reproduction is the executable acceptance test; PL_OMS_DEC_01 scopes v1 Pass-2 to L=0 seeds. |
 | 2026-07-15 | Implemented all 4 phases (`firmware/mcs51.py`, `firmware/ofw_mask_solver.py`; 4 standalone test scripts, all PASS). §3f reproduced (col 133→`unique` 0x29 when hidden; 21/125→`unique`, 13/45→`variants`). Catalog byte-deterministic; `ks_partial` sha256 unchanged. Two upstream corrections (106 in-scope anchors; `data-page` note deferred) — see Implementation Notes. Status → completed. |
+| 2026-07-16 | Added **S-prologue** read-only diagnostic to the `jumps` command (symmetric to the existing S-epilogue), keyed by SDCC `--model-small` prologue conventions verified against `firmware/reference/ref0400.rst` (spike §3g). It emits **soft priors** (`0xC0` PUSH-ACC ISR ~60%, `0xAF` MOV-R7-DPL regular-fn) — **never** hard anchors, never promoted to `ks_partial` (SDCC has no reliable stack prologue: static overlay, not stack frames; optimizer drops leaf-ISR pushes). Outside the formal S1–S6 contracts, like `vectors`/`jumps`/S-epilogue (post-spec read-only diagnostics). Fires only on a column-mapped fn-start with an unknown entry column → **0 targets today** (only 0x0483 is mapped, a trampoline whose opcode is already known); loaded for the external levers. Test added to `test_ofw_solver_window.py`; all solver tests PASS. |
+| 2026-07-16 | **Phase 5b implemented** (`firmware/ofw_graph_decode.py`: `tiling_roles` + `narrow_from_seed`, `decode` CLI). Sound linear tiling-narrowing — branch on instruction **length** (1/2/3), context-free reachability + memoized `can_complete`, no node budget. Cross-version intersection; a col narrows only if it is a boundary in **every** valid tiling of every version. **MEASURED from the only L=0 seed (col136): 5 cols narrowed, each by just 1 value (the illegal 0xA5) → 255/256. Negligible** — operand-escape dominates + the free-completing window leaves all lengths viable, so only S1 bites. (The prior "floor-29" needed a cross-version *shared-boundary* assumption — NOT sound in general; the sound version is weaker and confirms the wall harder.) Soundness test added (hidden known col's true K never removed) + controlled tiling-roles decode; all graph+solver tests PASS. Real narrowing now depends on Phase 5c (the 14 vector-target entries as extra boundary anchors + epilogue/prologue priors). |
+| 2026-07-16 | **Phase 5c implemented + measured — RCIGD graph approach SOUNDLY REFUTED for file-only** (`expand_frontier`, `_branch_roles`, `frontier` CLI). MRV frontier expansion over the 14 decodable vector-target ISR entries: sweep each `target-lo` (256), run the 5b tiling from each candidate entry, accumulate narrowing with correct operand-escape union semantics (a col narrows only if a forced boundary in EVERY alive lo-branch reaching it). **Result: 3 cols hard-narrowed across all 14 vectors (each −1..−3 values); with 5b, 6 cols total, all still 253–255 candidates. alive_lo ≈ 254–256 (almost no target-lo refutable).** Cross-page jump-target propagation adds ~nothing: each target lands on another unknown-K region; operand-escape makes every col loose in some branch. Clean-context **soundness review: SOUND** (never removes a true K — all 5 claims verified). Test extended (`_branch_roles` + full `expand_frontier` run, determinism, known-cols-untouched); all 4 test files PASS. **Conclusion: the file-only graph does not collapse — 111/514 stands; only external levers remain (more versions / known page).** |
+| 2026-07-16 | Extended S-prologue to **2-byte** patterns (spike §3g.4): each prior now predicts `P[entry],P[entry+1]` → two keystream bytes, tiered primary/secondary/variant (`AF 82`, `C0 E0`, `AE 83`, `AE 82`/`AD 82`). Added a **neighbour cross-check** — when `entry+1` is a known column the derived `K[entry+1]` is compared to the known byte → `validated`/`refuted` (a real filter: a wrong fn-start hypothesis at col13 is refuted by the lattice `K[14]`). Still soft/never-promoted, still 0 live targets. Test updated (2-byte structure + cross-check + arithmetic); all solver tests PASS. |

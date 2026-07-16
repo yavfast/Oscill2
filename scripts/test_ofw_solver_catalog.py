@@ -44,7 +44,7 @@ def test_happy_path(tmp):
     check("512 column records", len(cols) == 512)
     s = catalog["meta"]["summary"]
     check("summary sums to 512", s["known"] + s["unique"] + s["variants"] + s["undeterminable"] == 512)
-    check("known count == 106 (cols 2..513)", s["known"] == 106)
+    check("known count == 110 (cols 2..513; 111 total incl. col 1 SEQ)", s["known"] == 110)
     check("meta.total == 514", catalog["meta"]["total"] == 514)
     return catalog
 

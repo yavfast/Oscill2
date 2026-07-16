@@ -42,8 +42,8 @@ def test_load_and_anchors():
     # ks_partial has 107 anchors total; col 1 (SEQ) is out of catalog scope (SP_OMS §01),
     # so 106 fall in cols 2..513 — the catalog's `known` count (SP_OMS_01_06 restriction).
     n_in_range = sum(1 for c in anchors if 2 <= c <= 513)
-    check("106 anchors on cols 2..513 (107 total incl. col 1 SEQ)", n_in_range == 106)
-    check("107 anchors total (incl. col 1 SEQ)", len(anchors) == 107)
+    check("110 anchors on cols 2..513 (111 total incl. col 1 SEQ)", n_in_range == 110)
+    check("111 anchors total (incl. col 1 SEQ)", len(anchors) == 111)
     return images, anchors
 
 

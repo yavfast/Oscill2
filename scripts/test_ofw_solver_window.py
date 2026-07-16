@@ -57,8 +57,10 @@ def test_hide_col133(images, base_anchors):
 
 
 def test_trap_slots_21_125(images, base_anchors):
-    print("cols 21,125 -> candidate set contains 0xc1 / 0xdf:")
-    res = _solve_L0(images, base_anchors)
+    print("cols 21,125 -> candidate set contains 0xc1 / 0xdf (hidden):")
+    # 21/125 were promoted into ks_partial (mask 109); hide them to exercise recovery.
+    anchors = {c: v for c, v in base_anchors.items() if c not in (21, 125)}
+    res = _solve_L0(images, anchors)
     s21 = res[21]["survivors"]
     s125 = res[125]["survivors"]
     check("col 21 candidates contain 0xc1", 0xc1 in s21)
@@ -118,6 +120,50 @@ def test_cross_version_prunes(images, base_anchors):
     check("col 133 survivor decodes to LJMP in all versions", ok)
 
 
+def test_epilogue_prologue_signals(images, base_anchors):
+    print("S-epilogue / S-prologue signals (spike §3g — soft, never-promoted):")
+    # A synthetic mapped fn-start whose entry column is NOT yet known exercises both signals.
+    entry_col = 200                                   # not lattice (≢6 mod8), not a vector col
+    fn_addr = S.L0_LO + (entry_col - 2)               # 0x04C6 -> _l0_addr_to_col == 200
+    check("chosen entry col is genuinely unknown", entry_col not in base_anchors)
+    check("addr round-trips to the entry col", S._l0_addr_to_col(fn_addr) == entry_col)
+
+    pro = S.prologue_candidates(images, base_anchors, fn_addr)
+    check("prologue fires on an unknown-entry mapped fn-start", bool(pro))
+    priors = pro.get("priors", [])
+    p0_vals = {int(c["P"][0], 16) for c in priors}        # first byte of each 2-byte pattern
+    check("prologue priors include MOV R7,DPL (AF ..)", 0xAF in p0_vals)
+    check("prologue priors include PUSH ACC (C0 ..)", 0xC0 in p0_vals)
+    check("every prior is a 2-byte pattern (col1 in page)", all(len(c["P"]) == 2 for c in priors))
+    check("every prior yields two (col,K) pairs", all(len(c["cols"]) == 2 and len(c["K"]) == 2 for c in priors))
+    check("priors are tiered by confidence", {c["confidence"] for c in priors} >= {"primary", "variant"})
+    check("prologue is a PRIOR set, never a single forced pattern", len(priors) >= 3)
+    # K derivation is arithmetically correct: K[entry] = C[entry] - P0
+    ref = images.ref_bytes(0)
+    af = next(c for c in priors if int(c["P"][0], 16) == 0xAF)
+    check("K[entry] = (C[entry]-0xAF) mod 256 for the AF-82 prior",
+          int(af["K"][0], 16) == (ref[entry_col] - 0xAF) & 0xFF)
+
+    # Cross-check: entry col just before a KNOWN anchor -> 2nd byte is validated/refuted (a real filter).
+    kc = min(c for c in base_anchors if c - 1 not in base_anchors and c - 1 > 2)  # known col whose pred is unknown
+    x_addr = S.L0_LO + ((kc - 1) - 2)
+    xpro = S.prologue_candidates(images, base_anchors, x_addr)
+    if xpro:  # only if (kc-1) maps into L0
+        checks = [c.get("check") for c in xpro["priors"] if "check" in c]
+        check("2nd byte on a known col yields a validated/refuted cross-check",
+              len(checks) == len(xpro["priors"]) and set(checks) <= {"validated", "refuted"})
+
+    epi = S.epilogue_candidates(images, base_anchors, fn_addr)
+    e_vals = {int(c["P"], 16) for c in epi.get("candidates", [])}
+    check("epilogue offers RET(0x22) and RETI(0x32)", {0x22, 0x32} <= e_vals)
+    check("epilogue is a variant set, never a single unique byte", len(epi.get("candidates", [])) >= 2)
+
+    # Safety: prologue SKIPS an already-known entry column (no re-derivation of a proven byte).
+    known_addr = S.L0_LO + (133 - 2)                  # col 133 = the proven trampoline LJMP opcode
+    check("prologue skips a known entry column (col 133)",
+          S.prologue_candidates(images, base_anchors, known_addr) == {})
+
+
 if __name__ == "__main__":
     print("=" * 60)
     print("OFW solver solve_window §3f reproduction (acceptance test)")
@@ -130,6 +176,7 @@ if __name__ == "__main__":
     test_invariants(images, anchors)
     test_bound_independence(images, anchors)
     test_cross_version_prunes(images, anchors)
+    test_epilogue_prologue_signals(images, anchors)
     print("-" * 60)
     if _failures:
         print(f"RESULT: FAIL ({_failures} failing case(s))")

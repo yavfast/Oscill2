@@ -1,5 +1,5 @@
 {
- "note": "CONJECTURAL / low-confidence .ofw keystream bytes. NOT proven \u2014 kept SEPARATE from ks_partial.json (106 recovered: 66 proven + 12 vector-opcode + 28 crib-validated hex-LUT). Source: L=0 vector-table 'sudoku' (docs/ofw_mask_cryptanalysis.spike.md \u00a73c). Each column lists candidate plaintext value(s) -> implied K with confidence + basis. \u00a73f (2026-07-15): vector table is a COMPLETE LJMP grid; col133 (post-table LJMP, app-range hi) PROMOTED to ks_partial (107). INT1(21)/v15(125) = structural-high LJMP candidates; Tmr0(13)/Tmr2(45) opcodes ambiguous (LJMP 0xFFxx vs erased). Refine/confirm with external check.",
+ "note": "CONJECTURAL / low-confidence .ofw keystream bytes. NOT proven \u2014 kept SEPARATE from ks_partial.json (106 recovered: 66 proven + 12 vector-opcode + 28 crib-validated hex-LUT). Source: L=0 vector-table 'sudoku' (docs/ofw_mask_cryptanalysis.spike.md \u00a73c). Each column lists candidate plaintext value(s) -> implied K with confidence + basis. \u00a73f (2026-07-15): vector table is a COMPLETE LJMP grid; col133 (post-table LJMP, app-range hi) PROMOTED to ks_partial (107). INT1(21)/v15(125) PROMOTED to ks_partial (109/514, 2026-07-15, vector-hi-conf); Tmr0(13)/Tmr2(45) opcodes ambiguous (LJMP 0xFFxx vs erased). Refine/confirm with external check.",
  "cipher": "K[c]=(C[c]-P[c])&0xFF ; C = the L=0 sector byte at column c (page offset = c-2).",
  "confidence_tiers": {
   "low": "structural hypothesis (e.g. FF-padding) consistent with cross-version data but UNVERIFIABLE from files (many-time-pad); FF-model is falsified for INT0/ADC0-EOC/PCA0 gaps.",
@@ -13,7 +13,7 @@
   "speculative": "hypothesis-dependent (INT1 anomaly)."
  },
  "proven_reference": "firmware/ks_partial.json (106 cols: 66 proven + 12 vector-hi-conf + 28 crib-validated).",
- "n_conjectural_cols": 82,
+ "n_conjectural_cols": 81,
  "candidates": {
   "8": {
    "page_offset": 6,
@@ -247,25 +247,6 @@
     }
    ],
    "status": "unverified"
-  },
-  "21": {
-   "page_offset": 19,
-   "region": "INT1 anomaly opcode",
-   "C_per_version": {
-    "123": "0xc3",
-    "125": "0xc3",
-    "126": "0xc3"
-   },
-   "cross_version": "constant",
-   "variants": [
-    {
-     "P": "0x02",
-     "K": "0xc1",
-     "confidence": "structural-high",
-     "basis": "INT1 slot, hi=0xf7 (specific written value, NOT FF) at vector grid pos => LJMP 0xf7xx (bootloader). Part of the complete LJMP grid (\u00a73f). Opcode 0x02 high-confidence; target unverifiable."
-    }
-   ],
-   "status": "structural-high (written LJMP to high flash; promote on any external check)"
   },
   "23": {
    "page_offset": 21,
@@ -1543,43 +1524,30 @@
    ],
    "status": "unverified"
   },
-  "125": {
-   "page_offset": 123,
-   "region": "v15 (last IRQ vector) opcode",
+  "132": {
+   "page_offset": 130,
+   "region": "byte before 0x0483 (post-vector-table fn start) \u2014 S-epilogue",
    "C_per_version": {
-    "123": "0xe1",
-    "125": "0xe1",
-    "126": "0xe1"
+    "123": "0xa9",
+    "125": "0xa9",
+    "126": "0xa9"
    },
    "cross_version": "constant",
    "variants": [
     {
-     "P": "0x02",
-     "K": "0xdf",
-     "confidence": "structural-high",
-     "basis": "v15 slot, hi=0xf1 (specific written value, NOT FF) at vector grid pos => LJMP 0xf1xx. Same class as INT1. Part of complete LJMP grid (\u00a73f). Opcode 0x02 high-confidence."
-    }
-   ],
-   "status": "structural-high (written LJMP to high flash; promote on any external check)"
-  },
-  "133": {
-   "page_offset": 131,
-   "region": "post-vector-table startup LJMP",
-   "C_per_version": {
-    "123": "0x2b",
-    "125": "0x2b",
-    "126": "0x2b"
-   },
-   "cross_version": "constant",
-   "variants": [
+     "P": "0x22",
+     "K": "0x87",
+     "confidence": "low",
+     "basis": "prev-fn RET (most common 8051 fn terminator); 8051 packs fns back-to-back, no align pad"
+    },
     {
-     "P": "0x02",
-     "K": "0x29",
-     "confidence": "vector-hi-conf",
-     "basis": "hi=0x0d (app-code range) => unambiguous LJMP 0x0Dxx. PROMOTED to ks_partial.json."
+     "P": "0x32",
+     "K": "0x77",
+     "confidence": "low",
+     "basis": "prev-fn RETI"
     }
    ],
-   "status": "PROMOTED to ks_partial (solid; hi in app-code range)"
+   "status": "epilogue-candidate (2 variants): 0x0483 is an ODD fn-start addr -> 8051 has NO code alignment -> byte-before is a REAL terminator, padding EXCLUDED. RET(0x22)->K=0x87 or RETI(0x32)->K=0x77. Cannot pick (RET vs RETI) without disasm; boundary itself still assumes 0x0483 is a clean fn start."
   }
  }
 }

@@ -47,6 +47,10 @@ POST_TABLE_COL = 133
 LJMP_OPCODE = 0x02
 ERASED_FILL = 0xFF
 
+# C8051F340 interrupt names by vector index (0..15); slot 16 = the post-table startup LJMP.
+IRQ_NAMES = ("INT0", "Tmr0", "INT1", "Tmr1", "UART0", "Tmr2", "SPI0", "SMB0",
+             "v8", "ADC(v9)", "v10", "v11", "v12", "v13", "v14", "v15")
+
 
 def _is_lattice(col: int) -> bool:
     """True for the stride-8 offset-4 erased-flash lattice columns (0xFF background)."""
@@ -291,6 +295,20 @@ def _s4_all_versions(col: int, k: int, expected_p: int, pv: dict) -> bool:
     return all(((sec[col] - k) & 0xFF) == expected_p for sec in pv.values())
 
 
+def _slot_is_written(opcode_col: int, pv: dict, span: int = 8) -> bool:
+    """S4-family — a vector slot is 'written' (not erased) if ANY byte in its 8-byte span
+    differs across versions. Erased flash is a constant 0xFF fill, so any cross-version
+    variation proves the slot holds real content ⇒ the erased hypothesis is excluded ⇒ the
+    opcode must be the written LJMP. (Doesn't fire when every slot byte is version-constant.)"""
+    if len(pv) < 2:
+        return False
+    secs = list(pv.values())
+    for c in range(opcode_col, min(opcode_col + span, SECTOR)):
+        if len({sec[c] for sec in secs}) > 1:
+            return True
+    return False
+
+
 # ----------------------------------------------------------- 02_04 window CSP core
 
 def windows_of(page: PageInfo, anchors: dict) -> list:
@@ -311,6 +329,188 @@ def windows_of(page: PageInfo, anchors: dict) -> list:
             "anchors_in_span": {hicol: anchors[hicol]},
         })
     return windows
+
+
+def _target_class(hi):
+    """Classify an LJMP target by its (known) high byte — the vendor's layout pattern."""
+    if hi is None:
+        return "unknown-hi"
+    if 0x04 <= hi <= 0x7B:
+        return "app-code"          # in the application flash region -> a used handler
+    if hi == 0xFF:
+        return "ff-ambiguous"      # LJMP 0xFFxx vs erased slot — hi=0xFF can't distinguish
+    if 0xF0 <= hi <= 0xFE:
+        return "boot-redirect"     # written non-FF high-flash target -> redirect to bootloader
+    return "other"
+
+
+def vector_table_analysis(images: LoadedImages, anchors: dict) -> list:
+    """Automated L=0 vector-table walk (the systematized §3f procedure).
+
+    For every slot (reset + 16 IRQ vectors + post-table LJMP) decode what is known —
+    opcode plaintext (from anchors) and target-hi plaintext (the lattice anchor) — and
+    classify the slot by its target region (app-code / boot-redirect / ff-ambiguous).
+    Read-only; returns one dict per slot. This is the repeatable form of the manual
+    vector sudoku: run it on any future image set to re-derive the disposition table.
+    """
+    ref = images.ref_bytes(0)
+    if ref is None:
+        return []
+    pv = images.page_versions(0)
+
+    def pval(col):
+        return (ref[col] - anchors[col]) & 0xFF if col in anchors else None
+
+    def lo_xver(col):
+        """target-lo constancy across versions: CONST => layout-fixed target (may be pinnable),
+        VARY => build-placed target (moved between firmware versions -> not file-determinable)."""
+        vals = {sec[col] for sec in pv.values()}
+        return "const" if len(vals) <= 1 else "vary"
+
+    slots = [("reset", RESET_COL, RESET_COL + 1)]
+    for n, name in enumerate(IRQ_NAMES):
+        slots.append((name, 5 + 8 * n, 6 + 8 * n))
+    slots.append(("post/startup", POST_TABLE_COL, POST_TABLE_COL + 1))
+
+    out = []
+    for name, opcol, hicol in slots:
+        p_op = pval(opcol)
+        # reset target-hi (col 3) is not on the lattice; every IRQ/post hi IS a lattice anchor.
+        p_hi = pval(hicol)
+        klass = _target_class(p_hi)
+        is_ljmp = (p_op == LJMP_OPCODE)
+        lo_col = opcol + 2
+        out.append({
+            "slot": name,
+            "opcode_col": opcol,
+            "opcode_P": _hex(p_op) if p_op is not None else None,
+            "opcode": "LJMP" if is_ljmp else ("?" if p_op is None else _hex(p_op)),
+            "hi_col": hicol,
+            "target_hi": _hex(p_hi) if p_hi is not None else None,
+            "target": f"0x{p_hi:02x}xx" if p_hi is not None else None,
+            "class": klass,
+            "opcode_known": opcol in anchors,
+            "lo_col": lo_col,
+            "lo_xver": lo_xver(lo_col),          # const => layout-fixed target; vary => build-placed
+            "lo_known": lo_col in anchors,
+        })
+    return out
+
+
+# 1-byte control-flow terminators — the ONLY terminators that fix a specific predecessor byte
+# value (RET/RETI). Multi-byte terminators (LJMP/SJMP/AJMP/ACALL) end in an operand → any value.
+TERMINATOR_OPCODES = {0x22: "RET", 0x32: "RETI"}
+PADDING_FILLS = {0x00: "pad-00", 0xFF: "pad-FF"}
+L0_LO, L0_HI = 0x0400, 0x05FF     # logical page 0 flash span
+
+
+def _l0_addr_to_col(addr: int):
+    """Map an absolute flash address in the L=0 page to its keystream column (or None)."""
+    if L0_LO <= addr <= L0_HI:
+        return (addr - L0_LO) + 2
+    return None
+
+
+def scan_jump_targets(images: LoadedImages, anchors: dict) -> list:
+    """Scan the decoded L=0 code for LJMP/LCALL whose full target (hi AND lo) is known —
+    i.e. the *addresses of other functions* reachable from what we've already opened. A fully
+    resolved target is a known function-start address that the epilogue signal can then anchor
+    on. Partially-resolved jumps (target-hi known, lo unknown) are reported as page-only."""
+    rows = []
+    ref = images.ref_bytes(0)
+    if ref is None:
+        return rows
+    for slot in vector_table_analysis(images, anchors):
+        if slot["opcode"] != "LJMP":
+            continue
+        hi = None if slot["target_hi"] is None else int(slot["target_hi"], 16)
+        lo_col = slot["lo_col"]
+        lo = (ref[lo_col] - anchors[lo_col]) & 0xFF if lo_col in anchors else None
+        resolved = hi is not None and lo is not None
+        rows.append({
+            "from_slot": slot["slot"],
+            "at_col": slot["opcode_col"],
+            "target_hi": slot["target_hi"],
+            "target": (f"0x{hi:02x}{lo:02x}" if resolved else
+                       (f"0x{hi:02x}xx" if hi is not None else "?")),
+            "resolved": resolved,
+            "target_addr": ((hi << 8) | lo) if (hi is not None and lo is not None) else None,
+        })
+    return rows
+
+
+def epilogue_candidates(images: LoadedImages, anchors: dict, target_addr: int) -> dict:
+    """S-epilogue — given a KNOWN function-start address, the preceding byte is a control-flow
+    terminator of the previous function (8051 packs functions back-to-back, no alignment pad).
+    Returns {pred_col, candidates:[{K,P,basis}]} — a NARROW variants set {RET, RETI (+pad)}, NEVER
+    a unique byte: picking one terminator would be a statistical guess (C_OMS_DEC_02, the §4 trap)."""
+    target_col = _l0_addr_to_col(target_addr)
+    if target_col is None or target_col <= 2:
+        return {}
+    pred_col = target_col - 1
+    if pred_col in anchors:
+        return {}                              # predecessor already known
+    ref = images.ref_bytes(0)
+    if ref is None:
+        return {}
+    c = ref[pred_col]
+    cands = [{"K": _hex((c - p) & 0xFF), "P": _hex(p), "basis": f"prev-fn terminator {name}"}
+             for p, name in {**TERMINATOR_OPCODES, **PADDING_FILLS}.items()]
+    return {"pred_col": pred_col, "target_addr": target_addr, "candidates": cands}
+
+
+# S-prologue PRIORS — the first *two* bytes of a function, keyed by SDCC --model-small conventions
+# (verified against firmware/reference/ref0400.rst; see spike §3g). UNLIKE the vector-table LJMP
+# (a hard S2/S3 anchor) these are STATISTICAL PRIORS, never hard-known plaintext: SDCC uses static
+# overlay allocation (no stack frame), so regular functions start with a 2-byte param-load
+# (MOV R7,DPL = AF 82 — 4/4 reference fns with a scalar 1st arg), and only NON-trivial ISRs push ACC
+# (C0 E0) — the optimizer drops the push for leaf ISRs (held in only 3/7 reference ISRs). Emitting one
+# as a `unique` K would be the §4 statistical trap (C_OMS_DEC_02). Each is a 2-byte pattern → predicts
+# TWO keystream bytes; when the 2nd byte lands on a KNOWN column it becomes a hard validated/refuted
+# cross-check (a real filter), but a "validated" prior is still NOT proof the fn uses that prologue.
+# ((p0, p1), basis, confidence):
+PROLOGUE_PRIORS_2B = (
+    ((0xAF, 0x82), "MOV R7,DPL (regular fn, 1-byte 1st arg — SDCC default; 4/4 in ref)", "primary"),
+    ((0xC0, 0xE0), "PUSH ACC (non-trivial ISR entry; 3/7 ISRs in ref)", "primary"),
+    ((0xAE, 0x83), "MOV R6,DPH (regular fn, 2-byte int/ptr 1st arg, high half)", "secondary"),
+    ((0xAE, 0x82), "MOV R6,DPL (1-byte 1st arg, alt R6 allocation)", "variant"),
+    ((0xAD, 0x82), "MOV R5,DPL (1-byte 1st arg, alt R5 allocation)", "variant"),
+)
+
+
+def prologue_candidates(images: LoadedImages, anchors: dict, target_addr: int) -> dict:
+    """S-prologue — given a KNOWN function-start address, the entry byte(s) follow an SDCC prologue
+    convention. Returns {entry_col, priors:[{cols,K,P,basis,confidence,check?}]} — SOFT PRIORS for
+    cross-checking only, NEVER promoted to ks_partial (symmetric to epilogue_candidates but even
+    weaker: a prior, not a narrow variant set). Each prior is a 2-byte pattern → two (col,K) pairs;
+    if the 2nd column is a known anchor the prior carries `check`=`validated`/`refuted` (the derived
+    K matches / contradicts the known byte). Fires only for an L=0-local, not-yet-known entry column;
+    the 2nd byte is emitted only while it stays inside the L=0 page. See spike §3g."""
+    entry_col = _l0_addr_to_col(target_addr)
+    if entry_col is None or entry_col <= 2:
+        return {}
+    if entry_col in anchors:
+        return {}                              # entry byte already known (e.g. a trampoline LJMP)
+    ref = images.ref_bytes(0)
+    if ref is None:
+        return {}
+    c0 = ref[entry_col]
+    col1 = entry_col + 1
+    have_c1 = col1 < len(ref)                  # keep the 2nd byte inside the page
+    priors = []
+    for (p0, p1), basis, conf in PROLOGUE_PRIORS_2B:
+        k0 = (c0 - p0) & 0xFF
+        entry = {"cols": [entry_col], "K": [_hex(k0)], "P": [_hex(p0)],
+                 "basis": basis, "confidence": conf}
+        if have_c1:
+            k1 = (ref[col1] - p1) & 0xFF
+            entry["cols"].append(col1)
+            entry["K"].append(_hex(k1))
+            entry["P"].append(_hex(p1))
+            if col1 in anchors:                # hard cross-check against a known neighbour
+                entry["check"] = "validated" if anchors[col1] == k1 else "refuted"
+        priors.append(entry)
+    return {"entry_col": entry_col, "target_addr": target_addr, "priors": priors}
 
 
 def solve_window(window: dict, page: PageInfo, images: LoadedImages, anchors: dict,
@@ -338,6 +538,7 @@ def solve_window(window: dict, page: PageInfo, images: LoadedImages, anchors: di
     hicol = window["hi_col"]
     p_hi = (ref[hicol] - anchors[hicol]) & 0xFF     # target-hi plaintext (known lattice anchor)
     slot = f"slot{(opcol - 5) // 8}" if opcol in VECTOR_OPCODE_COLS else "post-table"
+    slot_written = _slot_is_written(opcol, pv)      # any cross-version-varying slot byte ⇒ not erased
 
     # max_window: a window spanning more unknown columns than the cap is declared bounded
     # without search (SP_OMS_01_01 / 03_01). For a single anchor-bounded slot the span is 1.
@@ -385,6 +586,10 @@ def solve_window(window: dict, page: PageInfo, images: LoadedImages, anchors: di
                 # erased slot: whole slot is 0xFF ⇒ S2 tiling requires the known target-hi = 0xFF.
                 if p_hi != ERASED_FILL:
                     rejected[k] = "S2"
+                    continue
+                # S4 — a cross-version-varying slot byte proves the slot is written, not erased.
+                if slot_written:
+                    rejected[k] = "S4"
                     continue
                 if not _s4_all_versions(col, k, ERASED_FILL, pv):
                     rejected[k] = "S4"
@@ -617,6 +822,14 @@ def main(argv):
     pp.add_argument("--catalog", default="ks_solver_catalog.json")
     pp.add_argument("--ks")
 
+    pv = sub.add_parser("vectors", help="L=0 vector-table disposition analysis (read-only)")
+    pv.add_argument("--images", nargs="+")
+    pv.add_argument("--ks")
+
+    pj = sub.add_parser("jumps", help="scan opened code for jump targets + epilogue/prologue candidates (read-only)")
+    pj.add_argument("--images", nargs="+")
+    pj.add_argument("--ks")
+
     a = p.parse_args(argv)
     try:
         if a.cmd == "solve":
@@ -639,6 +852,61 @@ def main(argv):
             print(f"{len(proposals)} promotion proposal(s) (ks_partial NOT modified):")
             for pr_ in proposals:
                 print(f"  col {pr_['col']:>3} = {pr_['value']}   {pr_['basis']}")
+        elif a.cmd == "vectors":
+            cfg = _cfg_from_args(a)
+            images, anchors = load(cfg)
+            rows = vector_table_analysis(images, anchors)
+            print("L=0 vector-table disposition (opcode + target-hi decoded from anchors):")
+            print(f"  {'slot':<12} {'opCol':>5} {'opcode':>6} {'hiCol':>5} {'target':>8}  {'lo':>5}  class")
+            counts = collections.Counter()
+            lo_counts = collections.Counter()
+            for r in rows:
+                counts[r["class"]] += 1
+                lo_counts[r["lo_xver"]] += 1
+                print(f"  {r['slot']:<12} {r['opcode_col']:>5} {r['opcode']:>6} "
+                      f"{r['hi_col']:>5} {str(r['target']):>8}  {r['lo_xver']:>5}  {r['class']}"
+                      + ("" if r["opcode_known"] else "   (opcode unresolved)"))
+            print("  target class: " + ", ".join(f"{k}={v}" for k, v in sorted(counts.items())))
+            print("  target-lo   : " + ", ".join(f"{k}={v}" for k, v in sorted(lo_counts.items()))
+                  + "   (const => layout-fixed target, may be pinnable; vary => build-placed, not file-determinable)")
+        elif a.cmd == "jumps":
+            cfg = _cfg_from_args(a)
+            images, anchors = load(cfg)
+            rows = scan_jump_targets(images, anchors)
+            resolved = [r for r in rows if r["resolved"]]
+            print(f"jump/call targets found in opened L=0 code ({len(rows)} LJMP; {len(resolved)} fully resolved):")
+            for r in rows:
+                tag = "RESOLVED" if r["resolved"] else "page-only (lo unknown)"
+                print(f"  {r['from_slot']:<12} @col {r['at_col']:>3} -> {r['target']:>8}  {tag}")
+            print("\nS-epilogue (byte before a resolved function-start = prev-fn terminator):")
+            any_ep = False
+            for r in resolved:
+                ep = epilogue_candidates(images, anchors, r["target_addr"])
+                if not ep:
+                    continue
+                any_ep = True
+                ks = ", ".join(f"{c['K']}({c['P']}={c['basis'].split()[-1]})" for c in ep["candidates"])
+                print(f"  target {r['target']} (fn-start) -> col {ep['pred_col']} candidates: {ks}")
+                print(f"    NOTE: variants only — choosing one terminator is a statistical guess (NOT promoted).")
+            if not any_ep:
+                print("  (no resolved target has an unknown, L=0-local predecessor)")
+            print("\nS-prologue (2-byte SDCC prologue priors at a resolved function-start — spike §3g):")
+            any_pr = False
+            for r in resolved:
+                pr = prologue_candidates(images, anchors, r["target_addr"])
+                if not pr:
+                    continue
+                any_pr = True
+                print(f"  target {r['target']} (fn-start) -> cols {pr['entry_col']}[,{pr['entry_col']+1}]:")
+                for c in pr["priors"]:
+                    pat = " ".join(f"{p[2:]}" for p in c["P"])            # e.g. "af 82"
+                    kd = "->".join(f"K[{col}]={k}" for col, k in zip(c["cols"], c["K"]))
+                    chk = f"  [{c['check'].upper()}]" if "check" in c else ""
+                    print(f"      P={pat:<6} {kd:<26} {c['confidence']:<9} {c['basis']}{chk}")
+                print(f"    NOTE: SOFT PRIORS only (SDCC has no reliable stack prologue) — cross-check, NEVER promoted."
+                      f" A [REFUTED] prior is eliminated; [VALIDATED] is consistent, not proof.")
+            if not any_pr:
+                print("  (no resolved target has an unknown, L=0-local entry column)")
     except SolverError as e:
         print(f"ERROR {e}", file=sys.stderr)
         return 2
