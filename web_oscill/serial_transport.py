@@ -7,6 +7,7 @@
 # USB-only concerns live here: baud + `set_link_speed` (the host side of the OBEX `0x91`
 # speed-raise) and `auto_find_port`. `supports_speed_change = True`.
 
+import os
 import time
 from typing import Optional
 
@@ -125,11 +126,14 @@ class SerialTransport(Transport):
             except Exception:
                 # Some platforms don't expose vid/pid
                 pass
-        # Fallback: common serial names
-        for guess in ("/dev/ttyUSB0", "/dev/ttyUSB1", "/dev/ttyACM0"):
-            try:
-                with serial.Serial(guess) as _:
-                    return guess
-            except Exception:
-                continue
+        # Fallback: common serial names. POSIX-only — these `/dev/*` paths never exist on
+        # Windows/macOS, where the VID/PID scan above (list_ports, cross-platform, returns COMx on
+        # Windows) is the sole detection path. [C_BTT cross-platform]
+        if os.name == "posix":
+            for guess in ("/dev/ttyUSB0", "/dev/ttyUSB1", "/dev/ttyACM0"):
+                try:
+                    with serial.Serial(guess) as _:
+                        return guess
+                except Exception:
+                    continue
         return None

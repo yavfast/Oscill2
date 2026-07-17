@@ -14,11 +14,26 @@ import re
 import socket
 import struct
 import subprocess
+import sys
 from typing import Optional
 
 from transport import Transport, TransportCapabilities, TransportError, UnsupportedCapability
 
 log = logging.getLogger("rfcomm_transport")
+
+# [C_BTT] Cross-platform guard. This whole RFCOMM recipe (AF_BLUETOOTH socket + the
+# BT_SECURITY_LOW setsockopt + the (addr, channel) address tuple) is BlueZ-specific and
+# live-verified on Linux only (skill oscill_bluetooth_transport). Windows/macOS either lack
+# `socket.AF_BLUETOOTH` or use an incompatible address/security model, so calling `open()` there
+# would raise a raw AttributeError/OSError. We gate on it and raise a clean, actionable
+# BluetoothUnreachable instead. The portable BT path on Windows is the OS virtual COM port
+# (pair the scope → Windows exposes an outgoing COMx) driven through SerialTransport — no BT
+# socket needed. Native Windows RFCOMM is a separate, unverified feature (deferred).
+_BT_RFCOMM_SUPPORTED = (
+    sys.platform.startswith("linux")
+    and hasattr(socket, "AF_BLUETOOTH")
+    and hasattr(socket, "BTPROTO_RFCOMM")
+)
 
 # --- RFCOMM insecure-security socket option (SP_BTT_02_01, live-verified required) ---
 # Without BT_SECURITY_LOW the kernel elevates auth/encryption on connect and the Oscill stalls
@@ -196,6 +211,16 @@ class RfcommTransport(Transport):
         # read timeout. Verbatim from the live-proven test_bt_quick.py recipe.
         if self.is_open:
             raise TransportError("RFCOMM socket already open; call close() first")
+        if not _BT_RFCOMM_SUPPORTED:
+            # [C_BTT] Non-Linux platform: the BlueZ RFCOMM socket recipe is unavailable. Fail with
+            # an actionable message pointing to the portable COM-port path instead of an
+            # AttributeError. On Windows: pair the scope in OS Bluetooth settings, then connect to
+            # the auto-created outgoing COM port as a serial device (transport="serial").
+            raise BluetoothUnreachable(
+                f"Bluetooth RFCOMM is supported on Linux only (this platform is "
+                f"'{sys.platform}'). On Windows/macOS: pair the scope in the OS, then connect to "
+                f"its virtual serial (COM) port using transport='serial'."
+            )
         try:
             sock = socket.socket(
                 socket.AF_BLUETOOTH, socket.SOCK_STREAM, socket.BTPROTO_RFCOMM

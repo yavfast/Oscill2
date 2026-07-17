@@ -43,18 +43,32 @@ Oscill2/
 
 ### Running Web Application
 
-Use the `web_oscill.sh` script for automatic startup:
+**Linux/macOS** — use the `web_oscill.sh` script for automatic startup:
 
 ```bash
 ./web_oscill.sh
 ```
 
-The script automatically:
-- Checks and creates Python venv (`.venv`)
-- Installs required dependencies
-- Stops previous server instances
-- Starts server at `http://127.0.0.1:8000`
-- Opens browser with web interface
+**Windows** — use the `web_oscill.bat` script (double-click or run from `cmd`):
+
+```bat
+web_oscill.bat
+```
+
+Both scripts automatically:
+- Check and create the Python venv (`.venv`)
+- Install required dependencies
+- Stop the previous server instance
+- Start the server at `http://127.0.0.1:8000`
+- Open the browser with the web interface
+
+> **Connecting the scope on Windows**
+> - **USB:** install the Silicon Labs **CP210x VCP driver** so the scope appears as a `COMx`
+>   port; auto-detect then finds it by VID/PID (`10C4:840E`).
+> - **Bluetooth:** the native Linux RFCOMM socket path is Linux-only. On Windows, **pair** the
+>   scope in Bluetooth settings (PIN `0000`); Windows then creates an **outgoing COM port** for it
+>   (*Bluetooth settings → More Bluetooth options → COM Ports*). Connect to that `COMx` from the
+>   web UI as a normal **USB/serial** device.
 
 #### Manual Launch
 
