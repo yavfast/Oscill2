@@ -75,6 +75,12 @@ _(Detailed Android specs and plans deferred — refer to existing docs/ for Andr
 |---------|------|------|-------------|
 | [C_OMS](ofw_mask_solver.concept.md) | [SP_OMS](ofw_mask_solver.sp.md) | [PL_OMS](ofw_mask_solver.plan.md) | `.ofw` mask solver — automated per-column keystream candidate search (hybrid cross-version triage + anchored-window 8051 CSP, hard signals only) → per-column determinability catalog; builds on the `ofw_mask_cryptanalysis` spike; concept+spec+plan `draft` |
 
+## Device Firmware (clean-room, device-side)
+
+| Concept | Spec | Plan | Description |
+|---------|------|------|-------------|
+| [C_AFW](alt_firmware.concept.md) | SP_AFW _(pending)_ | alt_firmware.plan _(pending)_ | **Alternative clean-room firmware** for the C8051F41x — a drop-in protocol-server reimplementation so existing clients work unchanged (vendor abandoned v1.26). Layered L0–L4; realtime-only MVP (RIS/roll/hires deferred); C2-flash only (custom bootloader deferred, never `.ofw`-compatible). Client [C_OCL] is the conformance oracle. Concept `draft`; from `alt_firmware.spike.md` |
+
 ---
 
 ## Investigations (spikes — no pipeline gates)
@@ -86,6 +92,7 @@ _(Detailed Android specs and plans deferred — refer to existing docs/ for Andr
 | [firmware_update_method.spike.md](firmware_update_method.spike.md) | concluded | How the Windows software updates firmware; `.ofw` format + encryption; modification feasibility |
 | [ofw_mask_cryptanalysis.spike.md](ofw_mask_cryptanalysis.spike.md) | concluded | Math foundation for unpacking `.ofw`: many-time-pad model; file-only mask **107/514** (stride-8 0xFF lattice + SEQ/reset + 13 vector-LJMP incl. §3f + 2 hex-LUT cribs; ≤111 with candidates). Full mask needs 1 known page; **C2-readback LOCKED — verified 2026-07-17 via RPi C2** (Block Read → flash-error reset; see arduino_c2_programmer.md §9) → glitch-bypass only; test-fw = validator, not oracle |
 | [firmware_1.26_defects.md](firmware_1.26_defects.md) | draft (analysis) | Defect register for firmware 1.26 (slow-roll sweep drift, etc.) |
+| [alt_firmware.spike.md](alt_firmware.spike.md) | concluded | **Clean-room alternative firmware** feasibility + preliminary `C_AFW` concept sketch. Verdict: **feasible** (protocol fully known + working oracle; MCU C2-writable; `.ofw` encryption + read-lock irrelevant to a from-scratch build). Hard part = analog acquisition core (RIS/trigger/cal), staged. **Renode CANNOT simulate it** (no 8051 core — 32/64-bit only) → use Python OBEX emulator + SDCC ucSim instead |
 
 | [arduino_c2_programmer.md](arduino_c2_programmer.md) | reference | How-to: підключення до MCU Debug Interface (C2) через Arduino — розводка C2Dat/-RFS/+3V3/GND → C2D/C2CK, рівні напруги 3.3 В, скетчі (x893/C2.Flash D5/D6), locked-readback → glitch |
 
