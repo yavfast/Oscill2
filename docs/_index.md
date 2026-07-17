@@ -25,6 +25,7 @@ Oscill2 is a USB oscilloscope platform with three independent clients sharing th
 |---------|------|------|-------------|
 | [C_CVT](converters.concept.md) | [SP_CVT](converters.sp.md) | [PL_CVT](converters.plan.md) | Unit conversion (V/mV, ms/s, Hz) |
 | [C_OCL](oscill_client.concept.md) | [SP_OCL](oscill_client.sp.md) | [PL_OCL](oscill_client.plan.md) | OBEX device driver over USB serial |
+| [C_BTT](bluetooth_transport.concept.md) | [SP_BTT](bluetooth_transport.sp.md) | [PL_BTT](bluetooth_transport.plan.md) | Bluetooth (RFCOMM/SPP) connectivity via a transport abstraction in the OBEX driver; USB + BT links; concept+spec `active`, plan `draft` (Phase 7 live-verified) |
 
 ### Layer 1 — Signal processing + device service
 
