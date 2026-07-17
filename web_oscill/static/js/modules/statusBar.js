@@ -35,7 +35,9 @@ export class StatusBar {
   updateStatus(status, config) {
     const isConnected = (status && status.status === 'ok') || (status && status.status === 'error') || !!config;
     this.connCircle.fill(isConnected ? '#2ecc71' : '#d33');
-    this.connText.text(isConnected ? 'Connected' : 'Disconnected');
+    // [SP_BTT_02_09] Append the active transport (USB/BT) to the Connected label.
+    const kindLabel = { serial: 'USB', bluetooth: 'BT' }[status?.transport_kind] || '';
+    this.connText.text(isConnected ? (kindLabel ? `Connected · ${kindLabel}` : 'Connected') : 'Disconnected');
 
     if (config) {
       // Time division

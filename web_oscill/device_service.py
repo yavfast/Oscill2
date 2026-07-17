@@ -10,6 +10,17 @@ import os
 sys.path.append(os.path.dirname(__file__))
 
 from oscill_client import OscillClient, VDIV_VALUES_MV, TDIV_VALUES_MS
+from endpoints import (
+    BluetoothEndpoint,
+    ConfigError,
+    ConnectionEndpoint,
+    DeviceNotFound,
+    SerialEndpoint,
+    build_transport,
+    resolve_bt_address_optional,
+    resolve_default_endpoint,
+)
+from transport import TransportError
 from converters import convert
 
 
@@ -59,6 +70,9 @@ class DeviceService:
         logging.basicConfig(level=logging.INFO, format='[%(asctime)s] %(levelname)s %(name)s: %(message)s')
         self._log = logging.getLogger(self.__class__.__name__)
         self._client: Optional[OscillClient] = None
+        # [SP_BTT_02_09] Which transport the current connection is over ("serial" | "bluetooth"),
+        # for the status/UI indicator; None when disconnected.
+        self._transport_kind: Optional[str] = None
         self._dev_lock = threading.RLock()
         self._frames: Deque[Dict[str, Any]] = deque(maxlen=max(8, buffer_size))
         self._frames_lock = threading.Lock()
@@ -79,25 +93,62 @@ class DeviceService:
         self._last_delivered_len: Optional[int] = None
         # Single-threaded executor for serializing all device commands with timeout
         self._device_executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="device-cmd")
-        self._device_timeout = 5.0  # 5 seconds timeout for device operations
+        self._device_timeout = 5.0  # 5 seconds timeout for (fast) serial device operations
+        # [SP_BTT] Bluetooth connect is far slower than serial: SDP channel resolution (sdptool,
+        # up to ~30 s worst case), ~3.5 s RFCOMM bring-up (8 s connect timeout), then the OBEX
+        # init sequence — all inside the single-worker executor. The future budget for a BT
+        # connect MUST exceed those internal timeouts, or the future times out first, wedging the
+        # sole worker (and possibly connecting behind the caller's back). Serial keeps the 5 s
+        # budget (it never approaches it).
+        self._bt_connect_timeout = 50.0
 
     # ---------------- Device lifecycle ----------------
-    def _connect_internal(self, port: Optional[str], baud: int) -> Dict[str, Any]:
-        """Internal connect method that runs in executor."""
+    def _connect_internal(self, endpoint: ConnectionEndpoint) -> Dict[str, Any]:
+        """Internal connect (single endpoint) — runs in executor. [SP_BTT_02_09]"""
         with self._dev_lock:
-            # Close any existing connection
-            self._stop_acquisition_locked()
-            if self._client:
+            self._teardown_existing_locked()
+            return self._open_and_init_locked(endpoint)
+
+    def _connect_internal_auto(self, candidates: List[ConnectionEndpoint]) -> Dict[str, Any]:
+        """[SP_BTT_02_12] Internal auto-connect — try each candidate (USB first, then Bluetooth)
+        until one connects; the first success wins. A failed attempt is fully torn down inside
+        `_open_and_init_locked` before the next is tried. Runs in executor."""
+        with self._dev_lock:
+            self._teardown_existing_locked()
+            last_err: Optional[Exception] = None
+            for ep in candidates:
                 try:
-                    self._client.close()
-                except Exception:
-                    pass
-            # Auto-detect if requested
-            if not port or port == "auto":
-                port = OscillClient.auto_find_port()
-                if not port:
-                    raise RuntimeError("Device not found")
-            cli = OscillClient(port, baud)
+                    return self._open_and_init_locked(ep)
+                except (DeviceNotFound, ConfigError, TransportError, OSError, IOError) as e:
+                    last_err = e
+                    self._log.warning(f"auto-connect: {ep.describe()} unavailable: {e}")
+                    continue
+            raise last_err or DeviceNotFound("no transport available (no USB device, no paired BT)")
+
+    def _teardown_existing_locked(self) -> None:
+        """Stop acquisition and close any existing client, under the device lock."""
+        self._stop_acquisition_locked()
+        if self._client:
+            try:
+                self._client.close()
+            except Exception:
+                pass
+        self._client = None
+        self._transport_kind = None
+        self._is_connected = False
+
+    def _open_and_init_locked(self, ep: ConnectionEndpoint) -> Dict[str, Any]:
+        """Build the transport for `ep`, open+handshake, run the full init sequence, and mark the
+        service connected. On ANY failure the partially-built client is closed (no leaked
+        handle/socket) and the exception propagates. Caller holds the device lock.
+
+        [SP_BTT_02_08] build_transport auto-detects the serial port (→ DeviceNotFound) and resolves
+        the SPP channel for Bluetooth. The OBEX init is identical for both links; only the post-init
+        serial speed-raise is transport-specific (kind- + capability-gated).
+        """
+        transport = build_transport(ep, 3.0)
+        cli = OscillClient(transport)
+        try:
             # [task_qs-raise] Open + OBEX handshake at the base baud (device starts a
             # session at low speed); rescues a device left at a raised baud by a prior
             # ungraceful session. Speed is raised only AFTER init (below).
@@ -152,25 +203,91 @@ class DeviceService:
             # (~155 ms → ~19 ms at 921600). Best-effort: falls back to 115200 on any failure.
             # On by default (verified stable @921600); set OSCILL_HIGH_BAUD=0 to opt out
             # (e.g. a flaky cable/adapter that can't sustain the higher rate).
-            if os.environ.get("OSCILL_HIGH_BAUD", "1") != "0":
+            # [SP_BTT_02_09 / C_BTT_DEC_04] The serial speed-raise is serial-only: gate it on
+            # ep.kind == serial (raise_speed is also capability-gated in the driver, so this is a
+            # no-op even if reached over Bluetooth). OSCILL_HIGH_BAUD stays honoured for serial.
+            if isinstance(ep, SerialEndpoint) and os.environ.get("OSCILL_HIGH_BAUD", "1") != "0":
                 achieved_baud = cli.raise_speed()
                 self._log.info(f"Serial link running at {achieved_baud} baud")
             self._client = cli
+            self._transport_kind = ep.kind.value  # "serial" | "bluetooth"  [SP_BTT_02_09]
             self._is_connected = True
-            # Start acquisition automatically after successful connection
+            # Snapshot config BEFORE starting acquisition, so a snapshot read failure aborts the
+            # connect cleanly (via the except below) without a live acquisition thread running
+            # against a doomed link.
+            cfg = self._snapshot_config_locked()
+            # Start acquisition automatically after a fully successful connect + snapshot.
             self._start_acquisition_locked()
             self._is_acquiring = True
-            # Snapshot config after connect
-            cfg = self._snapshot_config_locked()
-            return {"status": "ok", "port": port, "config": cfg, "cfg_id": self._cfg_id, "is_connected": self._is_connected, "is_acquiring": self._is_acquiring}
+            return {
+                "status": "ok",
+                # [SP_BTT] Report the resolved link. `port` stays for serial back-compat
+                # (device path or auto/address), `transport` is the human-readable link label,
+                # `transport_kind` is the machine value for the UI indicator.
+                "port": ep.port if isinstance(ep, SerialEndpoint) else ep.address,
+                "transport": cli.describe_transport(),
+                "transport_kind": self._transport_kind,
+                "config": cfg,
+                "cfg_id": self._cfg_id,
+                "is_connected": self._is_connected,
+                "is_acquiring": self._is_acquiring,
+            }
+        except Exception:
+            # [SP_BTT_02_12] Fully tear down the partial attempt so it leaks no handle/socket and
+            # leaves no half-connected state (stops any started acq thread, resets flags), then
+            # close this cli explicitly in case it was never assigned to self._client. The next
+            # auto candidate starts clean.
+            self._teardown_existing_locked()
+            try:
+                cli.close()
+            except Exception:
+                pass
+            raise
 
-    def connect(self, port: Optional[str] = None, baud: int = 115200) -> Dict[str, Any]:
-        """Connect to device via executor with timeout."""
+    def connect_auto(self, baud: int = 115200) -> Dict[str, Any]:
+        """[SP_BTT_02_12] Auto-connect: try USB serial first, then Bluetooth (by name) if a paired
+        scope resolves. Runs through the executor with a transport-aware budget."""
+        candidates: List[ConnectionEndpoint] = [SerialEndpoint(port=None, baud=baud)]
+        addr = resolve_bt_address_optional()
+        if addr:
+            candidates.append(BluetoothEndpoint(address=addr))
+        has_bt = len(candidates) > 1
+        budget = self._bt_connect_timeout if has_bt else self._device_timeout
         try:
-            future = self._device_executor.submit(self._connect_internal, port, baud)
-            return future.result(timeout=self._device_timeout)
+            future = self._device_executor.submit(self._connect_internal_auto, candidates)
+            return future.result(timeout=budget)
         except FutureTimeoutError:
-            raise TimeoutError(f"Connection timed out after {self._device_timeout}s")
+            raise TimeoutError(f"Connection timed out after {budget}s")
+        except Exception as e:
+            self._log.error(f"Auto-connect failed: {e}")
+            raise
+
+    def connect(
+        self,
+        endpoint: Optional[ConnectionEndpoint] = None,
+        *,
+        port: Optional[str] = None,
+        baud: int = 115200,
+    ) -> Dict[str, Any]:
+        """[SP_BTT_02_09] Connect over any transport via the executor with timeout. Backward-
+        compatible superset: `connect("/dev/ttyUSB0", 115200)` still works because the legacy
+        first positional was the port — kept via the `port`/`baud` keyword path below. Prefer
+        passing a ConnectionEndpoint; when none is given, env/legacy defaults resolve it."""
+        # Back-compat: legacy callers pass the port as the first positional arg (a str), not an
+        # endpoint. Detect that and route it to the port parameter.
+        if isinstance(endpoint, str):
+            port, endpoint = endpoint, None
+        # Resolve the endpoint here (env/legacy default when none) so the executor budget can be
+        # sized to the transport: Bluetooth needs a much larger budget than serial (see
+        # _bt_connect_timeout). Resolution is I/O-free; a ConfigError (bluetooth w/o address)
+        # surfaces here, before any executor work.
+        ep = endpoint if endpoint is not None else resolve_default_endpoint(port, baud)
+        budget = self._device_timeout if isinstance(ep, SerialEndpoint) else self._bt_connect_timeout
+        try:
+            future = self._device_executor.submit(self._connect_internal, ep)
+            return future.result(timeout=budget)
+        except FutureTimeoutError:
+            raise TimeoutError(f"Connection timed out after {budget}s")
         except Exception as e:
             self._log.error(f"Connect failed: {e}")
             raise
@@ -185,6 +302,7 @@ class DeviceService:
                 except Exception:
                     pass
             self._client = None
+            self._transport_kind = None
             self._is_connected = False
             self._is_acquiring = False
         with self._frames_lock:
@@ -209,24 +327,36 @@ class DeviceService:
             raise
 
     # ---------------- Public API (synchronous) ----------------
-    def ensure_connected(self, port: Optional[str] = None, baud: int = 115200) -> Dict[str, Any]:
+    def ensure_connected(
+        self,
+        endpoint: Optional[ConnectionEndpoint] = None,
+        *,
+        port: Optional[str] = None,
+        baud: int = 115200,
+    ) -> Dict[str, Any]:
         """
         Ensure device is connected. If not connected, attempt to connect.
         If already connected, return current status.
-        
+
+        [SP_BTT_02_12] When nothing explicit is passed, uses the **auto** path (USB→BT). An
+        explicit endpoint or legacy port routes to `connect`.
+
         Args:
-            port: Port to connect to (None for auto-detect)
+            endpoint: ConnectionEndpoint to connect over (None + no port → auto USB→BT)
+            port: Legacy serial port (None for auto-detect); used only if endpoint is None
             baud: Baud rate (default: 115200)
-            
+
         Returns:
             Status dict with connection info
         """
         if self._is_connected and self._client:
             return self.get_status()
-        
+
         # Not connected, attempt connection
         try:
-            return self.connect(port, baud)
+            if endpoint is None and not port:
+                return self.connect_auto(baud=baud)
+            return self.connect(endpoint, port=port, baud=baud)
         except Exception as e:
             self._log.warning(f"Auto-connect failed: {e}")
             return {"status": "disconnected", "is_connected": False, "is_acquiring": False, "error": str(e)}
@@ -262,17 +392,21 @@ class DeviceService:
     def get_status(self) -> Dict[str, Any]:
         """Get status from cached configuration without querying device."""
         if not self._is_connected or not self._client:
-            return {"status": "disconnected", "is_connected": False, "is_acquiring": False}
-        
+            # [SP_BTT_02_09] transport_kind is null when disconnected.
+            return {"status": "disconnected", "is_connected": False, "is_acquiring": False,
+                    "transport_kind": None}
+
         # Return cached config instead of querying device, reconciled from the
         # device sample-space (QS/TC) to the delivered sample-space the client plots.
         config = self._reconcile_display_geometry(self._get_cached_config())
         return {
-            "status": "ok", 
-            "config": config, 
-            "cfg_id": self._cfg_id, 
-            "is_connected": self._is_connected, 
-            "is_acquiring": self._is_acquiring
+            "status": "ok",
+            "config": config,
+            "cfg_id": self._cfg_id,
+            "is_connected": self._is_connected,
+            "is_acquiring": self._is_acquiring,
+            # [SP_BTT_02_09] Current link for the UI indicator ("serial" | "bluetooth").
+            "transport_kind": self._transport_kind,
         }
 
     def _apply_config_internal(self, changes: Dict[str, Any]) -> Tuple[Dict[str, Any], List[str]]:

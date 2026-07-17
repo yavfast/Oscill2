@@ -8,7 +8,19 @@
   <script src="https://unpkg.com/konva@9/konva.min.js"></script>
 </head>
 <body>
-  <div id="status-bar"><div id="status-canvas"></div></div>
+  <div id="status-bar">
+    <div id="status-canvas"></div>
+    <!-- [SP_BTT] Transport picker + reconnect. Overlays the right of the Konva status canvas. -->
+    <div id="transport-controls">
+      <label for="transport-select">Link</label>
+      <select id="transport-select" title="Choose connection transport">
+        <option value="auto">Auto</option>
+        <option value="serial">USB</option>
+        <option value="bluetooth">BT</option>
+      </select>
+      <button id="reconnect-btn" type="button" title="Reconnect over the selected transport">↻</button>
+    </div>
+  </div>
 
   <div id="main-area">
     <div id="left-pane">

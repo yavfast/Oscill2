@@ -10,16 +10,16 @@
 > - 2026-07-15 code-audit reconciliation (PL_AUDIT_WEB): removed nonexistent `signed` parameter from get_reg_1/set_reg_1 (only reg_2/reg_4 accept it)
 > - 2026-07-15 — task_qs-raise: sampling density is now the per-instance `samples_per_div`, derived from the device QSh per mode (`refresh_samples_per_div`), replacing the fixed 32. QS rises to ~1784 (8-bit) / 888 (hi-res). `SAMPLES_PER_DIV` kept as fallback; added `MAX_SAMPLES_PER_DIV`. Timing/QS formulas now use the instance density.
 > - 2026-07-15 — task_qs-raise: added serial speed control (SET-SPEED opcode 0x91, ack 0x0F) — init at 115200 then `raise_speed()` to 921600 (default on; `OSCILL_HIGH_BAUD=0` opts out); `restore_default_speed`/`open_and_handshake`/`close(restore)` keep the device recoverable. Added a cached per-frame acquisition wait (`_frame_wait_s`) to drop per-frame QS/TS reads. Net measured on hardware: frame 291 ms → 132 ms, ~3.4 → ~7 fps at QS=1784, stable.
+> - 2026-07-17 — **SP_BTT**: the driver is now constructed **over a `Transport`** (byte-stream abstraction) instead of holding a `serial.Serial` directly. `self.ser` → `self._transport`; canonical ctor `OscillClient(transport, timeout=3.0)`, back-compat `OscillClient.over_serial(port, baud, timeout)`. The serial speed-raise is capability-gated (`transport.capabilities.supports_speed_change`) — inert on Bluetooth RFCOMM. OBEX framing byte-identical. See [SP_BTT](./bluetooth_transport.sp.md) for the Transport contract + Serial/RFCOMM implementations.
 
 ## Data Structures
 
 ### OscillClient
 | Field | Type | Default | Notes |
 |-------|------|---------|-------|
-| `port` | str | — | Serial device path |
-| `baud` | int | 115200 | Baud rate |
-| `timeout` | float | 3.0 | Serial read timeout (s) |
-| `ser` | Optional[serial.Serial] | None | Open only between open()/close() |
+| `_transport` | Transport | — | Byte-stream link (SerialTransport / RfcommTransport). Replaces the former `ser` handle — see [SP_BTT](./bluetooth_transport.sp.md). |
+| `baud` | int | 115200 | Host-side baud bookkeeping for the serial speed-raise; inert on RFCOMM |
+| `timeout` | float | 3.0 | Read timeout (s) |
 | `conn_id` | Optional[bytes] | None | 4-byte OBEX connection ID |
 | `SAMPLES_PER_DIV` | int (class) | 32 | **Default/fallback** sampling density. The active density is the instance `samples_per_div` (below). |
 | `MAX_SAMPLES_PER_DIV` | int (class) | 256 | Safety ceiling on the derived density. |
@@ -54,12 +54,14 @@
 
 ### Connection lifecycle
 ```
-OscillClient(port, baud, timeout=3.0)
-  .open()          → opens serial.Serial; AssertionError if called again without close()
-  .reset()         → sends ABORT, drains serial buffer; 300ms sleep
+OscillClient(transport, timeout=3.0)          # canonical; transport = SerialTransport | RfcommTransport
+OscillClient.over_serial(port, baud=115200, timeout=3.0)   # back-compat serial helper (SP_BTT)
+  .open()          → transport.open(); AssertionError if called again without close()
+  .reset()         → sends ABORT, drains transport buffer; 300ms sleep
   .connect()       → OBEX CONNECT; sets conn_id; IOError on non-0xA0 response
   .calibrate()     → PUT DATA "C"; returns True on 0xA0/0x90
-  .close()         → closes serial, clears conn_id
+  .close()         → transport.close(), clears conn_id
+  .describe_transport() → human-readable link label (SP_BTT_02_06)
 ```
 
 ### Register access
@@ -137,7 +139,7 @@ TS target = round(sample_ps × 256 / (MC × 10))
 
 ## Validation Rules
 
-- All serial operations require `self.ser is not None` (assert)
+- All I/O operations require `self._transport.is_open` (assert)
 - Register values clamped to valid ranges before write
 - OBEX response codes checked: IOError on unexpected opcodes
 - `connect()` must be called before any register access

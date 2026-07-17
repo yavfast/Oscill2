@@ -81,14 +81,29 @@ export class ApiService {
     return data;
   }
 
-  async connect(port = null, baud = 115200) {
-    const body = port ? { port, baud } : {};
+  // [SP_BTT_02_10] Connect over a chosen transport. `opts` may carry
+  // { transport: 'auto'|'serial'|'bluetooth', port, baud, address, channel }.
+  // Back-compat: connect() or connect('auto') behave as before (auto-connect).
+  async connect(opts = {}) {
+    // Legacy call shape connect(port, baud) — keep it working.
+    if (typeof opts === 'string') opts = opts === 'auto' ? {} : { transport: 'serial', port: opts };
+    const body = {};
+    if (opts.transport && opts.transport !== 'auto') body.transport = opts.transport;
+    if (opts.port) body.port = opts.port;
+    if (opts.baud) body.baud = opts.baud;
+    if (opts.address) body.address = opts.address;
+    if (opts.channel != null) body.channel = opts.channel;
     const response = await fetch(`${API_BASE}/connect`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body)
     });
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    if (!response.ok) {
+      // Surface the backend's actionable detail (DeviceNotFound / BluetoothUnreachable / …).
+      let detail = `HTTP ${response.status}`;
+      try { const j = await response.json(); if (j && j.detail) detail = j.detail; } catch (_) {}
+      throw new Error(detail);
+    }
     return await response.json();
   }
 

@@ -10,6 +10,8 @@
 > - 2026-07-15 code-audit reconciliation (PL_AUDIT_WEB): documented GET /api/frames side effect that temporarily starts/stops acquisition when the buffer is empty and acquisition is stopped
 > - 2026-07-15 — PL_AUDIT_WEB code-audit propagation: documented new GET /api/config/options endpoint; CORS restricted to localhost (allow_credentials=False), GZip minimum_size=1000, /static/{path} 403 path-traversal guard; generic error messages (no str(e) leak)
 > - 2026-07-15 — ConfigDict gains a `limits` block (per-parameter min/max) for client informativeness; apply_config silently clamps incoming values to those limits. See SP_DSV (device_service.sp.md → ConfigDict.limits).
+> - 2026-07-17 — **SP_BTT**: POST /api/connect body gains optional `transport`/`address`/`channel` (Bluetooth RFCOMM/SPP) alongside the unchanged `{port, baud}` serial path; errors now surface via `HTTPException(500, detail=str(e))` with an actionable message. Backward-compatible (additive optional fields). See [SP_BTT](./bluetooth_transport.sp.md).
+> - 2026-07-17 — **SP_BTT increment 2**: `transport` accepts `auto` (USB→BT); BT `address` optional (resolved by device name among paired); status carries `transport_kind` for the UI transport indicator; the web UI gains a transport picker (Auto/USB/BT) + reconnect. See [SP_BTT_02_11/02_12](./bluetooth_transport.sp.md).
 
 ## Middleware & Hardening
 
@@ -19,9 +21,14 @@
 ## Endpoints
 
 ### POST /api/connect
-- **Body:** `{port?: string, baud?: int}` (optional)
-- **Response:** DeviceService status dict
-- **Logic:** port specified → explicit connect; no port → ensure_connected (auto-detect)
+- **Body:** `{transport?: "auto"|"serial"|"bluetooth", port?: string, baud?: int, address?: string, channel?: int}` (all optional) — [SP_BTT_02_10]
+- **Response:** DeviceService status dict (adds `transport` link label + `transport_kind`)
+- **Logic:** `transport:"auto"` (or nothing) → auto USB→BT ([SP_BTT_02_12]); legacy `{port, baud}` →
+  serial, unchanged; `{transport:"bluetooth", address?, channel?}` → Bluetooth RFCOMM/SPP with the
+  address resolved explicit→env→**device name among paired** ([SP_BTT_02_11]). The route builds a
+  validated `ConnectionEndpoint` (or uses the auto path) and calls the matching DeviceService method.
+- **Errors:** 500 with actionable `detail` (rule PythonCatchAndReraise500) —
+  DeviceNotFound / BluetoothUnreachable / ChannelResolutionError / ConfigError / validation.
 
 ### POST /api/disconnect
 - **Response:** `{status: "ok"}`

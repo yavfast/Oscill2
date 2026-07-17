@@ -22,6 +22,8 @@ class App {
     this.isDeviceConnected = false; // Track device connection status
     this.frameRequestInFlight = false; // Guard to avoid overlapping frame requests
     this.autoAdjustInProgress = false; // Guard for auto-adjust operations
+    // [SP_BTT] Selected transport for (re)connect: 'auto' | 'serial' | 'bluetooth'.
+    this.transportMode = 'auto';
   }
 
   async init() {
@@ -54,16 +56,43 @@ class App {
       this.scopeView.setTriggerLevel(level);
     });
     
+    // [SP_BTT] Wire the transport picker + reconnect button.
+    this.initTransportControls();
+
     // Auto-connect and initialize on page load
     await this.autoConnectAndStart();
   }
 
+  // [SP_BTT] Transport picker: remembers the chosen mode; the reconnect button (and picking a
+  // non-auto transport) re-runs the connect flow over that transport.
+  initTransportControls() {
+    this.transportSelect = document.getElementById('transport-select');
+    const reconnectBtn = document.getElementById('reconnect-btn');
+    if (this.transportSelect) {
+      this.transportSelect.value = this.transportMode;
+      this.transportSelect.addEventListener('change', async () => {
+        this.transportMode = this.transportSelect.value;
+        await this.reconnectWithTransport();
+      });
+    }
+    if (reconnectBtn) {
+      reconnectBtn.addEventListener('click', () => this.reconnectWithTransport());
+    }
+  }
+
+  async reconnectWithTransport() {
+    console.log(`[App] Reconnecting over transport='${this.transportMode}'...`);
+    this.stopPolling();
+    try { await this.api.disconnect(); } catch (e) { /* ignore — may be disconnected */ }
+    await this.autoConnectAndStart();
+  }
+
   async autoConnectAndStart() {
-    console.log('[App] Auto-connecting on page load...');
-    
+    console.log(`[App] Auto-connecting on page load (transport='${this.transportMode}')...`);
+
     try {
-      // 1. Try to connect (will auto-detect device or return current status if already connected)
-      const connectResult = await this.api.connect();
+      // 1. Try to connect over the selected transport (auto = USB→BT; else the chosen link).
+      const connectResult = await this.api.connect({ transport: this.transportMode });
       console.log('[App] Connect result:', connectResult);
       
       if (connectResult.status === 'ok' && connectResult.is_connected) {

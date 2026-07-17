@@ -1,7 +1,7 @@
 # Implementation Plan: Bluetooth Connectivity via Transport Abstraction  {#PL_BTT}
 
 > **Code:** PL_BTT
-> **Status:** draft
+> **Status:** completed
 > **Created:** 2026-07-17
 > **Updated:** 2026-07-17
 >
@@ -56,13 +56,18 @@ the Verify phase.
 
 ## Progress
 
-- [ ] Phase 1 — Transport seam + SerialTransport (driver refactor)
-- [ ] Phase 2 — Endpoint model, factory, default resolver
-- [ ] Phase 3 — RfcommTransport + SPP channel resolution
-- [ ] Phase 4 — DeviceService.connect superset + env config
-- [ ] Phase 5 — Web API /api/connect extension
-- [ ] Phase 6 — Functional tests (unit + mock)
+- [x] Phase 1 — Transport seam + SerialTransport (driver refactor)
+- [x] Phase 2 — Endpoint model, factory, default resolver
+- [x] Phase 3 — RfcommTransport + SPP channel resolution
+- [x] Phase 4 — DeviceService.connect superset + env config
+- [x] Phase 5 — Web API /api/connect extension
+- [x] Phase 6 — Functional tests (unit + mock)
 - [x] Phase 7 — Live verification ✅ **PASS 2026-07-17** (RFCOMM ch1 + OBEX + frame over BT)
+- [x] Phase 8 — BT device discovery by name (paired-list) + `resolve_bt_address` layering
+- [x] Phase 9 — DeviceService auto-connect (USB→BT) + `transport_kind` in status
+- [x] Phase 10 — API `/api/connect` auto/serial/bluetooth modes + status `transport_kind`
+- [x] Phase 11 — Frontend transport indicator + Auto/USB/BT picker
+- [x] Phase 12 — Functional tests (name-discovery, auto-fallback order, transport_kind)
 
 ## Phases
 
@@ -215,11 +220,58 @@ CONNECT + read version properties (+ optional `--frame`). Validated for graceful
 `sdptool`, RFCOMM read→`b""`-on-timeout / full-write) so Phase 3 can lift the proven logic.
 Awaiting a powered/connectable scope for the live PASS.
 
+## Phases (increment 2 — auto / discovery / UI)
+
+### Phase 8 — BT device discovery by name (`web_oscill/rfcomm_transport.py`, `web_oscill/endpoints.py`) [TODO]
+
+**Depends on:** Phases 1-3
+**Implements:** [SP_BTT_02_11](./bluetooth_transport.sp.md#SP_BTT_02_11)
+**Verify:** paired-list parse picks the `Oscill*` device by name; explicit/env address overrides; missing → ConfigError
+
+- `find_paired_device_by_name(name_substr)` in `rfcomm_transport.py` — `bluetoothctl devices Paired` (fallback `paired-devices`), parse `Device <addr> <name>`, case-insensitive substring match.
+- `resolve_bt_address(address)` + `resolve_bt_address_optional()` in `endpoints.py` — explicit → `OSCILL_BT_ADDR` → name match; raise/return-None respectively.
+- `resolve_endpoint(transport="bluetooth", address=None)` now name-resolves the address.
+
+### Phase 9 — DeviceService auto-connect + transport_kind (`web_oscill/device_service.py`) [TODO]
+
+**Depends on:** Phase 8
+**Implements:** [SP_BTT_02_12](./bluetooth_transport.sp.md#SP_BTT_02_12), [SP_BTT_02_09](./bluetooth_transport.sp.md#SP_BTT_02_09) (transport_kind)
+**Verify:** auto tries USB then BT; first success wins; failed attempt torn down; `transport_kind` in status; disconnected→null
+
+- Refactor `_connect_internal` body into `_open_and_init(ep)` (build → handshake → init → mark), tearing down `cli` on any failure.
+- `connect_auto(baud)` → candidates `[serial-auto] + [bt if resolvable]`, budget = BT when BT present; `_connect_internal_auto` tries each until one connects.
+- Track `self._transport_kind`; include in `get_status()` + connect response; clear on disconnect.
+- `ensure_connected()` (no args) delegates to the auto path.
+
+### Phase 10 — API connect modes + status transport_kind (`web_oscill/main.py`) [TODO]
+
+**Depends on:** Phase 9
+**Implements:** [SP_BTT_02_10](./bluetooth_transport.sp.md#SP_BTT_02_10)
+**Verify:** `transport:"auto"`→auto; `"serial"`/`"bluetooth"` route correctly; BT with no address name-resolves; status carries transport_kind
+
+- `ConnectReq.transport` accepts `auto`; route maps auto→`connect_auto`, serial/bluetooth→endpoint→`connect`.
+- Default (no body) → auto.
+
+### Phase 11 — Frontend transport indicator + picker (`web_oscill/static/…`) [TODO]
+
+**Depends on:** Phase 10
+**Implements:** UI requirement (show current transport; Auto/USB/BT picker)
+**Verify:** indicator shows USB/BT when connected; picker drives connect over the chosen transport
+
+- `statusBar.js` — append `· USB`/`· BT` to the Connected label from `status.transport_kind`.
+- `index.html` — add a `#transport-select` (Auto/USB/BT) control in the status bar.
+- `app.js` — read the picker; pass its mode to `api.connect`; auto-connect on load uses it.
+- `api.js` — `connect({transport, address})` builds the body.
+
+### Phase 12 — Functional tests (`scripts/test_transport.py`, `scripts/test_bluetooth_connect.py`) [TODO]
+
+**Depends on:** Phases 8-10
+**Verify:** name-discovery parse (match/none/override); auto-fallback order (USB→BT, BT skipped when no device); transport_kind reported
+
 ## Backlog
 
-- Bluetooth device auto-discovery (name-match "Oscill*") — return when: a user needs connect without knowing the address ([SP_BTT_DEC_03]).
-- Frontend transport picker (choose USB/BT in the web UI) — return when: BT connectivity is proven and a UX need appears (currently selectable via API/env).
 - Android concrete Bluetooth `ObexTransport` — return when: Android BT is explicitly requested ([C_BTT_DEC_02] excluded Android).
+- Active BT **inquiry** scan for unpaired devices — return when: connecting to a never-paired scope is needed (pairing is currently an OS precondition — [SP_BTT_DEC_03]).
 
 ## Design Decisions  {#PL_BTT_DEC}
 
@@ -267,3 +319,4 @@ warned fallback per the dual-service caveat.
 |------|--------|
 | 2026-07-17 | Initial plan — 7 phases (seam+serial → endpoints → rfcomm → device_service → API → tests → live verify). DEC_02 (SDP mechanism) open → Verify. |
 | 2026-07-17 | **Phase 7 DONE — live BT PASS.** DEC_02 resolved (sdptool + fallback). Phase 3 note: RFCOMM MUST set `BT_SECURITY_LOW` (insecure) + ≥8 s connect timeout; pair (PIN 0000) precondition; reset host adapter after VirtualBox releases the dongle. |
+| 2026-07-17 | **Phases 1-6 DONE — plan completed.** transport.py/serial_transport.py/rfcomm_transport.py/endpoints.py + connect superset + `/api/connect` + hardware-free tests. Clean-context review PASS (fixed: BT executor budget 5s→50s; SDP parser targets SPP by 0x1101 UUID not service name). Propagated to SP_OCL/SP_DSV/SP_WEB. |

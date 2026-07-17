@@ -218,7 +218,30 @@ body {
 
 /* Status Konva container sizing */
 #status-canvas {
-  width: 100%;
+  flex: 1 1 auto;
+  min-width: 0;
   height: 40px;
   padding: 0;
 }
+
+/* [SP_BTT] Transport picker overlaid at the right of the status bar */
+#transport-controls {
+  flex: 0 0 auto;
+  gap: 6px;
+  padding: 0 12px;
+  color: #ddd;
+  font-size: 13px;
+}
+#transport-controls label { color: #aaa; }
+#transport-controls select,
+#transport-controls button {
+  background: #3a3a3a;
+  color: #eee;
+  border: 1px solid #555;
+  border-radius: 4px;
+  padding: 2px 6px;
+  font-size: 13px;
+  cursor: pointer;
+}
+#transport-controls button:hover,
+#transport-controls select:hover { background: #454545; }

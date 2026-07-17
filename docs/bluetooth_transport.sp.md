@@ -56,7 +56,9 @@ connection request. It is the single canonical input to the connection path; the
 
 Invariants:
 - `SerialEndpoint.port = null` triggers auto-detect; a non-null port is used verbatim.
-- `BluetoothEndpoint.address` is mandatory (no BT auto-discovery in this spec — see [SP_BTT_DEC_03](#SP_BTT_DEC_03)).
+- `BluetoothEndpoint.address` is mandatory **at the endpoint level** (validated BD_ADDR). It may be
+  supplied directly, from `OSCILL_BT_ADDR`, or resolved by device name among paired devices
+  ([SP_BTT_02_11](#SP_BTT_02_11)) — the address is filled *before* the endpoint is constructed.
 - The endpoint is immutable once a connection is opened from it.
 
 ### 01_03. TransportCapabilities  {#SP_BTT_01_03}
@@ -91,8 +93,9 @@ existing `OSCILL_*` convention.
 
 | Key | Type | Default | Constraints | Description |
 |-----|------|---------|-------------|-------------|
-| `OSCILL_TRANSPORT` | string | `serial` | `serial` \| `bluetooth` | Default transport kind |
-| `OSCILL_BT_ADDR` | string | unset | BD_ADDR format | Default Bluetooth device address (required if transport=bluetooth and no address passed) |
+| `OSCILL_TRANSPORT` | string | `auto` | `auto` \| `serial` \| `bluetooth` | Default transport kind. `auto` ⇒ try USB serial then Bluetooth ([SP_BTT_02_12](#SP_BTT_02_12)) |
+| `OSCILL_BT_ADDR` | string | unset | BD_ADDR format | Bluetooth device address override. When unset, the address is resolved by name ([SP_BTT_02_11](#SP_BTT_02_11)) |
+| `OSCILL_BT_NAME` | string | `Oscill` | substring, case-insensitive | Device-name pattern for paired-device discovery when no address is given ([SP_BTT_02_11](#SP_BTT_02_11)) |
 | `OSCILL_BT_CHANNEL` | int | unset | 1..30 | Default RFCOMM channel; unset ⇒ SDP resolve |
 
 Invariant: `OSCILL_HIGH_BAUD` (existing) is honoured only on the serial transport; it is inert under `bluetooth` (capability-gated, [SP_BTT_02_05](#SP_BTT_02_05)).
@@ -287,7 +290,10 @@ Input (backward-compatible superset):
 | `port` | string \| null | no | null | legacy serial path (used only if `endpoint` is null) |
 | `baud` | int | no | 115200 | legacy serial baud |
 
-Output: unchanged status dict (`status`, `is_connected`, `is_acquiring`, device info…).
+Output: status dict (`status`, `is_connected`, `is_acquiring`, device info…) plus
+`transport_kind` (`serial` | `bluetooth`) — the link actually connected over, so the UI can show
+it. `transport_kind` is also included in `get_status()` for the whole connected lifetime, and is
+`null` when disconnected.
 
 Logic:
     FUNCTION connect(endpoint=null, port=null, baud=115200):
@@ -308,7 +314,7 @@ Errors:
 | `ChannelResolutionError` | no SPP service on device (see 02_07) | verify device identity/mode |
 | `ConfigError` | transport=bluetooth but no address (env/request) | set `OSCILL_BT_ADDR` or pass `address` |
 
-`ensure_connected` delegates to `connect` with the same superset (env defaults apply when nothing is passed).
+`ensure_connected` delegates to the **auto** path ([SP_BTT_02_12](#SP_BTT_02_12)) when nothing is passed.
 
 ### 02_10. Web API — POST /api/connect (extended)  {#SP_BTT_02_10}
 
@@ -317,18 +323,72 @@ Errors:
 Request body (`ConnectReq`, all fields optional):
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `transport` | string | null | `serial` \| `bluetooth`; null ⇒ server default (env) |
+| `transport` | string | null | `auto` \| `serial` \| `bluetooth`; null ⇒ server default (env `OSCILL_TRANSPORT`, itself defaulting to `auto`) |
 | `port` | string | null | serial path (serial only) |
 | `baud` | int | 115200 | serial baud (serial only) |
-| `address` | string | null | BD_ADDR (bluetooth only; required for bluetooth if no env default) |
+| `address` | string | null | BD_ADDR (bluetooth only; null ⇒ resolve by name, [SP_BTT_02_11](#SP_BTT_02_11)) |
 | `channel` | int | null | RFCOMM channel (bluetooth only; null ⇒ SDP resolve) |
 
-Mapping: the route builds a `ConnectionEndpoint` from the body (or falls back to env defaults)
-and calls `DeviceService.connect(endpoint)`. Errors map to `HTTPException(500, detail=str(e))`
-per [`PythonCatchAndReraise500`]; the detail carries the actionable message from the connect
-error table above.
+Mapping:
+- `transport = auto` (or null with env `auto`) → `DeviceService.connect_auto()` ([SP_BTT_02_12](#SP_BTT_02_12)).
+- `transport = serial` (or a legacy `port`) → `SerialEndpoint` → `connect(endpoint)`.
+- `transport = bluetooth` → address resolved (explicit → env → name), `BluetoothEndpoint` → `connect(endpoint)`.
+Errors map to `HTTPException(500, detail=str(e))` per [`PythonCatchAndReraise500`]; the detail
+carries the actionable message from the connect error table above.
 
-Output: unchanged status JSON.
+Output: status JSON including `transport_kind` (`serial` | `bluetooth`) for the UI indicator.
+
+### 02_11. Bluetooth device discovery by name  {#SP_BTT_02_11}
+
+Purpose: resolve a Bluetooth device **address** when the caller does not supply one, using the
+stable device **name** rather than the per-unit-variable address.
+
+    FUNCTION resolve_bt_address(address):
+        IF address:            RETURN address                      # explicit request field wins
+        IF env OSCILL_BT_ADDR: RETURN env OSCILL_BT_ADDR           # configured override
+        name = env OSCILL_BT_NAME or "Oscill"
+        addr = find_paired_device_by_name(name)                    # substring, case-insensitive
+        IF addr: RETURN addr
+        RAISE ConfigError                                          # nothing to connect to
+
+    FUNCTION find_paired_device_by_name(name_substr) -> address | null:
+        # Query the OS-paired device list; match the first device whose name contains name_substr.
+        # Bluetooth Classic only connects to a bonded device (mirrors the old Android app, which
+        # connects to GetPairedDevices()), so paired-list lookup — not an active inquiry — is the
+        # right scope: fast, no scan, and the device is already bonded.
+
+Notes / mechanism (Linux): `bluetoothctl devices Paired` (fallback `bluetoothctl paired-devices`
+on older BlueZ) → lines `Device <BD_ADDR> <Name>`; match `<Name>` against `name_substr`. Verified
+live: `Device 20:13:04:24:20:55 Oscill DSO` matches `Oscill`. If the tool is missing/empty →
+returns null (caller decides: fallback to next transport, or ConfigError).
+
+Errors:
+| Code | Condition | Guidance |
+|------|-----------|----------|
+| `ConfigError` | no address given and no paired device matches the name | Pair the scope in the OS first, or set `OSCILL_BT_ADDR` |
+
+### 02_12. Auto-connect transport selection  {#SP_BTT_02_12}
+
+Purpose: connect to whichever transport is available, preferring the **faster** one (USB), with no
+caller input. Realises the "автоматично підключатися до наявного або швидшого" requirement.
+
+    FUNCTION connect_auto(baud):
+        candidates = [ SerialEndpoint(port=null, baud) ]           # USB first (faster, no bring-up)
+        addr = resolve_bt_address(null)  (best-effort; skip on ConfigError)
+        IF addr: candidates.append( BluetoothEndpoint(addr) )      # BT fallback if a paired scope exists
+        FOR ep IN candidates:
+            TRY: RETURN open_and_init(ep)                          # first that connects wins
+            EXCEPT DeviceNotFound | BluetoothUnreachable | ChannelResolutionError | TransportError:
+                CONTINUE
+        RAISE DeviceNotFound("no transport available")            # neither USB nor BT reachable
+
+Rules:
+- Order is fixed **USB → Bluetooth** (USB is faster and needs no RFCOMM bring-up).
+- BT is attempted only when a paired device resolves (explicit/env address or name match); otherwise
+  auto is serial-only (no scan, no delay).
+- The executor budget for an auto connect uses the Bluetooth budget when BT is a candidate
+  (SDP + ~3.5 s RFCOMM bring-up), else the serial budget.
+- A partial attempt that fails is fully torn down before the next candidate (no leaked handle).
 
 ## 03. Validation Rules  {#SP_BTT_03}
 
@@ -397,7 +457,7 @@ the link runs at whatever RFCOMM negotiates.
 | Scenario | Preconditions | Steps | Expected result |
 |----------|--------------|-------|-----------------|
 | **Live OBEX-over-BT handshake** (closes [C_BTT_DEC_05]) | Oscill DSO powered, connectable, paired in OS | 1. `connect(BluetoothEndpoint("20:13:04:24:20:55"))` 2. read a version property (e.g. VSD) 3. acquire one frame | CONNECT→`0xA0`; property returns 4 ASCII bytes; frame parses to samples — proving the full path |
-| End-to-end via web API | Backend running, scope connectable | `POST /api/connect {transport:"bluetooth", address:…}` then `GET` a frame | Frame served to the frontend over BT link |
+| End-to-end via web API ✅ **PASS 2026-07-17** | Backend running, scope connectable | `POST /api/connect {transport:"bluetooth"}` (address name-resolved) then `GET` a frame | ✅ 200 in 6.0s, `transport_kind:bluetooth`, addr resolved by name, acquisition running, frame served; clean disconnect |
 | Fallback channel | Scope up, SDP unavailable | connect with `channel=null` | Warns, tries channel 1, connects |
 | Serial regression | USB scope attached | Run existing acquisition script | fps/behaviour unchanged from pre-change baseline |
 
@@ -462,16 +522,25 @@ Minimum safe state: serial-only USB connectivity (the pre-feature behaviour), re
 **Rationale:** The resolution **contract** and its fallback chain are what other contracts bind to; the mechanism is fully isolated behind the `resolve_spp_channel` boundary (input BD_ADDR → output channel), so choosing A/B/C changes nothing outside that function. The safe fallback (explicit channel or channel 1) means the feature works even before the mechanism is finalized.
 **Resolution trigger:** the implement phase for `resolve_spp_channel` — pick A/B/C when the live device is available to test SDP; if SDP proves unreliable, default to C.
 
-### DEC_03 — No Bluetooth device auto-discovery in this version  {#SP_BTT_DEC_03}
+### DEC_03 — Bluetooth device discovery: paired-list name match  {#SP_BTT_DEC_03}
 
-> **Status:** resolved
+> **Status:** resolved (revised 2026-07-17 — superseded the original "explicit address only")
 > **Date:** 2026-07-17
 
-**Question:** Should the backend discover the Oscill by scanning/name-match (like the Windows app), or require a configured address?
+**Question:** Should the backend discover the Oscill by name, or require a configured address?
 
-**Decision:** Require an explicit address (request field or `OSCILL_BT_ADDR`); no scan/name-match.
-**Rationale:** The device is already paired and its address is known (`20:13:04:24:20:55`); requiring it keeps the feature minimal (no discovery contract, no name-match heuristic) and matches the "Python backend only / minimal" scope from [C_BTT_DEC_02]. Auto-discovery is a self-contained future addition if a real need appears.
-**Rejected because:** name-based auto-discovery adds a discovery contract and UI with no current consumer (YAGNI).
+**Decision (revised):** Resolve the address by **device name among OS-paired devices** when no
+address is supplied (`OSCILL_BT_NAME`, default "Oscill"); an explicit `address` / `OSCILL_BT_ADDR`
+overrides. See [SP_BTT_02_11](#SP_BTT_02_11).
+**Rationale:** The per-unit BD_ADDR varies between scopes but the device **name is stable**
+("Oscill DSO"), so name match is the durable identifier for the consumer's "connect without knowing
+the address" need. Scope is bounded to the **paired** list (no active inquiry) — fast, and Bluetooth
+Classic only connects to bonded devices anyway (mirrors the old Android app's `GetPairedDevices()`).
+**Original decision (rejected):** "explicit address only, no discovery" — reversed once the
+auto-connect + UI requirements landed a real consumer (the address-is-variable case), which the
+original YAGNI note explicitly deferred to "if a real need appears".
+**Still out of scope:** active BT **inquiry** scanning for *unpaired* devices (pairing stays an OS
+precondition).
 
 ### DEC_04 — `read` returns empty on timeout (never raises)  {#SP_BTT_DEC_04}
 
@@ -492,3 +561,4 @@ Minimum safe state: serial-only USB connectivity (the pre-feature behaviour), re
 | 2026-07-17 | Windows-app study (`firmware/oscill_new/`): device advertises **both** Object Push + Serial Port BT services → added dual-service caveat to SP_BTT_02_07 (SDP must target SPP; fallback-to-1 is best-effort/unverified). Confirmed WCL pairing flow (auto-PIN) — no device-side BT-enable exists; pairing is the host-side precondition already captured in the connect error table + edge cases. |
 | 2026-07-17 | **Working-source confirmation** (old B4A Android app `OscillDroidApp`): validates the whole design — single OBEX driver dispatched to pluggable BT/USB transport (= DEC_01), SPP connect via UUID `00001101-…805F9B34FB` with SDP auto-channel + explicit-channel fallback (= SP_BTT_02_07), transport is a pure byte stream, no baud/speed over BT (= capability gating), device MAC persisted in config (= OSCILL_BT_ADDR), pre-paired-only + host-adapter-enable-only (no device enable). No spec change needed — design confirmed. |
 | 2026-07-17 | **LIVE OBEX-over-BT PASS** (`scripts/test_bt_quick.py`, Oscill DSO 20:13:04:24:20:55): RFCOMM ch1 + OBEX CONNECT + props (VNM=Uosc, VSN=6070, VHW=1.25, VSW=1.26) + 252-sample frame. **New hard requirement added to §02_01: RFCOMM MUST use `BT_SECURITY_LOW` (insecure)** — default security stalls the device. Pairing (PIN 0000) is a precondition; SDP needs an active ACL. Closes C_BTT_DEC_05 + SP_BTT_DEC_02. |
+| 2026-07-17 | **Auto/discovery/UI increment** (dev-flow follow-up). Added SP_BTT_02_11 (BT address discovery by name among paired devices, `OSCILL_BT_NAME`), SP_BTT_02_12 (auto-connect USB→BT), `transport_kind` in connect/status output (02_09/02_10), `transport=auto` in the API. **Revised DEC_03**: paired-list name match now in scope (address is per-unit-variable, name stable); active inquiry still out. Env `OSCILL_TRANSPORT` default is now `auto`. |

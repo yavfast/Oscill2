@@ -336,7 +336,7 @@ def connect_client(port: Optional[str], baud: int, timeout: float = 2.0) -> Osci
         port = OscillClient.auto_find_port()
         if not port:
             raise RuntimeError("Пристрій не знайдено (auto). Вкажіть порт через --port")
-    client = OscillClient(port, baud=baud, timeout=timeout)
+    client = OscillClient.over_serial(port, baud=baud, timeout=timeout)
     client.open()
     # М’який reset (як у Java) і OBEX CONNECT
     client.reset()

@@ -1,9 +1,10 @@
 import time
 import os
 import logging
-import serial
-from serial.tools import list_ports
 from typing import Optional, Dict, Any, Tuple, List
+
+from transport import Transport
+from serial_transport import SerialTransport
 
 log = logging.getLogger("oscill_client")
 
@@ -29,9 +30,6 @@ CONNECTION_ID = 0xCB
 OSCILL_1BYTE = 0xB1
 OSCILL_2BYTE = 0xF0
 OSCILL_4BYTE = 0xF1
-
-VENDOR_ID = 0x10c4
-PRODUCT_ID = 0x840E
 
 # [task_config-limits] Canonical device step lists — single source of truth.
 # Kept in the Layer-0 device client so higher layers (auto_adjust, device_service)
@@ -79,11 +77,14 @@ class OscillClient:
         0x04: {"name": "NORMAL", "value_bits": 8, "components": 1},
     }
 
-    def __init__(self, port: str, baud: int = 115200, timeout: float = 3.0):
-        self.port = port
-        self.baud = baud
+    def __init__(self, transport: Transport, timeout: float = 3.0):
+        # [SP_BTT_02_08] The driver now speaks to a Transport (byte stream), not a serial port
+        # directly. `over_serial` builds the USB path; DeviceService builds BT via build_transport.
+        self._transport = transport
         self.timeout = timeout
-        self.ser: Optional[serial.Serial] = None
+        # [task_qs-raise] Host-side baud bookkeeping for the serial speed-raise logic. On a
+        # transport with supports_speed_change=False (RFCOMM) it is inert.
+        self.baud = self.DEFAULT_BAUD
         self.conn_id: Optional[bytes] = None
         # [task_qs-raise] Active sampling density; refreshed from QSh per mode.
         self.samples_per_div: int = self.SAMPLES_PER_DIV
@@ -106,29 +107,38 @@ class OscillClient:
         # budget) for on-device confirmation of the trigger/timeout path. Off by default.
         self._debug_timing: bool = os.environ.get("OSCILL_DEBUG_TIMING") == "1"
 
+    @classmethod
+    def over_serial(cls, port: str, baud: int = 115200, timeout: float = 3.0) -> "OscillClient":
+        """[SP_BTT_02_08] Backward-compat helper: build a driver over a USB SerialTransport,
+        preserving the pre-refactor `OscillClient(port, baud, timeout)` call semantics."""
+        return cls(SerialTransport(port, baud, timeout), timeout=timeout)
+
+    def describe_transport(self) -> str:
+        """[SP_BTT_02_06] Human-readable label of the underlying link (for logs / status)."""
+        return self._transport.describe()
+
     def open(self):
-        # [PL_AUDIT_WEB_B14] Guard against re-opening over a live port (SP_OCL
-        # invariant): silently replacing self.ser would leak the previous handle.
-        if self.ser is not None and getattr(self.ser, "is_open", False):
-            raise AssertionError("Serial port already open; call close() first")
-        self.ser = serial.Serial(self.port, self.baud, timeout=self.timeout)
+        # [PL_AUDIT_WEB_B14 / SP_BTT_02_01] Guard against re-opening over a live link (SP_OCL
+        # invariant): the transport itself also guards, but keep the driver-level assertion.
+        if self._transport.is_open:
+            raise AssertionError("Transport already open; call close() first")
+        self._transport.open()
 
     def close(self, restore: bool = True):
         # [task_qs-raise] Return the device to the base baud before closing so the next
         # session's low-speed handshake succeeds (the device keeps its UART speed across
         # an OBEX disconnect — reset() is a software ABORT, not a UART reset). Best-effort:
         # if comms are already dead, we still drop the host baud. Pass restore=False from
-        # the connect-time rescue path to avoid recursion.
+        # the connect-time rescue path to avoid recursion. On a non-speed-change transport
+        # (RFCOMM) restore_default_speed is a capability-gated no-op.
         try:
             if restore:
                 self.restore_default_speed()
         except Exception:
             pass
         try:
-            if self.ser and self.ser.is_open:
-                self.ser.close()
+            self._transport.close()
         finally:
-            self.ser = None
             self.conn_id = None
             self.baud = self.DEFAULT_BAUD
 
@@ -140,31 +150,25 @@ class OscillClient:
         (see _set_host_baud). Returns True if the device acked. NOTE: the device switches on
         receipt regardless of this return, so callers must switch the host even if this is
         False (see raise_speed) — otherwise the link desyncs."""
-        assert self.ser is not None
-        self.ser.write(self._build_packet(OSCILL_SPEED, bytes([coeff & 0xFF])))
+        assert self._transport.is_open
+        self._transport.write(self._build_packet(OSCILL_SPEED, bytes([coeff & 0xFF])))
         # The ack (0x0F) is immediate; use a short read timeout so a dead/desynced port
         # can't block the full serial timeout (~3 s) here — this runs inside connect's 5 s
         # executor budget (rescue does two of these) and inside disconnect under _dev_lock.
-        old_timeout = self.ser.timeout
+        old_timeout = self._transport.read_timeout
         try:
-            self.ser.timeout = 0.5
+            self._transport.read_timeout = 0.5
             opcode, _ = self._read_resp()
         finally:
-            self.ser.timeout = old_timeout
+            self._transport.read_timeout = old_timeout
         # 0x0F = device's SET-SPEED ack (observed); accept the OBEX OK/Continue codes too.
         return opcode in (0x0F, 0xA0, 0x90)
 
     def _set_host_baud(self, baud: int) -> None:
-        """Switch the host serial baud to match the device, then flush stale bytes."""
-        assert self.ser is not None
-        self.ser.baudrate = baud
+        """Switch the host link speed to match the device, then flush stale bytes. Delegates the
+        physical switch (baudrate + settle + flush) to the transport's set_link_speed."""
+        self._transport.set_link_speed(baud)
         self.baud = baud
-        time.sleep(0.05)  # let the device's UART settle at the new rate
-        try:
-            self.ser.reset_input_buffer()
-            self.ser.reset_output_buffer()
-        except Exception:
-            pass
 
     def _verify_link(self) -> bool:
         """Confirm two-way comms at the current baud by reading a known register."""
@@ -177,7 +181,11 @@ class OscillClient:
         """Raise the serial speed AFTER the low-speed init/handshake. Commands the device
         (SET-SPEED at the current baud), switches the host, and verifies the link. Reverts
         to the base baud on any failure. Returns the achieved baud."""
-        if self.ser is None or self.baud == baud:
+        # [SP_BTT_02_05 / C_BTT_DEC_04] Capability gate: the whole speed-raise (device `0x91`
+        # packet + host baud switch) is skipped on a link that can't change speed (RFCOMM).
+        if not self._transport.capabilities.supports_speed_change:
+            return self.baud
+        if not self._transport.is_open or self.baud == baud:
             return self.baud
         try:
             # The device switches its UART on RECEIPT of this command, so we must switch
@@ -201,7 +209,10 @@ class OscillClient:
     def restore_default_speed(self) -> None:
         """Return the device (and host) to the base baud. Best-effort — safe to call even
         if comms are dead; the host baud is dropped regardless so a reopen starts clean."""
-        if self.ser is None or self.baud == self.DEFAULT_BAUD:
+        # [SP_BTT_02_05] No-op on a link that can't change speed (RFCOMM).
+        if not self._transport.capabilities.supports_speed_change:
+            return
+        if not self._transport.is_open or self.baud == self.DEFAULT_BAUD:
             return
         try:
             self.set_speed(self.SPEED_115200)
@@ -210,11 +221,10 @@ class OscillClient:
             # Comms may have died mid-restore. Drop BOTH the real port baud and our
             # bookkeeping to 115200 so they stay in agreement (setting only self.baud
             # would leave the host actually at the high baud → a full-session data outage).
-            if self.ser is not None:
-                try:
-                    self.ser.baudrate = self.DEFAULT_BAUD
-                except Exception:
-                    pass
+            try:
+                self._transport.set_link_speed(self.DEFAULT_BAUD)
+            except Exception:
+                pass
             self.baud = self.DEFAULT_BAUD
 
     def open_and_handshake(self) -> None:
@@ -222,17 +232,26 @@ class OscillClient:
         device is stuck at a raised baud from a previous ungraceful session, rescue it:
         reopen at HIGH_BAUD, command it back to 115200, then reopen at base and retry."""
         self.baud = self.DEFAULT_BAUD
+        # [SP_BTT_02_08] Always start at the base baud; on serial this may override a transport
+        # constructed at a higher baud. No-op on RFCOMM (capability-gated).
+        if self._transport.capabilities.supports_speed_change:
+            self._transport.set_link_speed(self.DEFAULT_BAUD)
         self.open()
         try:
             self.reset()
             self.connect()
             return
         except Exception:
-            pass
-        # Rescue path — the device may still be at HIGH_BAUD.
+            # [SP_BTT] The baud-rescue below only makes sense on a serial link that can be
+            # stuck at HIGH_BAUD. On RFCOMM there is no baud state — a failed handshake is
+            # terminal, so propagate it.
+            if not self._transport.capabilities.supports_speed_change:
+                raise
+        # Rescue path (serial only) — the device may still be at HIGH_BAUD.
         try:
             self.close(restore=False)
             self.baud = self.HIGH_BAUD
+            self._transport.set_link_speed(self.HIGH_BAUD)
             self.open()
             try:
                 self.set_speed(self.SPEED_115200)
@@ -246,6 +265,7 @@ class OscillClient:
                 pass
         # Retry the handshake at the base baud (raises if the device is truly unreachable).
         self.baud = self.DEFAULT_BAUD
+        self._transport.set_link_speed(self.DEFAULT_BAUD)
         self.open()
         self.reset()
         self.connect()
@@ -264,9 +284,9 @@ class OscillClient:
 
     def _read_exact(self, n: int) -> bytes:
         buf = b""
-        assert self.ser is not None
+        assert self._transport.is_open
         while len(buf) < n:
-            chunk = self.ser.read(n - len(buf))
+            chunk = self._transport.read(n - len(buf))
             if not chunk:
                 break
             buf += chunk
@@ -311,39 +331,26 @@ class OscillClient:
     # ---------- Device/port utils ----------
     @staticmethod
     def auto_find_port() -> Optional[str]:
-        for p in list_ports.comports():
-            try:
-                if p.vid is not None and p.pid is not None:
-                    if int(p.vid) == VENDOR_ID and int(p.pid) == PRODUCT_ID:
-                        return p.device
-            except Exception:
-                # Some platforms don't expose vid/pid
-                pass
-        # Fallback: common serial names
-        for guess in ("/dev/ttyUSB0", "/dev/ttyUSB1", "/dev/ttyACM0"):
-            try:
-                with serial.Serial(guess) as _:
-                    return guess
-            except Exception:
-                continue
-        return None
+        # [SP_BTT] Serial-port auto-detect now lives in SerialTransport (USB-only concern);
+        # re-exported here to keep existing call sites (DeviceService, scripts) working.
+        return SerialTransport.auto_find_port()
 
     def reset(self):
-        assert self.ser is not None
+        assert self._transport.is_open
         pkt = self._build_packet(OBEX_ABORT)
-        self.ser.write(pkt)
+        self._transport.write(pkt)
         time.sleep(0.3)
         # drain
-        self.ser.timeout = 0.05
-        while self.ser.read(256):
+        self._transport.read_timeout = 0.05
+        while self._transport.read(256):
             pass
-        self.ser.timeout = self.timeout
+        self._transport.read_timeout = self.timeout
 
     def connect(self):
-        assert self.ser is not None
+        assert self._transport.is_open
         # version, flags, max_rx
         tail = bytes([0x10, 0x00]) + (0x1000).to_bytes(2, 'big')
-        self.ser.write(self._build_packet(OBEX_CONNECT, tail))
+        self._transport.write(self._build_packet(OBEX_CONNECT, tail))
         opcode, body = self._read_resp()
         if opcode != 0xA0:
             raise IOError(f"Connect failed 0x{opcode:02x}")
@@ -357,12 +364,12 @@ class OscillClient:
         self._cpu_tick_10ps = None
 
     def get_property(self, name: str) -> Optional[bytes]:
-        assert self.ser is not None
+        assert self._transport.is_open
         headers = b""
         if self.conn_id:
             headers += self._build_4byte(CONNECTION_ID, self.conn_id)
         headers += self._build_byte_seq(OSCILL_PROPERTY, name.encode('ascii'))
-        self.ser.write(self._build_packet(OBEX_GET_FINAL, headers))
+        self._transport.write(self._build_packet(OBEX_GET_FINAL, headers))
         opcode, body = self._read_resp()
         if opcode not in (0xA0, 0x90):
             return None
@@ -387,7 +394,7 @@ class OscillClient:
             return None
 
     def get_data_single(self, before_delay_ms: int = 0) -> Optional[bytes]:
-        assert self.ser is not None
+        assert self._transport.is_open
         headers = b""
         if self.conn_id:
             headers += self._build_4byte(CONNECTION_ID, self.conn_id)
@@ -421,15 +428,15 @@ class OscillClient:
         trig_s = self._trigger_wait_s if self._trigger_wait_s else 1.0
         budget = wait_s + trig_s + 0.5
         # Temporarily extend serial timeout to cover slow acquisitions
-        old_timeout = self.ser.timeout
+        old_timeout = self._transport.read_timeout
         chunks: List[bytes] = []
         t_start0 = time.monotonic()
         try:
             if old_timeout is None or old_timeout < budget:
-                self.ser.timeout = min(max(budget, 1.5), 12.0)
+                self._transport.read_timeout = min(max(budget, 1.5), 12.0)
 
             # Initial request (final flag ok). Some devices will return Continue for long data or ROLL mode.
-            self.ser.write(self._build_packet(OBEX_GET_FINAL, headers))
+            self._transport.write(self._build_packet(OBEX_GET_FINAL, headers))
             opcode, body = self._read_resp()
 
             # Collect body chunks across potential Continue responses until End-of-Body arrives.
@@ -469,10 +476,10 @@ class OscillClient:
                 cont_headers = b""
                 if self.conn_id:
                     cont_headers += self._build_4byte(CONNECTION_ID, self.conn_id)
-                self.ser.write(self._build_packet(OBEX_GET, cont_headers))
+                self._transport.write(self._build_packet(OBEX_GET, cont_headers))
                 opcode, body = self._read_resp()
         finally:
-            self.ser.timeout = old_timeout
+            self._transport.read_timeout = old_timeout
             # [task_trigger-highqs] Opt-in frame-timing diagnostics (OSCILL_DEBUG_TIMING=1):
             # runs on every return path so it captures timeouts (0 chunks) too. Confirms on
             # device which limit bites — trigger-wait vs chunk truncation vs read timeout.
@@ -490,12 +497,12 @@ class OscillClient:
 
     # ---------- Registry helpers ----------
     def _get_registry(self, name: str) -> Dict[int, List[bytes]]:
-        assert self.ser is not None
+        assert self._transport.is_open
         headers = b""
         if self.conn_id:
             headers += self._build_4byte(CONNECTION_ID, self.conn_id)
         headers += self._build_byte_seq(OSCILL_REGISTRY, name.encode('ascii'))
-        self.ser.write(self._build_packet(OBEX_GET_FINAL, headers))
+        self._transport.write(self._build_packet(OBEX_GET_FINAL, headers))
         opcode, body = self._read_resp()
         if opcode not in (0xA0, 0x90):
             raise IOError(f"GET registry {name} failed 0x{opcode:02x}")
@@ -527,7 +534,7 @@ class OscillClient:
         raise KeyError(f"No 4B registry value for {name}")
 
     def _put_registry(self, name: str, value_header: int, payload: bytes) -> Dict[int, List[bytes]]:
-        assert self.ser is not None
+        assert self._transport.is_open
         headers = b""
         if self.conn_id:
             headers += self._build_4byte(CONNECTION_ID, self.conn_id)
@@ -538,7 +545,7 @@ class OscillClient:
             headers += bytes([value_header]) + payload
         else:
             raise ValueError("Unsupported value header")
-        self.ser.write(self._build_packet(OBEX_PUT_FINAL, headers))
+        self._transport.write(self._build_packet(OBEX_PUT_FINAL, headers))
         opcode, body = self._read_resp()
         if opcode not in (0xA0, 0x90):
             raise IOError(f"PUT registry {name} failed 0x{opcode:02x}")
@@ -1055,12 +1062,12 @@ class OscillClient:
 
     # ---------- Commands ----------
     def calibrate(self) -> bool:
-        assert self.ser is not None
+        assert self._transport.is_open
         headers = b""
         if self.conn_id:
             headers += self._build_4byte(CONNECTION_ID, self.conn_id)
         # PUT command 0x72 = "C" (calibration)
         headers += self._build_byte_seq(OSCILL_DATA, b"C")
-        self.ser.write(self._build_packet(OBEX_PUT_FINAL, headers))
+        self._transport.write(self._build_packet(OBEX_PUT_FINAL, headers))
         opcode, _ = self._read_resp()
         return opcode in (0xA0, 0x90)

@@ -13,6 +13,7 @@ import sys
 sys.path.append(os.path.dirname(__file__))
 
 from device_service import DeviceService
+from endpoints import resolve_endpoint
 from converters import get_voltage_mv, get_time_ms
 from calculations import (
     samples_to_hex,
@@ -57,28 +58,54 @@ app.add_middleware(
 service = DeviceService(buffer_size=256)
 
 class ConnectReq(BaseModel):
-    port: Optional[str] = None
-    baud: int = 115200
+    # [SP_BTT_02_10] Backward-compatible superset: existing {port, baud} bodies behave exactly as
+    # before; transport/address/channel add the auto + Bluetooth paths. All optional → null ⇒
+    # server default (env OSCILL_TRANSPORT, itself defaulting to "auto").
+    transport: Optional[str] = None   # "auto" | "serial" | "bluetooth"; null ⇒ env default
+    port: Optional[str] = None        # serial device path (serial only)
+    baud: int = 115200                # serial baud (serial only)
+    address: Optional[str] = None     # BD_ADDR (bluetooth only; null ⇒ resolve by name)
+    channel: Optional[int] = None     # RFCOMM channel (bluetooth only; null ⇒ SDP resolve)
 
 @app.post("/api/connect")
 def api_connect(req: Optional[ConnectReq] = None):
     """
-    Connect to device or ensure connection.
-    If port is specified, explicitly connect to that port.
-    If port is None/not specified, use ensure_connected (auto-detect).
+    [SP_BTT_02_10] Connect to the device over the selected transport.
+
+    - `transport:"auto"` (or nothing / no explicit transport with no port) → auto USB→BT.
+    - Legacy {port, baud} → serial, unchanged behaviour.
+    - {transport:"serial"|"bluetooth", ...} → that link (BT address resolved explicit→env→name).
+    Errors map to HTTPException(500) with an actionable detail (rule PythonCatchAndReraise500).
     """
     try:
+        kind = (req.transport or "").strip().lower() if req else ""
+        # Explicit, non-auto transport → build a concrete endpoint. An unknown transport value
+        # (e.g. "usb") reaches resolve_endpoint and raises ValueError → HTTP 500 (SP_BTT_03_01).
+        if req and kind and kind != "auto":
+            endpoint = resolve_endpoint(
+                transport=req.transport, port=req.port, baud=req.baud,
+                address=req.address, channel=req.channel,
+            )
+            return service.connect(endpoint)
+        # address/channel without an explicit transport ⇒ bluetooth.
+        if req and (req.address or req.channel is not None):
+            endpoint = resolve_endpoint(
+                transport="bluetooth", baud=req.baud,
+                address=req.address, channel=req.channel,
+            )
+            return service.connect(endpoint)
         if req and req.port:
-            # Explicit connection to specified port
-            res = service.connect(req.port, req.baud)
-        else:
-            # Auto-connect if needed
-            baud = req.baud if req else 115200
-            res = service.ensure_connected(port=None, baud=baud)
-        return res
-    except Exception:
+            return service.connect(req.port, baud=req.baud)
+        # transport == "auto" or nothing → auto USB→BT.
+        baud = req.baud if req else 115200
+        return service.ensure_connected(port=None, baud=baud)
+    except HTTPException:
+        raise
+    except Exception as e:
+        # [PythonCatchAndReraise500] Surface the actionable connect message (DeviceNotFound /
+        # BluetoothUnreachable / ChannelResolutionError / ConfigError / validation) to the client.
         log.exception("connect failed")
-        raise HTTPException(status_code=500, detail="Connection failed")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/api/disconnect")
 def api_disconnect():

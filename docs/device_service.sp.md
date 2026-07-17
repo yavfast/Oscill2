@@ -10,6 +10,8 @@
 > - 2026-07-15 code-audit reconciliation (PL_AUDIT_WEB): documented start() "Not connected" RuntimeError path (stop() remains unconditional ok)
 > - 2026-07-15 — PL_AUDIT_WEB code-audit propagation: added public is_connected()/is_acquiring()/display_geometry() contracts; ConfigDict now includes h_divs alongside samples_per_div; acquisition loop reuses cached config per frame (no per-frame register re-read)
 > - 2026-07-15 — task_qs-raise: samples_per_div is now the live per-mode density (223/111, from QSh) not a fixed 32; display_geometry() is an instance method reading it; apply_config re-derives density on mode change (re-applying t/div) and resets _last_delivered_len before the response snapshot to avoid stale cross-mode geometry
+> - 2026-07-17 — **SP_BTT**: `connect`/`ensure_connected` are now a backward-compatible superset accepting a `ConnectionEndpoint` (serial | bluetooth) in addition to legacy `(port, baud)`; the driver is built via `build_transport` over a `Transport`. Executor budget is transport-aware (serial 5s, Bluetooth 50s — SDP + RFCOMM bring-up); serial speed-raise gated to serial endpoints; `DeviceNotFound`/`BluetoothUnreachable`/`ChannelResolutionError`/`ConfigError` error surface. See [SP_BTT](./bluetooth_transport.sp.md).
+> - 2026-07-17 — **SP_BTT increment 2**: added `connect_auto` (USB→BT auto-select); `ensure_connected()` (no args) now uses it; status/connect responses carry `transport_kind` (serial|bluetooth|null). BT address resolves by device name among paired devices (SP_BTT_02_11).
 
 ## Data Structures
 
@@ -27,7 +29,9 @@ DeviceService(buffer_size: int = 256)
   "is_acquiring": bool,
   "config": ConfigDict,       # present when status="ok"
   "cfg_id": int,              # present when status="ok"
-  "port": str,                # present in connect() response only
+  "port": str,                # connect() response only: serial path, or BD_ADDR for bluetooth
+  "transport": str,           # connect() response only: link label, e.g. "serial:/dev/ttyUSB0@115200" (SP_BTT)
+  "transport_kind": str|null, # "serial"|"bluetooth" when connected, null when disconnected (SP_BTT_02_09)
   "error": str                # present in ensure_connected() on failure
 }
 ```
@@ -90,12 +94,26 @@ existing v_offset/trigger_level clamping; no warning appended).
 
 ## Contracts
 
-### connect(port=None, baud=115200) → Dict
-- **Errors:** `TimeoutError` (5s timeout), `RuntimeError("Device not found")` if port=None and no device
-- **Side effects:** starts acquisition loop; snapshots config
+### connect(endpoint=None, *, port=None, baud=115200) → Dict
+- [SP_BTT_02_09] Backward-compatible superset: legacy `connect("/dev/ttyUSB0", 115200)` still works
+  (first positional str is routed to `port`). Prefer a `ConnectionEndpoint` (serial | bluetooth);
+  when none is given the env/legacy default resolves it ([SP_BTT_02_08]).
+- **Errors:** `TimeoutError` (serial 5s / Bluetooth 50s budget), `DeviceNotFound` if serial-auto
+  finds no CP210x, `BluetoothUnreachable` / `ChannelResolutionError` / `ConfigError` for the BT path
+  ([SP_BTT_02_09]).
+- **Side effects:** starts acquisition loop; snapshots config. The response adds a `transport`
+  label (link description); the serial speed-raise is gated to serial endpoints only.
 
-### ensure_connected(port=None, baud=115200) → Dict
-- Returns current status if already connected; calls connect() otherwise
+### connect_auto(baud=115200) → Dict  *(SP_BTT_02_12)*
+- Auto-selects the transport: tries **USB serial first**, then **Bluetooth** (address resolved by
+  name among paired devices) if a paired scope exists. First candidate that connects wins; a failed
+  attempt is fully torn down before the next. Executor budget = Bluetooth (50s) when a BT candidate
+  is present, else serial (5s).
+- **Errors:** `DeviceNotFound("no transport available…")` when neither USB nor a paired BT connects.
+
+### ensure_connected(endpoint=None, *, port=None, baud=115200) → Dict
+- Returns current status if already connected. With no endpoint and no port → **auto** path
+  (`connect_auto`, USB→BT); an explicit endpoint/port → `connect()`.
 - Never raises — returns `{status: "disconnected", error: ...}` on failure
 
 ### disconnect() → Dict
