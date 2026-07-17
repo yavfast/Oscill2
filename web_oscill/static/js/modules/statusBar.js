@@ -34,10 +34,14 @@ export class StatusBar {
 
   updateStatus(status, config) {
     const isConnected = (status && status.status === 'ok') || (status && status.status === 'error') || !!config;
-    this.connCircle.fill(isConnected ? '#2ecc71' : '#d33');
+    // [SP_DSV] "reconnecting" is a distinct (amber) state — disconnected but auto-retrying.
+    const reconnecting = !isConnected && status?.connection_state === 'reconnecting';
+    this.connCircle.fill(isConnected ? '#2ecc71' : (reconnecting ? '#e0a800' : '#d33'));
     // [SP_BTT_02_09] Append the active transport (USB/BT) to the Connected label.
     const kindLabel = { serial: 'USB', bluetooth: 'BT' }[status?.transport_kind] || '';
-    this.connText.text(isConnected ? (kindLabel ? `Connected · ${kindLabel}` : 'Connected') : 'Disconnected');
+    this.connText.text(
+      isConnected ? (kindLabel ? `Connected · ${kindLabel}` : 'Connected')
+                  : (reconnecting ? 'Reconnecting…' : 'Disconnected'));
 
     if (config) {
       // Time division

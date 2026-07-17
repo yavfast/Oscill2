@@ -12,6 +12,7 @@
 > - 2026-07-15 — task_qs-raise: samples_per_div is now the live per-mode density (223/111, from QSh) not a fixed 32; display_geometry() is an instance method reading it; apply_config re-derives density on mode change (re-applying t/div) and resets _last_delivered_len before the response snapshot to avoid stale cross-mode geometry
 > - 2026-07-17 — **SP_BTT**: `connect`/`ensure_connected` are now a backward-compatible superset accepting a `ConnectionEndpoint` (serial | bluetooth) in addition to legacy `(port, baud)`; the driver is built via `build_transport` over a `Transport`. Executor budget is transport-aware (serial 5s, Bluetooth 50s — SDP + RFCOMM bring-up); serial speed-raise gated to serial endpoints; `DeviceNotFound`/`BluetoothUnreachable`/`ChannelResolutionError`/`ConfigError` error surface. See [SP_BTT](./bluetooth_transport.sp.md).
 > - 2026-07-17 — **SP_BTT increment 2**: added `connect_auto` (USB→BT auto-select); `ensure_connected()` (no args) now uses it; status/connect responses carry `transport_kind` (serial|bluetooth|null). BT address resolves by device name among paired devices (SP_BTT_02_11).
+> - 2026-07-17 — **Lifecycle automation**: added a monitor thread for (a) idle auto-disconnect — disconnect after acquisition is stopped ≥ `OSCILL_IDLE_DISCONNECT_S` (default 300s, 0=off); and (b) auto-reconnect after the 5-error self-heal disconnect — replays the same connect target with bounded exp backoff (1→30s, ≤5 attempts). New `connection_state` status field (connected|reconnecting|disconnected).
 
 ## Data Structures
 
@@ -115,6 +116,35 @@ existing v_offset/trigger_level clamping; no warning appended).
 - Returns current status if already connected. With no endpoint and no port → **auto** path
   (`connect_auto`, USB→BT); an explicit endpoint/port → `connect()`.
 - Never raises — returns `{status: "disconnected", error: ...}` on failure
+
+### Lifecycle monitor: idle-disconnect + auto-reconnect  *(SP_BTT-adjacent; DeviceService)*
+
+A single daemon monitor thread (started at construction, stopped in `shutdown()`) manages two
+automatic lifecycle behaviours. It never holds `_dev_lock` for its checks; it drives connect/
+disconnect through the existing public (executor-serialised) methods.
+
+**Idle auto-disconnect**
+- **Config:** `OSCILL_IDLE_DISCONNECT_S` (float seconds; default **300**; `0` disables).
+- **Rule:** when **connected** and **acquisition is stopped** continuously for ≥ the timeout,
+  disconnect to release the link. Active acquisition (frames flowing) resets the idle clock, so an
+  acquiring device never idle-disconnects. An idle-disconnect is **intentional** → it does **not**
+  arm auto-reconnect.
+- **Idle clock:** starts when acquisition stops (`stop()`, or ends); cleared while acquiring
+  (`start()` / connect auto-start / each acquired frame).
+
+**Auto-reconnect on error**
+- **Trigger:** the acquisition loop's existing self-heal (`AcquisitionLoopSelfHealingDisconnect`:
+  disconnect after 5 consecutive errors) now also **arms** reconnect.
+- **Target:** the **same** connection the user chose — the last endpoint for `connect(endpoint)`,
+  or the auto path for `connect_auto()`/`ensure_connected()`. Reconnect **replays** that target.
+- **Backoff:** bounded exponential — first attempt ~immediate, then 1s, 2s, 4s… capped at 30s;
+  give up after **5** attempts (leaves the device disconnected, reconnect disarmed).
+- **Cancellation:** a **user** `disconnect()` (or an idle-disconnect) disarms reconnect. A
+  successful connect disarms it and resets the backoff.
+
+**connection_state** (new status field): `"connected"` | `"reconnecting"` | `"disconnected"`.
+Exposed in `get_status()` and connect responses; `"reconnecting"` while an error-armed reconnect is
+in progress (disconnected but retrying). The UI shows it (e.g. "Reconnecting…").
 
 ### disconnect() → Dict
 - Stops acquisition; closes serial; clears frame buffer; clears cached config

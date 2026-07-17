@@ -102,6 +102,34 @@ class DeviceService:
         # budget (it never approaches it).
         self._bt_connect_timeout = 50.0
 
+        # ---- Lifecycle automation (SP_DSV lifecycle monitor) ----
+        # Idle auto-disconnect: disconnect after acquisition has been stopped this long (seconds);
+        # 0 disables. Active acquisition never idles.
+        self._idle_disconnect_s = float(os.environ.get("OSCILL_IDLE_DISCONNECT_S", "300"))
+        self._idle_since: Optional[float] = None  # monotonic when acquisition stopped; None while acquiring
+        # Auto-reconnect after the acq-loop self-heal disconnect: replay the same target.
+        self._connection_state = "disconnected"   # "connected" | "reconnecting" | "disconnected"
+        self._reconnect_target: Any = None         # ConnectionEndpoint | "auto" | None
+        self._reconnect_baud = 115200
+        self._pending_reconnect = False
+        self._reconnect_attempts = 0
+        self._reconnect_backoff = 1.0
+        self._next_reconnect_ts = 0.0
+        # [SP_DSV] Lifecycle epoch: bumped (under _dev_lock) on every user/idle disconnect. The
+        # acq loop captures the epoch of the session it serves and only arms a reconnect if the
+        # epoch is unchanged — so a user disconnect racing the acq-loop's error-arming always wins
+        # (the device is never resurrected after an explicit disconnect).
+        self._lifecycle_epoch = 0
+        # Daemon monitor thread drives both behaviours off the device path (uses the public,
+        # executor-serialised connect/disconnect; never holds _dev_lock for its checks).
+        self._lifecycle_stop = threading.Event()
+        self._lifecycle_thread = threading.Thread(
+            target=self._lifecycle_monitor, name="device-lifecycle", daemon=True)
+        self._lifecycle_thread.start()
+
+    _RECONNECT_MAX_ATTEMPTS = 5
+    _RECONNECT_BACKOFF_CAP = 30.0
+
     # ---------------- Device lifecycle ----------------
     def _connect_internal(self, endpoint: ConnectionEndpoint) -> Dict[str, Any]:
         """Internal connect (single endpoint) — runs in executor. [SP_BTT_02_09]"""
@@ -136,6 +164,7 @@ class DeviceService:
         self._client = None
         self._transport_kind = None
         self._is_connected = False
+        self._idle_since = None
 
     def _open_and_init_locked(self, ep: ConnectionEndpoint) -> Dict[str, Any]:
         """Build the transport for `ep`, open+handshake, run the full init sequence, and mark the
@@ -212,6 +241,7 @@ class DeviceService:
             self._client = cli
             self._transport_kind = ep.kind.value  # "serial" | "bluetooth"  [SP_BTT_02_09]
             self._is_connected = True
+            self._connection_state = "connected"
             # Snapshot config BEFORE starting acquisition, so a snapshot read failure aborts the
             # connect cleanly (via the except below) without a live acquisition thread running
             # against a doomed link.
@@ -219,6 +249,7 @@ class DeviceService:
             # Start acquisition automatically after a fully successful connect + snapshot.
             self._start_acquisition_locked()
             self._is_acquiring = True
+            self._idle_since = None  # acquiring → not idle (SP_DSV idle-disconnect clock)
             return {
                 "status": "ok",
                 # [SP_BTT] Report the resolved link. `port` stays for serial back-compat
@@ -227,6 +258,7 @@ class DeviceService:
                 "port": ep.port if isinstance(ep, SerialEndpoint) else ep.address,
                 "transport": cli.describe_transport(),
                 "transport_kind": self._transport_kind,
+                "connection_state": self._connection_state,  # [SP_DSV] "connected"
                 "config": cfg,
                 "cfg_id": self._cfg_id,
                 "is_connected": self._is_connected,
@@ -253,9 +285,14 @@ class DeviceService:
             candidates.append(BluetoothEndpoint(address=addr))
         has_bt = len(candidates) > 1
         budget = self._bt_connect_timeout if has_bt else self._device_timeout
+        # [SP_DSV] Remember the auto target so an error-driven reconnect replays it.
+        self._reconnect_target = "auto"
+        self._reconnect_baud = baud
         try:
             future = self._device_executor.submit(self._connect_internal_auto, candidates)
-            return future.result(timeout=budget)
+            res = future.result(timeout=budget)
+            self._reset_reconnect_state()  # a successful connect disarms any pending reconnect
+            return res
         except FutureTimeoutError:
             raise TimeoutError(f"Connection timed out after {budget}s")
         except Exception as e:
@@ -283,14 +320,25 @@ class DeviceService:
         # surfaces here, before any executor work.
         ep = endpoint if endpoint is not None else resolve_default_endpoint(port, baud)
         budget = self._device_timeout if isinstance(ep, SerialEndpoint) else self._bt_connect_timeout
+        # [SP_DSV] Remember this endpoint so an error-driven reconnect replays the same link.
+        self._reconnect_target = ep
         try:
             future = self._device_executor.submit(self._connect_internal, ep)
-            return future.result(timeout=budget)
+            res = future.result(timeout=budget)
+            self._reset_reconnect_state()  # a successful connect disarms any pending reconnect
+            return res
         except FutureTimeoutError:
             raise TimeoutError(f"Connection timed out after {budget}s")
         except Exception as e:
             self._log.error(f"Connect failed: {e}")
             raise
+
+    def _reset_reconnect_state(self) -> None:
+        """[SP_DSV] A successful connect disarms auto-reconnect and resets the backoff."""
+        self._pending_reconnect = False
+        self._reconnect_attempts = 0
+        self._reconnect_backoff = 1.0
+        self._connection_state = "connected"
 
     def _disconnect_internal(self) -> Dict[str, Any]:
         """Internal disconnect method that runs in executor."""
@@ -305,6 +353,7 @@ class DeviceService:
             self._transport_kind = None
             self._is_connected = False
             self._is_acquiring = False
+            self._idle_since = None
         with self._frames_lock:
             self._frames.clear()
             self._seq = 0
@@ -316,7 +365,14 @@ class DeviceService:
         return {"status": "ok"}
 
     def disconnect(self) -> Dict[str, Any]:
-        """Disconnect from device via executor with timeout."""
+        """Disconnect from device via executor with timeout. A user-initiated disconnect [SP_DSV]
+        disarms auto-reconnect (only error-driven disconnects reconnect)."""
+        # Bump the epoch + disarm atomically so a concurrent acq-loop error-arming (which is
+        # gated on the same epoch under the same lock) cannot resurrect the connection.
+        with self._dev_lock:
+            self._lifecycle_epoch += 1
+            self._pending_reconnect = False
+            self._connection_state = "disconnected"
         try:
             future = self._device_executor.submit(self._disconnect_internal)
             return future.result(timeout=self._device_timeout)
@@ -392,9 +448,11 @@ class DeviceService:
     def get_status(self) -> Dict[str, Any]:
         """Get status from cached configuration without querying device."""
         if not self._is_connected or not self._client:
-            # [SP_BTT_02_09] transport_kind is null when disconnected.
+            # [SP_BTT_02_09] transport_kind null when disconnected. [SP_DSV] connection_state is
+            # "reconnecting" while an error-armed reconnect is retrying, else "disconnected".
             return {"status": "disconnected", "is_connected": False, "is_acquiring": False,
-                    "transport_kind": None}
+                    "transport_kind": None,
+                    "connection_state": "reconnecting" if self._pending_reconnect else "disconnected"}
 
         # Return cached config instead of querying device, reconciled from the
         # device sample-space (QS/TC) to the delivered sample-space the client plots.
@@ -407,6 +465,7 @@ class DeviceService:
             "is_acquiring": self._is_acquiring,
             # [SP_BTT_02_09] Current link for the UI indicator ("serial" | "bluetooth").
             "transport_kind": self._transport_kind,
+            "connection_state": "connected",  # [SP_DSV]
         }
 
     def _apply_config_internal(self, changes: Dict[str, Any]) -> Tuple[Dict[str, Any], List[str]]:
@@ -965,6 +1024,10 @@ class DeviceService:
         consecutive_errors = 0
         max_consecutive_errors = 5  # Disconnect if 5 consecutive errors
         force_disconnect = False
+        # [SP_DSV] Capture the lifecycle epoch of the session this loop serves. If the user (or an
+        # idle-disconnect) drops the connection, the epoch bumps and this loop will NOT arm a
+        # reconnect — so an explicit disconnect always wins the race with error-arming.
+        acq_epoch = self._lifecycle_epoch
         while not self._stop_event.is_set():
             # Try to acquire device without blocking for too long
             got = self._dev_lock.acquire(timeout=0.1)
@@ -1032,6 +1095,18 @@ class DeviceService:
             # Pace the loop lightly to avoid hogging CPU/USB
             time.sleep(backoff_s)
         if force_disconnect:
+            # [SP_DSV] This is an ERROR disconnect → arm auto-reconnect, but ONLY if the user has
+            # not disconnected/reconnected since this loop started (epoch unchanged) and a target
+            # exists to replay. Guarded by _dev_lock so it serialises with disconnect()'s
+            # epoch-bump+disarm — a concurrent user disconnect always wins. The monitor performs
+            # the reconnect off this thread with backoff.
+            with self._dev_lock:
+                if self._lifecycle_epoch == acq_epoch and self._reconnect_target is not None:
+                    self._pending_reconnect = True
+                    self._reconnect_attempts = 0
+                    self._reconnect_backoff = 1.0
+                    self._next_reconnect_ts = time.monotonic()  # first retry ~immediate
+                    self._connection_state = "reconnecting"
             # Now off the device executor path and not holding _dev_lock: safe to
             # tear the connection down directly on this (acquisition) thread.
             try:
@@ -1046,6 +1121,7 @@ class DeviceService:
                 raise RuntimeError("Not connected")
             self._start_acquisition_locked()
             self._is_acquiring = True
+            self._idle_since = None  # [SP_DSV] acquiring → clear the idle clock
             return {"status": "ok"}
 
     def stop(self) -> Dict[str, Any]:
@@ -1053,16 +1129,82 @@ class DeviceService:
         with self._dev_lock:
             self._stop_acquisition_locked()
             self._is_acquiring = False
+            # [SP_DSV] Start the idle clock so the monitor can auto-disconnect after the timeout.
+            if self._is_connected:
+                self._idle_since = time.monotonic()
             return {"status": "ok"}
+
+    # ---------------- Lifecycle monitor (SP_DSV) ----------------
+    def _lifecycle_monitor(self) -> None:
+        """Daemon: every ~1 s handle idle auto-disconnect and error-armed auto-reconnect. Drives
+        the public (executor-serialised) connect/disconnect; never holds `_dev_lock` for checks."""
+        while not self._lifecycle_stop.wait(1.0):
+            try:
+                self._maybe_idle_disconnect()
+                self._maybe_reconnect()
+            except Exception as e:  # never let the monitor die
+                self._log.debug(f"lifecycle monitor tick error: {e}")
+
+    def _maybe_idle_disconnect(self) -> None:
+        if self._idle_disconnect_s <= 0:
+            return
+        if not self._is_connected or self._is_acquiring:
+            return
+        since = self._idle_since
+        if since is None or (time.monotonic() - since) < self._idle_disconnect_s:
+            return
+        self._log.info(
+            f"Acquisition idle ≥{self._idle_disconnect_s:.0f}s → auto-disconnect (releasing link)")
+        # Intentional: disconnect() disarms auto-reconnect.
+        try:
+            self.disconnect()
+        except Exception as e:
+            self._log.warning(f"idle auto-disconnect failed: {e}")
+
+    def _maybe_reconnect(self) -> None:
+        if not self._pending_reconnect:
+            return
+        if self._is_connected:  # someone reconnected another way
+            self._reset_reconnect_state()
+            return
+        if time.monotonic() < self._next_reconnect_ts:
+            return
+        self._reconnect_attempts += 1
+        self._connection_state = "reconnecting"
+        target = self._reconnect_target
+        self._log.info(
+            f"Auto-reconnect attempt {self._reconnect_attempts}/{self._RECONNECT_MAX_ATTEMPTS} "
+            f"(target={'auto' if target == 'auto' else getattr(target, 'describe', lambda: target)()})")
+        try:
+            if target == "auto" or target is None:
+                self.connect_auto(baud=self._reconnect_baud)
+            else:
+                self.connect(target)
+            # connect()/connect_auto() call _reset_reconnect_state() on success.
+            self._log.info("Auto-reconnect succeeded")
+        except Exception as e:
+            self._log.warning(f"Auto-reconnect attempt failed: {e}")
+            if self._reconnect_attempts >= self._RECONNECT_MAX_ATTEMPTS:
+                self._pending_reconnect = False
+                self._connection_state = "disconnected"
+                self._log.error(
+                    f"Auto-reconnect gave up after {self._reconnect_attempts} attempts")
+            else:
+                self._next_reconnect_ts = time.monotonic() + self._reconnect_backoff
+                self._reconnect_backoff = min(
+                    self._reconnect_backoff * 2, self._RECONNECT_BACKOFF_CAP)
 
     def shutdown(self):
         """Shutdown the service and cleanup resources."""
         self._log.info("Shutting down DeviceService")
+        # Stop the lifecycle monitor first so it does not fight the shutdown disconnect.
+        self._pending_reconnect = False
+        self._lifecycle_stop.set()
         try:
             self.disconnect()
         except Exception as e:
             self._log.error(f"Error during disconnect on shutdown: {e}")
-        
+
         # Shutdown executor
         try:
             self._device_executor.shutdown(wait=True)
