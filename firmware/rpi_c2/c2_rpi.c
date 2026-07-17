@@ -73,13 +73,12 @@ static int  c2_read_dr(int *out){ pulse(); send_bits(0,2); send_bits(0,2); dIn()
 static int read_reg(unsigned c2addr,int *out){ c2_write_ar(c2addr); return c2_read_dr(out); }
 
 // PI (halt) path
-static int c2_connect(){
+static int c2_connect(){                // C8051F41x datasheet §26.4: FPCTL enable = 0x02, 0x01 (NO 0x04)
     c2_reset();
     c2_write_ar(0x02);
     if(!c2_write_dr(0x02)) return 0;
-    if(!c2_write_dr(0x04)) return 0;   // halt core (back-to-back, like c2port)
     if(!c2_write_dr(0x01)) return 0;
-    struct timespec t={0,25000000L}; nanosleep(&t,0);   // 25ms (core halted)
+    struct timespec t={0,25000000L}; nanosleep(&t,0);   // 25ms
     return 1;
 }
 static int poll_inbusy(){ for(int i=0;i<50000;i++){ if(!(c2_read_ar()&0x02)) return 1; } return 0; }
@@ -115,6 +114,23 @@ static void dump(unsigned addr, const unsigned char*b, int n){
         printf("  |");
         for(int j=0;j<16&&i+j<n;j++){ int c=b[i+j]; putchar((c>=0x20&&c<0x7e)?c:'.'); }
         printf("|\n"); }
+}
+
+// PI read commands (C2ADD must=FPDAT). READ-ONLY, target RAM/SFR (not flash → not lock-gated).
+static int pi_get2(uint8_t cmd, int *a, int *b){        // Get Version 0x01 / Derivative 0x02 (2 reads)
+    c2_write_ar(0xB4);
+    if(!fp_wr(cmd)) return -1;
+    if(!fp_rd(a))   return -2;
+    return fp_rd(b)?0:-3;
+}
+static int pi_dread(uint8_t cmd, uint8_t addr, int *v){ // Direct 0x09 / Indirect 0x0B: read 1 byte @addr
+    c2_write_ar(0xB4);
+    if(!fp_wr(cmd)) return -1;
+    int st=-1; if(!fp_rd(&st)) return -2;
+    if(st!=0x0D) return -3;                              // command rejected -> unsupported
+    if(!fp_wr(addr)) return -4;
+    if(!fp_wr(0x01)) return -5;                          // length = 1
+    return fp_rd(v)?0:-6;
 }
 
 static void go_realtime(){
@@ -167,6 +183,54 @@ int main(int argc,char**argv){
             else if(same) printf(">> all identical -> artifact\n");
             else printf(">> VARIED DATA (verify determinism above + looks like 8051 code)\n"); }
         else printf(">> block_read failed rc=%d (negative => guard/handshake; no erase possible)\n",r1);
+        printf("(scope halted - power-cycle to recover)\n");
+    } else if(strcmp(mode,"sweep")==0){
+        // Map the readable range: low->high pages + Lock Byte region. Datasheet: lock covers
+        // pages 0..n-1; pages above are C2-readable. Each addr gets a FRESH reset+halt (self-
+        // recovering even if the prior read reset the device). AR-after = reset/contention indicator.
+        unsigned addrs[]={0x0000,0x2000,0x4000,0x6000,0x7800,0x7C00,0x7DF0};
+        printf("addr : conn st1 st2 ARaf  data[0..7]            verdict\n");
+        for(unsigned k=0;k<sizeof(addrs)/sizeof(addrs[0]);k++){
+            T_LOW=300; T_HIGH=500; int ok=c2_connect(); T_LOW=2000; T_HIGH=4000;
+            c2_write_ar(0xB4);
+            int w1=fp_wr(0x06); int st1=-1; fp_rd(&st1);
+            fp_wr((addrs[k]>>8)&0xFF); fp_wr(addrs[k]&0xFF); fp_wr(0x10);
+            int st2=-1; fp_rd(&st2);
+            unsigned char b[16]; int got=0; for(;got<16;got++){ int v; if(!fp_rd(&v)) break; b[got]=v; }
+            int arA=c2_read_ar();
+            int varied=0,allff=1,all00=1; for(int i=0;i<got;i++){ if(i&&b[i]!=b[0])varied=1; if(b[i]!=0xFF)allff=0; if(b[i])all00=0; }
+            const char*v = (w1==0||st1!=0x0D)?"cmd-rejected" : (got<16)?"read-fail" :
+                all00?"all-00" : allff?"all-FF(blank)" : varied?"VARIED->REAL DATA?":"repeat(artifact)";
+            printf("%04X :  %d   %02X  %02X  %02X  ", addrs[k], ok, st1&0xFF, st2&0xFF, arA&0xFF);
+            for(int i=0;i<8&&i<got;i++) printf("%02X ", b[i]);
+            for(int i=got;i<8;i++) printf(".. ");
+            printf(" %s\n", v);
+        }
+        printf(">> VARIED at high addr = flash readable there (NOT fully locked); all cmd-rejected/fail = locked/blocked\n");
+        printf("(scope halted/reset - power-cycle to recover)\n");
+    } else if(strcmp(mode,"dbg")==0){
+        T_LOW=300; T_HIGH=500;                          // FAST: win reset->halt race
+        int ok=c2_connect();
+        printf("c2_connect(FPCTL halt): %s\n", ok?"OK":"FAIL");
+        T_LOW=2000; T_HIGH=4000;                        // SLOW: reliable FPDAT
+        int dev=-1,rev=-1; read_reg(0x00,&dev); read_reg(0x01,&rev);
+        printf("halted DeviceID/Rev: 0x%02X/0x%02X\n", dev&0xFF, rev&0xFF);
+        int a=-1,b=-1;
+        pi_get2(0x01,&a,&b); printf("GetVersion(0x01):    r1=0x%02X r2=0x%02X\n", a&0xFF,b&0xFF);
+        a=b=-1; pi_get2(0x02,&a,&b); printf("GetDerivative(0x02): r1=0x%02X r2=0x%02X\n", a&0xFF,b&0xFF);
+        struct { uint8_t a; const char*n; } D[]={{0xE0,"ACC "},{0x81,"SP  "},{0xD0,"PSW "},
+            {0x80,"P0  "},{0x90,"P1  "},{0xA0,"P2  "},{0xB0,"P3  "},{0x87,"PCON"},{0x30,"R30 "},{0x00,"R00 "}};
+        printf("-- Direct Read (0x09) SFR/direct-RAM --\n");
+        for(unsigned i=0;i<sizeof(D)/sizeof(D[0]);i++){ int v=-1; int r=pi_dread(0x09,D[i].a,&v);
+            if(r==0) printf("   %s @%02X = 0x%02X\n", D[i].n, D[i].a, v&0xFF);
+            else if(r==-3){ printf("   %s @%02X : REJECTED (status!=0x0D) => 0x09 unsupported on F41x\n", D[i].n, D[i].a); break; }
+            else printf("   %s @%02X : fail rc=%d\n", D[i].n, D[i].a, r); }
+        uint8_t I[]={0x30,0x80,0xF0};
+        printf("-- Indirect Read (0x0B) idata --\n");
+        for(unsigned i=0;i<3;i++){ int v=-1; int r=pi_dread(0x0B,I[i],&v);
+            if(r==0) printf("   @%02X = 0x%02X\n", I[i], v&0xFF);
+            else if(r==-3){ printf("   @%02X : REJECTED => 0x0B unsupported on F41x\n", I[i]); break; }
+            else printf("   @%02X : fail rc=%d\n", I[i], r); }
         printf("(scope halted - power-cycle to recover)\n");
     } else {
         for(int i=0;i<6;i++){ int dev=-1,rev=-1; c2_reset(); read_reg(0x00,&dev); read_reg(0x01,&rev);
