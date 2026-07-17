@@ -1,0 +1,1553 @@
+{
+ "note": "CONJECTURAL / low-confidence .ofw keystream bytes. NOT proven \u2014 kept SEPARATE from ks_partial.json (106 recovered: 66 proven + 12 vector-opcode + 28 crib-validated hex-LUT). Source: L=0 vector-table 'sudoku' (docs/ofw_mask_cryptanalysis.spike.md \u00a73c). Each column lists candidate plaintext value(s) -> implied K with confidence + basis. \u00a73f (2026-07-15): vector table is a COMPLETE LJMP grid; col133 (post-table LJMP, app-range hi) PROMOTED to ks_partial (107). INT1(21)/v15(125) PROMOTED to ks_partial (109/514, 2026-07-15, vector-hi-conf); Tmr0(13)/Tmr2(45) opcodes ambiguous (LJMP 0xFFxx vs erased). Refine/confirm with external check.",
+ "cipher": "K[c]=(C[c]-P[c])&0xFF ; C = the L=0 sector byte at column c (page offset = c-2).",
+ "confidence_tiers": {
+  "low": "structural hypothesis (e.g. FF-padding) consistent with cross-version data but UNVERIFIABLE from files (many-time-pad); FF-model is falsified for INT0/ADC0-EOC/PCA0 gaps.",
+  "speculative": "single-slot guess, no corroboration (e.g. INT1 as LJMP to high flash).",
+  "structural-high": "opcode at a vector-table grid position whose target-hi is a SPECIFIC written non-FF value (=> slot was written, not erased => it is a LJMP => opcode=0x02). Very likely correct; the only unverifiable part is the high-flash target. Top candidate for promotion to ks_partial. Backed by the now-proven-COMPLETE LJMP grid (spike \u00a73f): 13 grid opcodes confirmed 0x02."
+ },
+ "status_legend": {
+  "unverified": "one plausible value; commit only after a known-page confirms.",
+  "unrecoverable": "plaintext proven version-variable (NOT constant FF) \u2014 no single crib from files.",
+  "unknown-value": "plaintext constant but value has no crib (e.g. LJMP low byte).",
+  "speculative": "hypothesis-dependent (INT1 anomaly)."
+ },
+ "proven_reference": "firmware/ks_partial.json (106 cols: 66 proven + 12 vector-hi-conf + 28 crib-validated).",
+ "n_conjectural_cols": 81,
+ "candidates": {
+  "8": {
+   "page_offset": 6,
+   "region": "INT0 gap/padding",
+   "C_per_version": {
+    "123": "0xc6",
+    "125": "0xc6",
+    "126": "0xc6"
+   },
+   "cross_version": "constant",
+   "variants": [
+    {
+     "P": "0xff",
+     "K": "0xc7",
+     "confidence": "low",
+     "basis": "8051 vector FF-padding; UNVERIFIED (FF-model falsified for INT0/ADC0-EOC/PCA0 gaps)"
+    }
+   ],
+   "status": "unverified"
+  },
+  "9": {
+   "page_offset": 7,
+   "region": "INT0 gap/padding",
+   "C_per_version": {
+    "123": "0x07",
+    "125": "0x07",
+    "126": "0x06"
+   },
+   "cross_version": "VARIES",
+   "variants": [],
+   "status": "unrecoverable (version-variable => proven NOT 0xFF; plaintext differs per version)"
+  },
+  "10": {
+   "page_offset": 8,
+   "region": "INT0 gap/padding",
+   "C_per_version": {
+    "123": "0x7f",
+    "125": "0x7f",
+    "126": "0x7f"
+   },
+   "cross_version": "constant",
+   "variants": [
+    {
+     "P": "0xff",
+     "K": "0x80",
+     "confidence": "low",
+     "basis": "8051 vector FF-padding; UNVERIFIED (FF-model falsified for INT0/ADC0-EOC/PCA0 gaps)"
+    }
+   ],
+   "status": "unverified"
+  },
+  "11": {
+   "page_offset": 9,
+   "region": "INT0 gap/padding",
+   "C_per_version": {
+    "123": "0x93",
+    "125": "0x93",
+    "126": "0x93"
+   },
+   "cross_version": "constant",
+   "variants": [
+    {
+     "P": "0xff",
+     "K": "0x94",
+     "confidence": "low",
+     "basis": "8051 vector FF-padding; UNVERIFIED (FF-model falsified for INT0/ADC0-EOC/PCA0 gaps)"
+    }
+   ],
+   "status": "unverified"
+  },
+  "12": {
+   "page_offset": 10,
+   "region": "INT0 gap/padding",
+   "C_per_version": {
+    "123": "0x0e",
+    "125": "0x0e",
+    "126": "0x0e"
+   },
+   "cross_version": "constant",
+   "variants": [
+    {
+     "P": "0xff",
+     "K": "0x0f",
+     "confidence": "low",
+     "basis": "8051 vector FF-padding; UNVERIFIED (FF-model falsified for INT0/ADC0-EOC/PCA0 gaps)"
+    }
+   ],
+   "status": "unverified"
+  },
+  "13": {
+   "page_offset": 11,
+   "region": "Timer0 unused opcode",
+   "C_per_version": {
+    "123": "0xad",
+    "125": "0xad",
+    "126": "0xad"
+   },
+   "cross_version": "constant",
+   "variants": [
+    {
+     "P": "0x02",
+     "K": "0xab",
+     "confidence": "low",
+     "basis": "LJMP 0xFFxx trap: vendor demonstrably LJMP-fills non-app vectors (INT1->0xf7xx, v15->0xf1xx). hi=0xFF is consistent with LJMP-to-top-of-flash. AMBIGUOUS vs erased (hi=FF cannot distinguish)."
+    },
+    {
+     "P": "0x32",
+     "K": "0x7b",
+     "confidence": "low",
+     "basis": "RETI, per SDCC unused-vector fill (32 FF*7)"
+    },
+    {
+     "P": "0xff",
+     "K": "0xae",
+     "confidence": "low",
+     "basis": "fully-erased slot"
+    }
+   ],
+   "status": "ambiguous: 3 fills (LJMP 0xFFxx / erased FF*8 / RETI); hi=FF cannot distinguish -> needs external check"
+  },
+  "15": {
+   "page_offset": 13,
+   "region": "Timer0 unused",
+   "C_per_version": {
+    "123": "0xbc",
+    "125": "0xbc",
+    "126": "0xbc"
+   },
+   "cross_version": "constant",
+   "variants": [
+    {
+     "P": "0xff",
+     "K": "0xbd",
+     "confidence": "low",
+     "basis": "erased/RETI-padding"
+    }
+   ],
+   "status": "unverified"
+  },
+  "16": {
+   "page_offset": 14,
+   "region": "Timer0 unused",
+   "C_per_version": {
+    "123": "0xbd",
+    "125": "0xbd",
+    "126": "0xbd"
+   },
+   "cross_version": "constant",
+   "variants": [
+    {
+     "P": "0xff",
+     "K": "0xbe",
+     "confidence": "low",
+     "basis": "erased/RETI-padding"
+    }
+   ],
+   "status": "unverified"
+  },
+  "17": {
+   "page_offset": 15,
+   "region": "Timer0 unused",
+   "C_per_version": {
+    "123": "0x0f",
+    "125": "0x0f",
+    "126": "0x0f"
+   },
+   "cross_version": "constant",
+   "variants": [
+    {
+     "P": "0xff",
+     "K": "0x10",
+     "confidence": "low",
+     "basis": "erased/RETI-padding"
+    }
+   ],
+   "status": "unverified"
+  },
+  "18": {
+   "page_offset": 16,
+   "region": "Timer0 unused",
+   "C_per_version": {
+    "123": "0x7e",
+    "125": "0x7e",
+    "126": "0x7e"
+   },
+   "cross_version": "constant",
+   "variants": [
+    {
+     "P": "0xff",
+     "K": "0x7f",
+     "confidence": "low",
+     "basis": "erased/RETI-padding"
+    }
+   ],
+   "status": "unverified"
+  },
+  "19": {
+   "page_offset": 17,
+   "region": "Timer0 unused",
+   "C_per_version": {
+    "123": "0xa5",
+    "125": "0xa5",
+    "126": "0xa5"
+   },
+   "cross_version": "constant",
+   "variants": [
+    {
+     "P": "0xff",
+     "K": "0xa6",
+     "confidence": "low",
+     "basis": "erased/RETI-padding"
+    }
+   ],
+   "status": "unverified"
+  },
+  "20": {
+   "page_offset": 18,
+   "region": "Timer0 unused",
+   "C_per_version": {
+    "123": "0x99",
+    "125": "0x99",
+    "126": "0x99"
+   },
+   "cross_version": "constant",
+   "variants": [
+    {
+     "P": "0xff",
+     "K": "0x9a",
+     "confidence": "low",
+     "basis": "erased/RETI-padding"
+    }
+   ],
+   "status": "unverified"
+  },
+  "23": {
+   "page_offset": 21,
+   "region": "INT1 anomaly",
+   "C_per_version": {
+    "123": "0x1f",
+    "125": "0x1f",
+    "126": "0x1f"
+   },
+   "cross_version": "constant",
+   "variants": [],
+   "status": "unknown-value (target-lo if LJMP, else data)"
+  },
+  "24": {
+   "page_offset": 22,
+   "region": "INT1 anomaly",
+   "C_per_version": {
+    "123": "0x13",
+    "125": "0x13",
+    "126": "0x13"
+   },
+   "cross_version": "constant",
+   "variants": [
+    {
+     "P": "0xff",
+     "K": "0x14",
+     "confidence": "speculative",
+     "basis": "padding IF INT1 is LJMP 02 f7 lo"
+    }
+   ],
+   "status": "speculative"
+  },
+  "25": {
+   "page_offset": 23,
+   "region": "INT1 anomaly",
+   "C_per_version": {
+    "123": "0xa4",
+    "125": "0xa4",
+    "126": "0xa4"
+   },
+   "cross_version": "constant",
+   "variants": [
+    {
+     "P": "0xff",
+     "K": "0xa5",
+     "confidence": "speculative",
+     "basis": "padding IF INT1 is LJMP 02 f7 lo"
+    }
+   ],
+   "status": "speculative"
+  },
+  "26": {
+   "page_offset": 24,
+   "region": "INT1 anomaly",
+   "C_per_version": {
+    "123": "0x30",
+    "125": "0x30",
+    "126": "0x30"
+   },
+   "cross_version": "constant",
+   "variants": [
+    {
+     "P": "0xff",
+     "K": "0x31",
+     "confidence": "speculative",
+     "basis": "padding IF INT1 is LJMP 02 f7 lo"
+    }
+   ],
+   "status": "speculative"
+  },
+  "27": {
+   "page_offset": 25,
+   "region": "INT1 anomaly",
+   "C_per_version": {
+    "123": "0xcd",
+    "125": "0xcd",
+    "126": "0xcd"
+   },
+   "cross_version": "constant",
+   "variants": [
+    {
+     "P": "0xff",
+     "K": "0xce",
+     "confidence": "speculative",
+     "basis": "padding IF INT1 is LJMP 02 f7 lo"
+    }
+   ],
+   "status": "speculative"
+  },
+  "28": {
+   "page_offset": 26,
+   "region": "INT1 anomaly",
+   "C_per_version": {
+    "123": "0xbd",
+    "125": "0xbd",
+    "126": "0xbd"
+   },
+   "cross_version": "constant",
+   "variants": [
+    {
+     "P": "0xff",
+     "K": "0xbe",
+     "confidence": "speculative",
+     "basis": "padding IF INT1 is LJMP 02 f7 lo"
+    }
+   ],
+   "status": "speculative"
+  },
+  "32": {
+   "page_offset": 30,
+   "region": "Timer1 gap/padding",
+   "C_per_version": {
+    "123": "0x21",
+    "125": "0x21",
+    "126": "0x21"
+   },
+   "cross_version": "constant",
+   "variants": [
+    {
+     "P": "0xff",
+     "K": "0x22",
+     "confidence": "low",
+     "basis": "8051 vector FF-padding; UNVERIFIED (FF-model falsified for INT0/ADC0-EOC/PCA0 gaps)"
+    }
+   ],
+   "status": "unverified"
+  },
+  "33": {
+   "page_offset": 31,
+   "region": "Timer1 gap/padding",
+   "C_per_version": {
+    "123": "0xd0",
+    "125": "0xd0",
+    "126": "0xd0"
+   },
+   "cross_version": "constant",
+   "variants": [
+    {
+     "P": "0xff",
+     "K": "0xd1",
+     "confidence": "low",
+     "basis": "8051 vector FF-padding; UNVERIFIED (FF-model falsified for INT0/ADC0-EOC/PCA0 gaps)"
+    }
+   ],
+   "status": "unverified"
+  },
+  "34": {
+   "page_offset": 32,
+   "region": "Timer1 gap/padding",
+   "C_per_version": {
+    "123": "0x9c",
+    "125": "0x9c",
+    "126": "0x9c"
+   },
+   "cross_version": "constant",
+   "variants": [
+    {
+     "P": "0xff",
+     "K": "0x9d",
+     "confidence": "low",
+     "basis": "8051 vector FF-padding; UNVERIFIED (FF-model falsified for INT0/ADC0-EOC/PCA0 gaps)"
+    }
+   ],
+   "status": "unverified"
+  },
+  "35": {
+   "page_offset": 33,
+   "region": "Timer1 gap/padding",
+   "C_per_version": {
+    "123": "0xec",
+    "125": "0xec",
+    "126": "0xec"
+   },
+   "cross_version": "constant",
+   "variants": [
+    {
+     "P": "0xff",
+     "K": "0xed",
+     "confidence": "low",
+     "basis": "8051 vector FF-padding; UNVERIFIED (FF-model falsified for INT0/ADC0-EOC/PCA0 gaps)"
+    }
+   ],
+   "status": "unverified"
+  },
+  "36": {
+   "page_offset": 34,
+   "region": "Timer1 gap/padding",
+   "C_per_version": {
+    "123": "0x75",
+    "125": "0x75",
+    "126": "0x75"
+   },
+   "cross_version": "constant",
+   "variants": [
+    {
+     "P": "0xff",
+     "K": "0x76",
+     "confidence": "low",
+     "basis": "8051 vector FF-padding; UNVERIFIED (FF-model falsified for INT0/ADC0-EOC/PCA0 gaps)"
+    }
+   ],
+   "status": "unverified"
+  },
+  "40": {
+   "page_offset": 38,
+   "region": "UART0 gap/padding",
+   "C_per_version": {
+    "123": "0xeb",
+    "125": "0xeb",
+    "126": "0xeb"
+   },
+   "cross_version": "constant",
+   "variants": [
+    {
+     "P": "0xff",
+     "K": "0xec",
+     "confidence": "low",
+     "basis": "8051 vector FF-padding; UNVERIFIED (FF-model falsified for INT0/ADC0-EOC/PCA0 gaps)"
+    }
+   ],
+   "status": "unverified"
+  },
+  "41": {
+   "page_offset": 39,
+   "region": "UART0 gap/padding",
+   "C_per_version": {
+    "123": "0x09",
+    "125": "0x09",
+    "126": "0x09"
+   },
+   "cross_version": "constant",
+   "variants": [
+    {
+     "P": "0xff",
+     "K": "0x0a",
+     "confidence": "low",
+     "basis": "8051 vector FF-padding; UNVERIFIED (FF-model falsified for INT0/ADC0-EOC/PCA0 gaps)"
+    }
+   ],
+   "status": "unverified"
+  },
+  "42": {
+   "page_offset": 40,
+   "region": "UART0 gap/padding",
+   "C_per_version": {
+    "123": "0xd7",
+    "125": "0xd7",
+    "126": "0xd7"
+   },
+   "cross_version": "constant",
+   "variants": [
+    {
+     "P": "0xff",
+     "K": "0xd8",
+     "confidence": "low",
+     "basis": "8051 vector FF-padding; UNVERIFIED (FF-model falsified for INT0/ADC0-EOC/PCA0 gaps)"
+    }
+   ],
+   "status": "unverified"
+  },
+  "43": {
+   "page_offset": 41,
+   "region": "UART0 gap/padding",
+   "C_per_version": {
+    "123": "0x16",
+    "125": "0x16",
+    "126": "0x16"
+   },
+   "cross_version": "constant",
+   "variants": [
+    {
+     "P": "0xff",
+     "K": "0x17",
+     "confidence": "low",
+     "basis": "8051 vector FF-padding; UNVERIFIED (FF-model falsified for INT0/ADC0-EOC/PCA0 gaps)"
+    }
+   ],
+   "status": "unverified"
+  },
+  "44": {
+   "page_offset": 42,
+   "region": "UART0 gap/padding",
+   "C_per_version": {
+    "123": "0x0e",
+    "125": "0x0e",
+    "126": "0x0e"
+   },
+   "cross_version": "constant",
+   "variants": [
+    {
+     "P": "0xff",
+     "K": "0x0f",
+     "confidence": "low",
+     "basis": "8051 vector FF-padding; UNVERIFIED (FF-model falsified for INT0/ADC0-EOC/PCA0 gaps)"
+    }
+   ],
+   "status": "unverified"
+  },
+  "45": {
+   "page_offset": 43,
+   "region": "Timer2 unused opcode",
+   "C_per_version": {
+    "123": "0x08",
+    "125": "0x08",
+    "126": "0x08"
+   },
+   "cross_version": "constant",
+   "variants": [
+    {
+     "P": "0x02",
+     "K": "0x06",
+     "confidence": "low",
+     "basis": "LJMP 0xFFxx trap: vendor demonstrably LJMP-fills non-app vectors (INT1->0xf7xx, v15->0xf1xx). hi=0xFF is consistent with LJMP-to-top-of-flash. AMBIGUOUS vs erased (hi=FF cannot distinguish)."
+    },
+    {
+     "P": "0x32",
+     "K": "0xd6",
+     "confidence": "low",
+     "basis": "RETI, per SDCC unused-vector fill (32 FF*7)"
+    },
+    {
+     "P": "0xff",
+     "K": "0x09",
+     "confidence": "low",
+     "basis": "fully-erased slot"
+    }
+   ],
+   "status": "ambiguous: 3 fills (LJMP 0xFFxx / erased FF*8 / RETI); hi=FF cannot distinguish -> needs external check"
+  },
+  "47": {
+   "page_offset": 45,
+   "region": "Timer2 unused",
+   "C_per_version": {
+    "123": "0x06",
+    "125": "0x06",
+    "126": "0x06"
+   },
+   "cross_version": "constant",
+   "variants": [
+    {
+     "P": "0xff",
+     "K": "0x07",
+     "confidence": "low",
+     "basis": "erased/RETI-padding"
+    }
+   ],
+   "status": "unverified"
+  },
+  "48": {
+   "page_offset": 46,
+   "region": "Timer2 unused",
+   "C_per_version": {
+    "123": "0x3c",
+    "125": "0x3c",
+    "126": "0x3c"
+   },
+   "cross_version": "constant",
+   "variants": [
+    {
+     "P": "0xff",
+     "K": "0x3d",
+     "confidence": "low",
+     "basis": "erased/RETI-padding"
+    }
+   ],
+   "status": "unverified"
+  },
+  "49": {
+   "page_offset": 47,
+   "region": "Timer2 unused",
+   "C_per_version": {
+    "123": "0xaf",
+    "125": "0xaf",
+    "126": "0xaf"
+   },
+   "cross_version": "constant",
+   "variants": [
+    {
+     "P": "0xff",
+     "K": "0xb0",
+     "confidence": "low",
+     "basis": "erased/RETI-padding"
+    }
+   ],
+   "status": "unverified"
+  },
+  "50": {
+   "page_offset": 48,
+   "region": "Timer2 unused",
+   "C_per_version": {
+    "123": "0x8e",
+    "125": "0x8e",
+    "126": "0x8e"
+   },
+   "cross_version": "constant",
+   "variants": [
+    {
+     "P": "0xff",
+     "K": "0x8f",
+     "confidence": "low",
+     "basis": "erased/RETI-padding"
+    }
+   ],
+   "status": "unverified"
+  },
+  "51": {
+   "page_offset": 49,
+   "region": "Timer2 unused",
+   "C_per_version": {
+    "123": "0x10",
+    "125": "0x10",
+    "126": "0x10"
+   },
+   "cross_version": "constant",
+   "variants": [
+    {
+     "P": "0xff",
+     "K": "0x11",
+     "confidence": "low",
+     "basis": "erased/RETI-padding"
+    }
+   ],
+   "status": "unverified"
+  },
+  "52": {
+   "page_offset": 50,
+   "region": "Timer2 unused",
+   "C_per_version": {
+    "123": "0x89",
+    "125": "0x89",
+    "126": "0x89"
+   },
+   "cross_version": "constant",
+   "variants": [
+    {
+     "P": "0xff",
+     "K": "0x8a",
+     "confidence": "low",
+     "basis": "erased/RETI-padding"
+    }
+   ],
+   "status": "unverified"
+  },
+  "56": {
+   "page_offset": 54,
+   "region": "SPI0 gap/padding",
+   "C_per_version": {
+    "123": "0xac",
+    "125": "0xac",
+    "126": "0xac"
+   },
+   "cross_version": "constant",
+   "variants": [
+    {
+     "P": "0xff",
+     "K": "0xad",
+     "confidence": "low",
+     "basis": "8051 vector FF-padding; UNVERIFIED (FF-model falsified for INT0/ADC0-EOC/PCA0 gaps)"
+    }
+   ],
+   "status": "unverified"
+  },
+  "57": {
+   "page_offset": 55,
+   "region": "SPI0 gap/padding",
+   "C_per_version": {
+    "123": "0x37",
+    "125": "0x37",
+    "126": "0x37"
+   },
+   "cross_version": "constant",
+   "variants": [
+    {
+     "P": "0xff",
+     "K": "0x38",
+     "confidence": "low",
+     "basis": "8051 vector FF-padding; UNVERIFIED (FF-model falsified for INT0/ADC0-EOC/PCA0 gaps)"
+    }
+   ],
+   "status": "unverified"
+  },
+  "58": {
+   "page_offset": 56,
+   "region": "SPI0 gap/padding",
+   "C_per_version": {
+    "123": "0x11",
+    "125": "0x11",
+    "126": "0x11"
+   },
+   "cross_version": "constant",
+   "variants": [
+    {
+     "P": "0xff",
+     "K": "0x12",
+     "confidence": "low",
+     "basis": "8051 vector FF-padding; UNVERIFIED (FF-model falsified for INT0/ADC0-EOC/PCA0 gaps)"
+    }
+   ],
+   "status": "unverified"
+  },
+  "59": {
+   "page_offset": 57,
+   "region": "SPI0 gap/padding",
+   "C_per_version": {
+    "123": "0xf8",
+    "125": "0xf8",
+    "126": "0xf8"
+   },
+   "cross_version": "constant",
+   "variants": [
+    {
+     "P": "0xff",
+     "K": "0xf9",
+     "confidence": "low",
+     "basis": "8051 vector FF-padding; UNVERIFIED (FF-model falsified for INT0/ADC0-EOC/PCA0 gaps)"
+    }
+   ],
+   "status": "unverified"
+  },
+  "60": {
+   "page_offset": 58,
+   "region": "SPI0 gap/padding",
+   "C_per_version": {
+    "123": "0xc8",
+    "125": "0xc8",
+    "126": "0xc8"
+   },
+   "cross_version": "constant",
+   "variants": [
+    {
+     "P": "0xff",
+     "K": "0xc9",
+     "confidence": "low",
+     "basis": "8051 vector FF-padding; UNVERIFIED (FF-model falsified for INT0/ADC0-EOC/PCA0 gaps)"
+    }
+   ],
+   "status": "unverified"
+  },
+  "64": {
+   "page_offset": 62,
+   "region": "SMB0 gap/padding",
+   "C_per_version": {
+    "123": "0xee",
+    "125": "0xee",
+    "126": "0xee"
+   },
+   "cross_version": "constant",
+   "variants": [
+    {
+     "P": "0xff",
+     "K": "0xef",
+     "confidence": "low",
+     "basis": "8051 vector FF-padding; UNVERIFIED (FF-model falsified for INT0/ADC0-EOC/PCA0 gaps)"
+    }
+   ],
+   "status": "unverified"
+  },
+  "65": {
+   "page_offset": 63,
+   "region": "SMB0 gap/padding",
+   "C_per_version": {
+    "123": "0x41",
+    "125": "0x41",
+    "126": "0x41"
+   },
+   "cross_version": "constant",
+   "variants": [
+    {
+     "P": "0xff",
+     "K": "0x42",
+     "confidence": "low",
+     "basis": "8051 vector FF-padding; UNVERIFIED (FF-model falsified for INT0/ADC0-EOC/PCA0 gaps)"
+    }
+   ],
+   "status": "unverified"
+  },
+  "66": {
+   "page_offset": 64,
+   "region": "SMB0 gap/padding",
+   "C_per_version": {
+    "123": "0xa9",
+    "125": "0xa9",
+    "126": "0xa9"
+   },
+   "cross_version": "constant",
+   "variants": [
+    {
+     "P": "0xff",
+     "K": "0xaa",
+     "confidence": "low",
+     "basis": "8051 vector FF-padding; UNVERIFIED (FF-model falsified for INT0/ADC0-EOC/PCA0 gaps)"
+    }
+   ],
+   "status": "unverified"
+  },
+  "67": {
+   "page_offset": 65,
+   "region": "SMB0 gap/padding",
+   "C_per_version": {
+    "123": "0x6d",
+    "125": "0x6d",
+    "126": "0x6d"
+   },
+   "cross_version": "constant",
+   "variants": [
+    {
+     "P": "0xff",
+     "K": "0x6e",
+     "confidence": "low",
+     "basis": "8051 vector FF-padding; UNVERIFIED (FF-model falsified for INT0/ADC0-EOC/PCA0 gaps)"
+    }
+   ],
+   "status": "unverified"
+  },
+  "68": {
+   "page_offset": 66,
+   "region": "SMB0 gap/padding",
+   "C_per_version": {
+    "123": "0x3f",
+    "125": "0x3f",
+    "126": "0x3f"
+   },
+   "cross_version": "constant",
+   "variants": [
+    {
+     "P": "0xff",
+     "K": "0x40",
+     "confidence": "low",
+     "basis": "8051 vector FF-padding; UNVERIFIED (FF-model falsified for INT0/ADC0-EOC/PCA0 gaps)"
+    }
+   ],
+   "status": "unverified"
+  },
+  "72": {
+   "page_offset": 70,
+   "region": "USB0 gap/padding",
+   "C_per_version": {
+    "123": "0x00",
+    "125": "0x00",
+    "126": "0x00"
+   },
+   "cross_version": "constant",
+   "variants": [
+    {
+     "P": "0xff",
+     "K": "0x01",
+     "confidence": "low",
+     "basis": "8051 vector FF-padding; UNVERIFIED (FF-model falsified for INT0/ADC0-EOC/PCA0 gaps)"
+    }
+   ],
+   "status": "unverified"
+  },
+  "73": {
+   "page_offset": 71,
+   "region": "USB0 gap/padding",
+   "C_per_version": {
+    "123": "0xae",
+    "125": "0xae",
+    "126": "0xae"
+   },
+   "cross_version": "constant",
+   "variants": [
+    {
+     "P": "0xff",
+     "K": "0xaf",
+     "confidence": "low",
+     "basis": "8051 vector FF-padding; UNVERIFIED (FF-model falsified for INT0/ADC0-EOC/PCA0 gaps)"
+    }
+   ],
+   "status": "unverified"
+  },
+  "74": {
+   "page_offset": 72,
+   "region": "USB0 gap/padding",
+   "C_per_version": {
+    "123": "0xb9",
+    "125": "0xb9",
+    "126": "0xb9"
+   },
+   "cross_version": "constant",
+   "variants": [
+    {
+     "P": "0xff",
+     "K": "0xba",
+     "confidence": "low",
+     "basis": "8051 vector FF-padding; UNVERIFIED (FF-model falsified for INT0/ADC0-EOC/PCA0 gaps)"
+    }
+   ],
+   "status": "unverified"
+  },
+  "75": {
+   "page_offset": 73,
+   "region": "USB0 gap/padding",
+   "C_per_version": {
+    "123": "0x79",
+    "125": "0x79",
+    "126": "0x79"
+   },
+   "cross_version": "constant",
+   "variants": [
+    {
+     "P": "0xff",
+     "K": "0x7a",
+     "confidence": "low",
+     "basis": "8051 vector FF-padding; UNVERIFIED (FF-model falsified for INT0/ADC0-EOC/PCA0 gaps)"
+    }
+   ],
+   "status": "unverified"
+  },
+  "76": {
+   "page_offset": 74,
+   "region": "USB0 gap/padding",
+   "C_per_version": {
+    "123": "0x0a",
+    "125": "0x0a",
+    "126": "0x0a"
+   },
+   "cross_version": "constant",
+   "variants": [
+    {
+     "P": "0xff",
+     "K": "0x0b",
+     "confidence": "low",
+     "basis": "8051 vector FF-padding; UNVERIFIED (FF-model falsified for INT0/ADC0-EOC/PCA0 gaps)"
+    }
+   ],
+   "status": "unverified"
+  },
+  "80": {
+   "page_offset": 78,
+   "region": "ADC0-WC gap/padding",
+   "C_per_version": {
+    "123": "0xad",
+    "125": "0xad",
+    "126": "0xad"
+   },
+   "cross_version": "constant",
+   "variants": [
+    {
+     "P": "0xff",
+     "K": "0xae",
+     "confidence": "low",
+     "basis": "8051 vector FF-padding; UNVERIFIED (FF-model falsified for INT0/ADC0-EOC/PCA0 gaps)"
+    }
+   ],
+   "status": "unverified"
+  },
+  "81": {
+   "page_offset": 79,
+   "region": "ADC0-WC gap/padding",
+   "C_per_version": {
+    "123": "0x26",
+    "125": "0x26",
+    "126": "0x26"
+   },
+   "cross_version": "constant",
+   "variants": [
+    {
+     "P": "0xff",
+     "K": "0x27",
+     "confidence": "low",
+     "basis": "8051 vector FF-padding; UNVERIFIED (FF-model falsified for INT0/ADC0-EOC/PCA0 gaps)"
+    }
+   ],
+   "status": "unverified"
+  },
+  "82": {
+   "page_offset": 80,
+   "region": "ADC0-WC gap/padding",
+   "C_per_version": {
+    "123": "0xf9",
+    "125": "0xf9",
+    "126": "0xf9"
+   },
+   "cross_version": "constant",
+   "variants": [
+    {
+     "P": "0xff",
+     "K": "0xfa",
+     "confidence": "low",
+     "basis": "8051 vector FF-padding; UNVERIFIED (FF-model falsified for INT0/ADC0-EOC/PCA0 gaps)"
+    }
+   ],
+   "status": "unverified"
+  },
+  "83": {
+   "page_offset": 81,
+   "region": "ADC0-WC gap/padding",
+   "C_per_version": {
+    "123": "0x7f",
+    "125": "0x7f",
+    "126": "0x7f"
+   },
+   "cross_version": "constant",
+   "variants": [
+    {
+     "P": "0xff",
+     "K": "0x80",
+     "confidence": "low",
+     "basis": "8051 vector FF-padding; UNVERIFIED (FF-model falsified for INT0/ADC0-EOC/PCA0 gaps)"
+    }
+   ],
+   "status": "unverified"
+  },
+  "84": {
+   "page_offset": 82,
+   "region": "ADC0-WC gap/padding",
+   "C_per_version": {
+    "123": "0x1f",
+    "125": "0x1f",
+    "126": "0x1f"
+   },
+   "cross_version": "constant",
+   "variants": [
+    {
+     "P": "0xff",
+     "K": "0x20",
+     "confidence": "low",
+     "basis": "8051 vector FF-padding; UNVERIFIED (FF-model falsified for INT0/ADC0-EOC/PCA0 gaps)"
+    }
+   ],
+   "status": "unverified"
+  },
+  "88": {
+   "page_offset": 86,
+   "region": "ADC0-EOC gap/padding",
+   "C_per_version": {
+    "123": "0x54",
+    "125": "0x54",
+    "126": "0x54"
+   },
+   "cross_version": "constant",
+   "variants": [
+    {
+     "P": "0xff",
+     "K": "0x55",
+     "confidence": "low",
+     "basis": "8051 vector FF-padding; UNVERIFIED (FF-model falsified for INT0/ADC0-EOC/PCA0 gaps)"
+    }
+   ],
+   "status": "unverified"
+  },
+  "89": {
+   "page_offset": 87,
+   "region": "ADC0-EOC gap/padding",
+   "C_per_version": {
+    "123": "0xe0",
+    "125": "0xe0",
+    "126": "0xe0"
+   },
+   "cross_version": "constant",
+   "variants": [
+    {
+     "P": "0xff",
+     "K": "0xe1",
+     "confidence": "low",
+     "basis": "8051 vector FF-padding; UNVERIFIED (FF-model falsified for INT0/ADC0-EOC/PCA0 gaps)"
+    }
+   ],
+   "status": "unverified"
+  },
+  "90": {
+   "page_offset": 88,
+   "region": "ADC0-EOC gap/padding",
+   "C_per_version": {
+    "123": "0xe2",
+    "125": "0xda",
+    "126": "0xda"
+   },
+   "cross_version": "VARIES",
+   "variants": [],
+   "status": "unrecoverable (version-variable => proven NOT 0xFF; plaintext differs per version)"
+  },
+  "91": {
+   "page_offset": 89,
+   "region": "ADC0-EOC gap/padding",
+   "C_per_version": {
+    "123": "0x07",
+    "125": "0x07",
+    "126": "0x07"
+   },
+   "cross_version": "constant",
+   "variants": [
+    {
+     "P": "0xff",
+     "K": "0x08",
+     "confidence": "low",
+     "basis": "8051 vector FF-padding; UNVERIFIED (FF-model falsified for INT0/ADC0-EOC/PCA0 gaps)"
+    }
+   ],
+   "status": "unverified"
+  },
+  "92": {
+   "page_offset": 90,
+   "region": "ADC0-EOC gap/padding",
+   "C_per_version": {
+    "123": "0x18",
+    "125": "0x18",
+    "126": "0x18"
+   },
+   "cross_version": "constant",
+   "variants": [
+    {
+     "P": "0xff",
+     "K": "0x19",
+     "confidence": "low",
+     "basis": "8051 vector FF-padding; UNVERIFIED (FF-model falsified for INT0/ADC0-EOC/PCA0 gaps)"
+    }
+   ],
+   "status": "unverified"
+  },
+  "96": {
+   "page_offset": 94,
+   "region": "PCA0 gap/padding",
+   "C_per_version": {
+    "123": "0x57",
+    "125": "0x57",
+    "126": "0x57"
+   },
+   "cross_version": "constant",
+   "variants": [
+    {
+     "P": "0xff",
+     "K": "0x58",
+     "confidence": "low",
+     "basis": "8051 vector FF-padding; UNVERIFIED (FF-model falsified for INT0/ADC0-EOC/PCA0 gaps)"
+    }
+   ],
+   "status": "unverified"
+  },
+  "97": {
+   "page_offset": 95,
+   "region": "PCA0 gap/padding",
+   "C_per_version": {
+    "123": "0x11",
+    "125": "0x10",
+    "126": "0x10"
+   },
+   "cross_version": "VARIES",
+   "variants": [],
+   "status": "unrecoverable (version-variable => proven NOT 0xFF; plaintext differs per version)"
+  },
+  "98": {
+   "page_offset": 96,
+   "region": "PCA0 gap/padding",
+   "C_per_version": {
+    "123": "0x5e",
+    "125": "0x5e",
+    "126": "0x5e"
+   },
+   "cross_version": "constant",
+   "variants": [
+    {
+     "P": "0xff",
+     "K": "0x5f",
+     "confidence": "low",
+     "basis": "8051 vector FF-padding; UNVERIFIED (FF-model falsified for INT0/ADC0-EOC/PCA0 gaps)"
+    }
+   ],
+   "status": "unverified"
+  },
+  "99": {
+   "page_offset": 97,
+   "region": "PCA0 gap/padding",
+   "C_per_version": {
+    "123": "0x13",
+    "125": "0x13",
+    "126": "0x13"
+   },
+   "cross_version": "constant",
+   "variants": [
+    {
+     "P": "0xff",
+     "K": "0x14",
+     "confidence": "low",
+     "basis": "8051 vector FF-padding; UNVERIFIED (FF-model falsified for INT0/ADC0-EOC/PCA0 gaps)"
+    }
+   ],
+   "status": "unverified"
+  },
+  "100": {
+   "page_offset": 98,
+   "region": "PCA0 gap/padding",
+   "C_per_version": {
+    "123": "0x54",
+    "125": "0x5c",
+    "126": "0x5c"
+   },
+   "cross_version": "VARIES",
+   "variants": [],
+   "status": "unrecoverable (version-variable => proven NOT 0xFF; plaintext differs per version)"
+  },
+  "104": {
+   "page_offset": 102,
+   "region": "CMP0 gap/padding",
+   "C_per_version": {
+    "123": "0x98",
+    "125": "0x98",
+    "126": "0x98"
+   },
+   "cross_version": "constant",
+   "variants": [
+    {
+     "P": "0xff",
+     "K": "0x99",
+     "confidence": "low",
+     "basis": "8051 vector FF-padding; UNVERIFIED (FF-model falsified for INT0/ADC0-EOC/PCA0 gaps)"
+    }
+   ],
+   "status": "unverified"
+  },
+  "105": {
+   "page_offset": 103,
+   "region": "CMP0 gap/padding",
+   "C_per_version": {
+    "123": "0x8e",
+    "125": "0x8e",
+    "126": "0x8e"
+   },
+   "cross_version": "constant",
+   "variants": [
+    {
+     "P": "0xff",
+     "K": "0x8f",
+     "confidence": "low",
+     "basis": "8051 vector FF-padding; UNVERIFIED (FF-model falsified for INT0/ADC0-EOC/PCA0 gaps)"
+    }
+   ],
+   "status": "unverified"
+  },
+  "106": {
+   "page_offset": 104,
+   "region": "CMP0 gap/padding",
+   "C_per_version": {
+    "123": "0x13",
+    "125": "0x13",
+    "126": "0x13"
+   },
+   "cross_version": "constant",
+   "variants": [
+    {
+     "P": "0xff",
+     "K": "0x14",
+     "confidence": "low",
+     "basis": "8051 vector FF-padding; UNVERIFIED (FF-model falsified for INT0/ADC0-EOC/PCA0 gaps)"
+    }
+   ],
+   "status": "unverified"
+  },
+  "107": {
+   "page_offset": 105,
+   "region": "CMP0 gap/padding",
+   "C_per_version": {
+    "123": "0x1b",
+    "125": "0x1b",
+    "126": "0x1b"
+   },
+   "cross_version": "constant",
+   "variants": [
+    {
+     "P": "0xff",
+     "K": "0x1c",
+     "confidence": "low",
+     "basis": "8051 vector FF-padding; UNVERIFIED (FF-model falsified for INT0/ADC0-EOC/PCA0 gaps)"
+    }
+   ],
+   "status": "unverified"
+  },
+  "108": {
+   "page_offset": 106,
+   "region": "CMP0 gap/padding",
+   "C_per_version": {
+    "123": "0x90",
+    "125": "0x90",
+    "126": "0x90"
+   },
+   "cross_version": "constant",
+   "variants": [
+    {
+     "P": "0xff",
+     "K": "0x91",
+     "confidence": "low",
+     "basis": "8051 vector FF-padding; UNVERIFIED (FF-model falsified for INT0/ADC0-EOC/PCA0 gaps)"
+    }
+   ],
+   "status": "unverified"
+  },
+  "112": {
+   "page_offset": 110,
+   "region": "CMP1 gap/padding",
+   "C_per_version": {
+    "123": "0x67",
+    "125": "0x67",
+    "126": "0x67"
+   },
+   "cross_version": "constant",
+   "variants": [
+    {
+     "P": "0xff",
+     "K": "0x68",
+     "confidence": "low",
+     "basis": "8051 vector FF-padding; UNVERIFIED (FF-model falsified for INT0/ADC0-EOC/PCA0 gaps)"
+    }
+   ],
+   "status": "unverified"
+  },
+  "113": {
+   "page_offset": 111,
+   "region": "CMP1 gap/padding",
+   "C_per_version": {
+    "123": "0x14",
+    "125": "0x14",
+    "126": "0x14"
+   },
+   "cross_version": "constant",
+   "variants": [
+    {
+     "P": "0xff",
+     "K": "0x15",
+     "confidence": "low",
+     "basis": "8051 vector FF-padding; UNVERIFIED (FF-model falsified for INT0/ADC0-EOC/PCA0 gaps)"
+    }
+   ],
+   "status": "unverified"
+  },
+  "114": {
+   "page_offset": 112,
+   "region": "CMP1 gap/padding",
+   "C_per_version": {
+    "123": "0x44",
+    "125": "0x44",
+    "126": "0x44"
+   },
+   "cross_version": "constant",
+   "variants": [
+    {
+     "P": "0xff",
+     "K": "0x45",
+     "confidence": "low",
+     "basis": "8051 vector FF-padding; UNVERIFIED (FF-model falsified for INT0/ADC0-EOC/PCA0 gaps)"
+    }
+   ],
+   "status": "unverified"
+  },
+  "115": {
+   "page_offset": 113,
+   "region": "CMP1 gap/padding",
+   "C_per_version": {
+    "123": "0x2e",
+    "125": "0x2e",
+    "126": "0x2e"
+   },
+   "cross_version": "constant",
+   "variants": [
+    {
+     "P": "0xff",
+     "K": "0x2f",
+     "confidence": "low",
+     "basis": "8051 vector FF-padding; UNVERIFIED (FF-model falsified for INT0/ADC0-EOC/PCA0 gaps)"
+    }
+   ],
+   "status": "unverified"
+  },
+  "116": {
+   "page_offset": 114,
+   "region": "CMP1 gap/padding",
+   "C_per_version": {
+    "123": "0x7f",
+    "125": "0x7f",
+    "126": "0x7f"
+   },
+   "cross_version": "constant",
+   "variants": [
+    {
+     "P": "0xff",
+     "K": "0x80",
+     "confidence": "low",
+     "basis": "8051 vector FF-padding; UNVERIFIED (FF-model falsified for INT0/ADC0-EOC/PCA0 gaps)"
+    }
+   ],
+   "status": "unverified"
+  },
+  "120": {
+   "page_offset": 118,
+   "region": "vec15 gap/padding",
+   "C_per_version": {
+    "123": "0x1a",
+    "125": "0x1a",
+    "126": "0x1a"
+   },
+   "cross_version": "constant",
+   "variants": [
+    {
+     "P": "0xff",
+     "K": "0x1b",
+     "confidence": "low",
+     "basis": "8051 vector FF-padding; UNVERIFIED (FF-model falsified for INT0/ADC0-EOC/PCA0 gaps)"
+    }
+   ],
+   "status": "unverified"
+  },
+  "121": {
+   "page_offset": 119,
+   "region": "vec15 gap/padding",
+   "C_per_version": {
+    "123": "0x8e",
+    "125": "0x8e",
+    "126": "0x8e"
+   },
+   "cross_version": "constant",
+   "variants": [
+    {
+     "P": "0xff",
+     "K": "0x8f",
+     "confidence": "low",
+     "basis": "8051 vector FF-padding; UNVERIFIED (FF-model falsified for INT0/ADC0-EOC/PCA0 gaps)"
+    }
+   ],
+   "status": "unverified"
+  },
+  "122": {
+   "page_offset": 120,
+   "region": "vec15 gap/padding",
+   "C_per_version": {
+    "123": "0x1a",
+    "125": "0x1a",
+    "126": "0x1a"
+   },
+   "cross_version": "constant",
+   "variants": [
+    {
+     "P": "0xff",
+     "K": "0x1b",
+     "confidence": "low",
+     "basis": "8051 vector FF-padding; UNVERIFIED (FF-model falsified for INT0/ADC0-EOC/PCA0 gaps)"
+    }
+   ],
+   "status": "unverified"
+  },
+  "123": {
+   "page_offset": 121,
+   "region": "vec15 gap/padding",
+   "C_per_version": {
+    "123": "0xf6",
+    "125": "0xf6",
+    "126": "0xf6"
+   },
+   "cross_version": "constant",
+   "variants": [
+    {
+     "P": "0xff",
+     "K": "0xf7",
+     "confidence": "low",
+     "basis": "8051 vector FF-padding; UNVERIFIED (FF-model falsified for INT0/ADC0-EOC/PCA0 gaps)"
+    }
+   ],
+   "status": "unverified"
+  },
+  "124": {
+   "page_offset": 122,
+   "region": "vec15 gap/padding",
+   "C_per_version": {
+    "123": "0xb7",
+    "125": "0xb7",
+    "126": "0xb7"
+   },
+   "cross_version": "constant",
+   "variants": [
+    {
+     "P": "0xff",
+     "K": "0xb8",
+     "confidence": "low",
+     "basis": "8051 vector FF-padding; UNVERIFIED (FF-model falsified for INT0/ADC0-EOC/PCA0 gaps)"
+    }
+   ],
+   "status": "unverified"
+  },
+  "132": {
+   "page_offset": 130,
+   "region": "byte before 0x0483 (post-vector-table fn start) \u2014 S-epilogue",
+   "C_per_version": {
+    "123": "0xa9",
+    "125": "0xa9",
+    "126": "0xa9"
+   },
+   "cross_version": "constant",
+   "variants": [
+    {
+     "P": "0x22",
+     "K": "0x87",
+     "confidence": "low",
+     "basis": "prev-fn RET (most common 8051 fn terminator); 8051 packs fns back-to-back, no align pad"
+    },
+    {
+     "P": "0x32",
+     "K": "0x77",
+     "confidence": "low",
+     "basis": "prev-fn RETI"
+    }
+   ],
+   "status": "epilogue-candidate (2 variants): 0x0483 is an ODD fn-start addr -> 8051 has NO code alignment -> byte-before is a REAL terminator, padding EXCLUDED. RET(0x22)->K=0x87 or RETI(0x32)->K=0x77. Cannot pick (RET vs RETI) without disasm; boundary itself still assumes 0x0483 is a clean fn start."
+  }
+ }
+}

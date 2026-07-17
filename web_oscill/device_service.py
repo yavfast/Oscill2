@@ -9,7 +9,7 @@ import sys
 import os
 sys.path.append(os.path.dirname(__file__))
 
-from oscill_client import OscillClient
+from oscill_client import OscillClient, VDIV_VALUES_MV, TDIV_VALUES_MS
 from converters import convert
 
 
@@ -71,6 +71,12 @@ class DeviceService:
         # Cached configuration to avoid querying device on every status request
         self._cached_config: Dict[str, Any] = {}
         self._config_lock = threading.Lock()
+        # [task_scope-zero-offset] Actual sample count the device last delivered.
+        # The device returns fewer samples than QS (empirically QS-2 in AVG/NORMAL),
+        # so QS (samples_total) and TC (t_offset) — both in device sample-space —
+        # must be reconciled to this delivered-space before the client plots them.
+        # Plain int assignment is atomic under the GIL; no dedicated lock needed.
+        self._last_delivered_len: Optional[int] = None
         # Single-threaded executor for serializing all device commands with timeout
         self._device_executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="device-cmd")
         self._device_timeout = 5.0  # 5 seconds timeout for device operations
@@ -92,9 +98,10 @@ class DeviceService:
                 if not port:
                     raise RuntimeError("Device not found")
             cli = OscillClient(port, baud)
-            cli.open()
-            cli.reset()
-            cli.connect()
+            # [task_qs-raise] Open + OBEX handshake at the base baud (device starts a
+            # session at low speed); rescues a device left at a raised baud by a prior
+            # ungraceful session. Speed is raised only AFTER init (below).
+            cli.open_and_handshake()
 
             # Set CPU frequency to 70 MHz
             cli.set_cpu_freq_mhz(70)
@@ -107,9 +114,9 @@ class DeviceService:
             # RS: realtime (0), post-processing/normal via M1 (not explicitly modeled here)
             # TD (delay) = 0
             cli.set_scan_delay(0)
-            # TA/TW (max wait for auto/wait) = 500 (units 12*MC per docs)
-            cli.set_max_sync_wait_auto(500)
-            cli.set_max_sync_wait_on_trig(500)
+            # [task_trigger-highqs] TA/TW (max trigger wait) are programmed AFTER the
+            # timebase is set (below) via apply_sync_wait(), sized to the sweep — the old
+            # fixed 500 (12*MC ≈ 86 µs @ 70 MHz) starved the trigger, esp. at high QS.
             # AP/AR (averaging/ris passes) = 0
             cli.set_avg_passes(0)
             cli.set_min_ris_passes(0)
@@ -124,17 +131,30 @@ class DeviceService:
             # T1 bit composition is device-specific; reuse Android defaults: 0x2C
             cli.set_trigger_mode(0x2C)
             cli.set_trigger_level(128)
-            # Samples per div and total QS; choose 10 divs * min(64, QSh/10)
-            # Ensure QS sane
+            # [task_qs-raise] Derive the sampling density from the device's QSh ceiling
+            # for the mode just set (M1=Normal above), then size QS to it. QSh is
+            # mode-dependent, so this must run after set_channel_sw_mode.
+            cli.refresh_samples_per_div()
             total_samples = cli.ensure_qs()
-            # Timebase 5 ms/div
+            # Timebase 5 ms/div (computed at the new density)
             cli.set_time_div_ms(5)
+            # [task_trigger-highqs] Size the trigger-wait window (TA/TW) to the sweep now
+            # that the timebase and density are set.
+            cli.apply_sync_wait()
             # Center the sweep offset so the trigger is in the middle of the displayed window.
             center_offset = total_samples // 2 if isinstance(total_samples, int) and total_samples > 0 else 0
             center_offset = max(0, min(0xFFFF, center_offset))
             cli.set_samples_offset(center_offset)
             # Calibrate at the end
             cli.calibrate()
+            # [task_qs-raise] Init/handshake/calibrate all done at the base baud; now raise
+            # the serial link so the larger mode-aware frames (QS up to ~1784) transfer fast
+            # (~155 ms → ~19 ms at 921600). Best-effort: falls back to 115200 on any failure.
+            # On by default (verified stable @921600); set OSCILL_HIGH_BAUD=0 to opt out
+            # (e.g. a flaky cable/adapter that can't sustain the higher rate).
+            if os.environ.get("OSCILL_HIGH_BAUD", "1") != "0":
+                achieved_baud = cli.raise_speed()
+                self._log.info(f"Serial link running at {achieved_baud} baud")
             self._client = cli
             self._is_connected = True
             # Start acquisition automatically after successful connection
@@ -170,6 +190,9 @@ class DeviceService:
         with self._frames_lock:
             self._frames.clear()
             self._seq = 0
+        # [task_scope-zero-offset] Reset delivered-length so a reconnect never
+        # reconciles against a stale count before its first frame arrives.
+        self._last_delivered_len = None
         # Clear cached config
         self._update_cached_config({})
         return {"status": "ok"}
@@ -220,17 +243,20 @@ class DeviceService:
         """Public accessor: True if the background acquisition loop is running."""
         return bool(self._is_acquiring)
 
-    @staticmethod
-    def display_geometry() -> Dict[str, int]:
-        """Static display grid geometry (single source of truth for the frontend).
+    def display_geometry(self) -> Dict[str, int]:
+        """Display grid geometry (single source of truth for the frontend).
 
         [PL_AUDIT_WEB_06] Exposes the device's horizontal-division count and
         samples-per-division so the web layer need not import OscillClient directly
         (rule HardwareAccessOnlyThroughDeviceService) nor hardcode its own copy.
+        [task_qs-raise] samples_per_div is now the live per-connection density (derived
+        from QSh per mode); falls back to the class default when disconnected.
         """
+        spd = getattr(self._client, "samples_per_div", OscillClient.SAMPLES_PER_DIV) \
+            if self._client else OscillClient.SAMPLES_PER_DIV
         return {
             "h_divs": OscillClient.H_DIVS,
-            "samples_per_div": OscillClient.SAMPLES_PER_DIV,
+            "samples_per_div": int(spd),
         }
 
     def get_status(self) -> Dict[str, Any]:
@@ -238,8 +264,9 @@ class DeviceService:
         if not self._is_connected or not self._client:
             return {"status": "disconnected", "is_connected": False, "is_acquiring": False}
         
-        # Return cached config instead of querying device
-        config = self._get_cached_config()
+        # Return cached config instead of querying device, reconciled from the
+        # device sample-space (QS/TC) to the delivered sample-space the client plots.
+        config = self._reconcile_display_geometry(self._get_cached_config())
         return {
             "status": "ok", 
             "config": config, 
@@ -270,9 +297,17 @@ class DeviceService:
                 raise RuntimeError("Not connected")
             c = self._client
             try:
+                # [task_config-limits] Cached config carries the parameter limits;
+                # apply_config silently clamps incoming values to them before writing.
+                cached = self._get_cached_config()
+                limits = cached.get("limits") or {}
                 if changes.get("v_div") is not None:
                     v_div = changes["v_div"]
                     value_mv = int(convert(v_div["v"], v_div["u"], "mV"))
+                    vlim = limits.get("v_div")
+                    if isinstance(vlim, dict) and vlim.get("values"):
+                        vals = vlim["values"]
+                        value_mv = max(int(min(vals)), min(int(max(vals)), value_mv))
                     c.set_v_div_mV(value_mv)
                 if changes.get("v_offset") is not None:
                     v_offset_raw = changes["v_offset"]
@@ -286,6 +321,10 @@ class DeviceService:
                 if changes.get("t_div") is not None:
                     t_div = changes["t_div"]
                     value_ms = float(convert(t_div["v"], t_div["u"], "ms"))
+                    tlim = limits.get("t_div")
+                    if isinstance(tlim, dict) and tlim.get("values"):
+                        vals = tlim["values"]
+                        value_ms = max(float(min(vals)), min(float(max(vals)), value_ms))
                     c.set_time_div_ms(value_ms)
                 if changes.get("t_offset") is not None:
                     t_offset_raw = changes["t_offset"]
@@ -296,10 +335,28 @@ class DeviceService:
                         t_offset_raw = t_offset_raw.get("v")
                     if t_offset_raw is None:
                         raise ValueError("t_offset requires a value")
-                    raw_samples = max(0, min(0xFF, int(float(t_offset_raw))))
-                    c.set_samples_offset(raw_samples)
+                    # [task_scope-zero-offset] Incoming t_offset is in delivered
+                    # sample-space (see _reconcile_display_geometry). Convert back to
+                    # the device TC register — exact inverse of the read-side reconcile:
+                    #   TC = delivered_index + (QS - delivered) + 1
+                    # so the marker-drag round-trips. No frame yet → treat as raw TC.
+                    delivered_index = max(0, int(float(t_offset_raw)))
+                    qs = cached.get("samples_total")
+                    delivered = self._last_delivered_len
+                    if isinstance(qs, int) and delivered and delivered <= qs:
+                        tc = delivered_index + (qs - delivered) + 1
+                    else:
+                        tc = delivered_index
+                    # TC is a 2-byte register (bounded by TCh on-device); clamp to
+                    # 0xFFFF, not 0xFF — a 0xFF cap collapses the rightmost delivered
+                    # index (253→252) and contradicts the advertised t_offset limit.
+                    c.set_samples_offset(max(0, min(0xFFFF, tc)))
                 if changes.get("trigger_level") is not None:
-                    c.set_trigger_level(int(changes["trigger_level"]))
+                    tl = int(changes["trigger_level"])
+                    tllim = limits.get("trigger_level")
+                    if isinstance(tllim, dict) and "min" in tllim and "max" in tllim:
+                        tl = max(int(tllim["min"]), min(int(tllim["max"]), tl))
+                    c.set_trigger_level(tl)
                 hw_mode_value: Optional[int] = None
                 if any(key in changes for key in ("coupling", "filter_high", "filter_low")):
                     hw_mode_value = c.get_channel_hw_mode()
@@ -397,17 +454,56 @@ class DeviceService:
                         c.set_sync_type(sync_bits)
                     else:
                         warnings.append(f"Unsupported sync_type '{changes['sync_type']}'")
+                # [task_qs-raise] A mode change alters QSh and thus the optimal sampling
+                # density. Recompute it only when sw_mode changed (QSh is flat over t/div,
+                # verified live). Density scales time-per-sample, so re-apply the current
+                # t/div to preserve the timebase; QS = density × H_DIVS then changes, so
+                # rescale the sweep offset (TC) proportionally to the resized window — else
+                # a centered TC can exceed a shrunk hi-res QS (888) or drift in 8-bit (1784).
+                # Runs after the sw_mode register write above.
+                density_changed = False
+                old_spd = c.samples_per_div
+                if "sw_mode" in changes:
+                    t_div_now = c.get_time_div_ms()  # at OLD density, before refresh
+                    if c.refresh_samples_per_div() != old_spd:
+                        density_changed = True
+                        c.set_time_div_ms(t_div_now)  # recompute TS → same t/div at new density
                 c.ensure_qs()
+                # [task_trigger-highqs] Re-size the trigger-wait window to the (possibly
+                # changed) timebase/density on every config change. Cheap, backend-side;
+                # keeps the trigger firing after t/div or mode changes.
+                c.apply_sync_wait()
+                if density_changed and old_spd:
+                    try:
+                        new_qs = c.samples_per_div * c.H_DIVS
+                        old_tc = c.get_reg_2('TC', signed=False)
+                        new_tc = int(round(old_tc * c.samples_per_div / old_spd))
+                        c.set_samples_offset(max(0, min(new_qs - 1, new_tc)))
+                    except Exception:
+                        pass
+                # [task_qs-raise] Any config change cleared the buffer, so the delivered
+                # length is stale. Reset it BEFORE the snapshot below so the response
+                # reconciles against the requested QS-space — critical when QS changed
+                # across modes (e.g. AVG_HIRES 888 → NORMAL 1784). First frame re-establishes it.
+                self._last_delivered_len = None
                 # Increment config ID on any config change
                 self._cfg_id += 1
-                # Update cached config
+                # Update cached config; return it reconciled to delivered-space so the
+                # apply response matches /api/status and /api/frames (single geometry).
                 cfg = self._snapshot_config_locked()
-                status = {"config": cfg, "cfg_id": self._cfg_id}
+                # [SP_RES_02_01] Enhancement settings are backend-only (no register
+                # write above): fold the requested enh_* onto the fresh snapshot,
+                # silently clamped, and re-cache. cfg_id already bumped + buffer cleared
+                # below, so an enh_*-only change resets the averaging window like any other.
+                self._apply_enh_settings(cfg, changes)
+                self._update_cached_config(cfg)
+                status = {"config": self._reconcile_display_geometry(cfg), "cfg_id": self._cfg_id}
             except Exception as e:
                 warnings.append(f"config update failed: {e}")
                 status = {}
         
         # Clear frame buffer after config change - old frames are no longer valid
+        # (_last_delivered_len was reset above, under the device lock, before the snapshot).
         with self._frames_lock:
             self._frames.clear()
             self._log.info(f"Cleared frame buffer after config change (cfg_id: {self._cfg_id})")
@@ -530,6 +626,68 @@ class DeviceService:
         with self._config_lock:
             return self._cached_config.copy()
 
+    def _reconcile_display_geometry(self, cfg: Dict[str, Any]) -> Dict[str, Any]:
+        """Reconcile device sample-space (QS/TC) to the delivered sample-space.
+
+        The device returns fewer samples than the requested QS (empirically QS-2 in
+        AVG/NORMAL mode), so raw ``samples_total`` (QS) and ``t_offset`` (TC = samples
+        before the sync moment) do not match the array the client actually plots.
+        Left unreconciled, the zero/trigger marker (placed via TC in QS-space) lands a
+        couple of samples right of the real trigger, so the trace looks shifted left.
+
+        We report ``samples_total`` = delivered count and ``t_offset`` = the trigger's
+        index inside the delivered array::
+
+            trigger_index = TC - (QS - delivered) - 1
+
+        where ``(QS - delivered)`` is the front-dropped-sample count and the extra ``-1``
+        is the device's sync convention (the sample that equals the trigger level sits one
+        index before the declared sync sample). Verified against live captures at
+        TC=64/128/192 (crossing at 61/125/189 = TC-3, delivered=254). ``apply_config``
+        performs the exact inverse so the marker-drag round-trips.
+        Falls back to a no-op until the first frame establishes the delivered count.
+        """
+        cfg = dict(cfg)  # never mutate the caller's dict (may be the cached config)
+        delivered = self._last_delivered_len
+        qs = cfg.get("samples_total")
+        tc = cfg.get("t_offset")
+        if not delivered or not isinstance(qs, int) or not isinstance(tc, int) or delivered > qs:
+            return cfg
+        drop = qs - delivered
+        trigger_index = tc - drop - 1
+        cfg["samples_total"] = delivered
+        cfg["t_offset"] = max(0, min(delivered - 1, trigger_index))
+        # [task_config-limits] Reconcile the limits block to delivered-space too, using
+        # new dicts (never mutate the possibly-cached nested objects).
+        lim = cfg.get("limits")
+        if isinstance(lim, dict):
+            lim = dict(lim)
+            st = lim.get("samples_total")
+            if isinstance(st, dict) and isinstance(st.get("max"), int):
+                lim["samples_total"] = {**st, "max": max(1, st["max"] - drop)}
+            to = lim.get("t_offset")
+            if isinstance(to, dict):
+                lim["t_offset"] = {**to, "max": max(0, delivered - 1)}
+            cfg["limits"] = lim
+        return cfg
+
+    def _apply_enh_settings(self, cfg: Dict[str, Any], changes: Dict[str, Any]) -> None:
+        """Fold resolution-enhancement settings into cfg, silently clamped.  [SP_RES_02_01 / SP_RES_03_01]
+
+        enh_enabled → bool; enh_depth → [2,64]; enh_sma_window → [1,63] then forced odd
+        (even → nearest lower odd). No warning on out-of-range, consistent with the
+        v_offset/trigger_level clamp. Backend-only: never passed to oscill_client.
+        """
+        if changes.get("enh_enabled") is not None:
+            cfg["enh_enabled"] = bool(changes["enh_enabled"])
+        if changes.get("enh_depth") is not None:
+            cfg["enh_depth"] = max(2, min(64, int(changes["enh_depth"])))
+        if changes.get("enh_sma_window") is not None:
+            w = max(1, min(63, int(changes["enh_sma_window"])))
+            if w % 2 == 0:
+                w -= 1
+            cfg["enh_sma_window"] = w
+
     def _snapshot_config_locked(self) -> Dict[str, Any]:
         """
         Snapshot current device configuration under device lock.
@@ -565,7 +723,8 @@ class DeviceService:
         cfg["samples_total"] = max(0, int(total_samples))
         
         # Static geometry info for UI
-        cfg["samples_per_div"] = getattr(c, 'SAMPLES_PER_DIV', 32)
+        # [task_qs-raise] live per-connection density (mode-aware), not the class default.
+        cfg["samples_per_div"] = getattr(c, 'samples_per_div', 32)
         # [PL_AUDIT_WEB_08] Expose the device horizontal-division count (device truth
         # = 8, NOT the 10 the frontend historically assumed) so the display grid and
         # time-axis are computed against the real capture window.
@@ -611,6 +770,45 @@ class DeviceService:
         else:
             cfg["trigger_slope"] = "None"
         
+        # [SP_RES_01_01] Resolution-enhancement controls (backend-only, C_RES_DEC_04 —
+        # never written to a device register). Carried forward across re-snapshots from
+        # the prior cached config so they survive an unrelated register change; seeded to
+        # defaults on first snapshot. apply_config mutates them (clamped) via
+        # _apply_enh_settings. Bare scalars, not {v,u} (StructuredConfigValues).
+        prev = self._get_cached_config()
+        cfg["enh_enabled"] = bool(prev.get("enh_enabled", False))
+        cfg["enh_depth"] = int(prev.get("enh_depth", 16))
+        cfg["enh_sma_window"] = int(prev.get("enh_sma_window", 1))
+
+        # [task_config-limits] Parameter min/max for client informativeness + clamping.
+        # Device-authoritative where a property exists (v_div via V1l/V1h with step-list
+        # fallback; samples_total via QSh); structural for raw 0..255 offsets; t_div from
+        # the canonical step list (no single device max — roll mode is unbounded).
+        # samples_total/t_offset are seeded in raw QS-space and reconciled to
+        # delivered-space in _reconcile_display_geometry.
+        dev_limits = c.read_device_limits()
+        # V1l/V1h "low/high" labels don't reliably map to numeric min/max — derive by
+        # value; fall back to the step-list bounds if the device omits a property.
+        v_div_bounds = [v for v in (dev_limits.get("v1l_mv"), dev_limits.get("v1h_mv")) if v]
+        v_div_min = min(v_div_bounds) if v_div_bounds else VDIV_VALUES_MV[0]
+        v_div_max = max(v_div_bounds) if v_div_bounds else VDIV_VALUES_MV[-1]
+        qsh = dev_limits.get("qsh") or int(total_samples)
+        # Stepped params (v_div, t_div) expose the discrete allowed-value LIST instead
+        # of min/max; continuous params keep {min, max}. v_div's list is the step list
+        # filtered to the device-supported sensitivity range (V1l/V1h).
+        v_div_values = [v for v in VDIV_VALUES_MV if v_div_min <= v <= v_div_max] or list(VDIV_VALUES_MV)
+        cfg["limits"] = {
+            "v_div": {"values": v_div_values, "u": "mV"},
+            "v_offset": {"min": 0, "max": 0xFF},
+            "trigger_level": {"min": 0, "max": 0xFF},
+            "t_div": {"values": list(TDIV_VALUES_MS), "u": "ms"},
+            "samples_total": {"min": 1, "max": int(qsh)},
+            "t_offset": {"min": 0, "max": max(0, int(total_samples) - 1)},
+            # [SP_RES_01_04] Structural bounds (cap per-poll enhancement cost).
+            "enh_depth": {"min": 2, "max": 64},
+            "enh_sma_window": {"min": 1, "max": 63},
+        }
+
         cfg["cfg_id"] = self._cfg_id  # Add config ID
         # Update cached config
         self._update_cached_config(cfg)
@@ -621,6 +819,11 @@ class DeviceService:
             self._seq += 1
             payload["seq"] = self._seq
             self._frames.append(payload)
+        # [task_scope-zero-offset] Remember how many samples the device actually
+        # delivered, so get_status()/apply_config() can reconcile QS/TC to it.
+        samples = payload.get("samples")
+        if samples:
+            self._last_delivered_len = len(samples)
 
     def _acq_loop(self):
         # Soft loop with opportunistic device access
