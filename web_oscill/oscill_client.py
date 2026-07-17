@@ -298,7 +298,19 @@ class OscillClient:
             raise IOError("OBEX header read timeout")
         opcode = head[0]
         length = int.from_bytes(head[1:3], 'big')
-        rest = self._read_exact(max(0, length - 3))
+        want = max(0, length - 3)
+        rest = self._read_exact(want)
+        # [fix skip-broken-frame] OBEX packets are self-framing: the 3-byte header declares the
+        # TOTAL packet length, so a complete read returns exactly `length-3` body bytes (verified
+        # live: declared 1798 == received 1798). A short read means the packet was truncated — the
+        # transport timed out mid-packet (an incomplete chunk). Reject it as an IOError so the
+        # partial/corrupt frame is never parsed/plotted; the acquisition loop skips it, and if
+        # truncation is persistent the 5-error self-heal disconnect + auto-reconnect kicks in.
+        # (The documented 0xB0 checksum is OPTIONAL and this device does not emit it, so the
+        # declared length is the reliable completeness signal — not a CRC.)
+        if len(rest) < want:
+            raise IOError(f"OBEX packet truncated: got {len(rest)} of {want} body bytes "
+                          f"(opcode 0x{opcode:02x}, declared len {length})")
         return opcode, rest
 
     def _parse_headers(self, data: bytes) -> Dict[int, List[bytes]]:

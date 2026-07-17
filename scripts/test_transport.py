@@ -412,6 +412,26 @@ def test_obex_framing_byte_identical():
     check(reg_get[0] == 0x83, "registry read uses GET_FINAL (0x83)")
 
 
+def test_read_resp_rejects_truncated_packet():
+    print("[fix skip-broken-frame] _read_resp rejects a truncated OBEX packet (declared len > received):")
+    from oscill_client import OscillClient
+    # Complete packet: opcode 0xA0, declared total length 7 → 4 body bytes present.
+    complete = bytes([0xA0, 0x00, 0x07]) + bytes([0x10, 0x00, 0x10, 0x00])
+    t = FakeTransport()
+    t.open()
+    t.feed(complete)
+    c = OscillClient(t)
+    op, body = c._read_resp()
+    check(op == 0xA0 and body == bytes([0x10, 0x00, 0x10, 0x00]), "complete packet reads fully")
+    # Truncated packet: header declares total length 20 (→17 body bytes) but only 5 arrive.
+    truncated = bytes([0xA0, 0x00, 0x14]) + bytes([1, 2, 3, 4, 5])
+    t2 = FakeTransport()
+    t2.open()
+    t2.feed(truncated)
+    c2 = OscillClient(t2)
+    expect_raises(IOError, c2._read_resp, "truncated packet (5 of 17 body bytes) → IOError")
+
+
 def test_sdp_parser_targets_spp_not_opp():
     print("resolve_spp_channel SDP parse targets SPP (0x1101), not Object Push:")
     from rfcomm_transport import _parse_spp_channel
@@ -479,6 +499,7 @@ def main() -> int:
     test_endpoint_validation()
     test_build_transport_serial_auto_notfound()
     test_obex_framing_byte_identical()
+    test_read_resp_rejects_truncated_packet()
     test_sdp_parser_targets_spp_not_opp()
     test_find_paired_device_by_name()
     print("-" * 60)
